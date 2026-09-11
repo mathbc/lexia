@@ -1,35 +1,63 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
-        Schema::create('users', function (Blueprint $table) {
-            $table->id();
+        Schema::create('users', function (Blueprint $table): void {
+            $table->uuid('id')->primary();
+
+            // Every user belongs to exactly one account. Restrict rather than
+            // cascade: deleting a tenant with live users should be a deliberate
+            // act, not a side effect.
+            $table->foreignUuid('account_id')
+                ->constrained()
+                ->restrictOnDelete();
+
             $table->string('name');
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+
+            $table->string('oab_number', 20)->nullable();
+            $table->char('oab_state', 2)->nullable();
+            $table->date('birth_date')->nullable();
+
+            $table->string('role', 20);
+            $table->string('type', 20);
+
+            $table->boolean('enabled')->default(true);
+
+            // Platform staff, deliberately outside the UserRole enum: the three
+            // business roles are all account-scoped, so administering tenants
+            // needs a separate, rarely-granted flag.
+            $table->boolean('platform_admin')->default(false);
+
             $table->rememberToken();
             $table->timestamps();
+            $table->softDeletes();
+
+            $table->index(['account_id', 'role']);
+            $table->index(['account_id', 'enabled']);
         });
 
-        Schema::create('password_reset_tokens', function (Blueprint $table) {
+        Schema::create('password_reset_tokens', function (Blueprint $table): void {
             $table->string('email')->primary();
             $table->string('token');
             $table->timestamp('created_at')->nullable();
         });
 
-        Schema::create('sessions', function (Blueprint $table) {
+        Schema::create('sessions', function (Blueprint $table): void {
             $table->string('id')->primary();
-            $table->foreignId('user_id')->nullable()->index();
+            // Stock Laravel declares this as a bigint foreignId. With UUID user
+            // keys that mismatch silently breaks every authenticated session.
+            $table->foreignUuid('user_id')->nullable()->index();
             $table->string('ip_address', 45)->nullable();
             $table->text('user_agent')->nullable();
             $table->longText('payload');
@@ -37,13 +65,10 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::dropIfExists('users');
-        Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
+        Schema::dropIfExists('password_reset_tokens');
+        Schema::dropIfExists('users');
     }
 };

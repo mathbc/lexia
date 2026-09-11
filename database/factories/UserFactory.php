@@ -1,8 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Factories;
 
-use App\Models\User;
+use App\Domain\Accounts\Models\Account;
+use App\Domain\Users\Enums\UserRole;
+use App\Domain\Users\Enums\UserType;
+use App\Domain\Users\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -12,34 +17,78 @@ use Illuminate\Support\Str;
  */
 class UserFactory extends Factory
 {
-    /**
-     * The current password being used by the factory.
-     */
-    protected static ?string $password;
+    protected $model = User::class;
 
     /**
-     * Define the model's default state.
-     *
+     * Hashing once and reusing it keeps test suites fast; bcrypt is
+     * deliberately slow and every factory call would otherwise pay for it.
+     */
+    protected static ?string $password = null;
+
+    /**
      * @return array<string, mixed>
      */
     public function definition(): array
     {
         return [
+            'account_id' => Account::factory(),
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
-            'password' => static::$password ??= Hash::make('password'),
+            'password' => self::$password ??= Hash::make('password'),
+            'oab_number' => (string) fake()->numberBetween(1000, 999999),
+            'oab_state' => fake()->randomElement(['SP', 'RJ', 'MG', 'RS', 'PR']),
+            'birth_date' => fake()->dateTimeBetween('-70 years', '-22 years'),
+            'role' => UserRole::Lawyer,
+            'type' => UserType::Lawyer,
+            'enabled' => true,
+            'platform_admin' => false,
             'remember_token' => Str::random(10),
         ];
     }
 
-    /**
-     * Indicate that the model's email address should be unverified.
-     */
+    public function accountAdmin(): static
+    {
+        return $this->state(fn (): array => ['role' => UserRole::AccountAdmin]);
+    }
+
+    public function admin(): static
+    {
+        return $this->state(fn (): array => ['role' => UserRole::Admin]);
+    }
+
+    public function judge(): static
+    {
+        return $this->state(fn (): array => [
+            'type' => UserType::Judge,
+            'oab_number' => null,
+            'oab_state' => null,
+        ]);
+    }
+
+    public function platformAdmin(): static
+    {
+        return $this->state(fn (): array => [
+            'platform_admin' => true,
+            'role' => UserRole::AccountAdmin,
+        ]);
+    }
+
+    public function disabled(): static
+    {
+        return $this->state(fn (): array => ['enabled' => false]);
+    }
+
     public function unverified(): static
     {
-        return $this->state(fn (array $attributes) => [
-            'email_verified_at' => null,
-        ]);
+        return $this->state(fn (): array => ['email_verified_at' => null]);
+    }
+
+    /**
+     * Attach to an existing account instead of creating a fresh one.
+     */
+    public function forAccount(Account $account): static
+    {
+        return $this->state(fn (): array => ['account_id' => $account->id]);
     }
 }
