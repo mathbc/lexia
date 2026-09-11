@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: lexia-postgres
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-lexia}
+      POSTGRES_USER: ${DB_USERNAME:-lexia}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-lexia}
+    volumes:
+      - lexia_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-lexia} -d ${DB_DATABASE:-lexia}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  lexia_postgres_data:
