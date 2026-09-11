@@ -22,3 +22,6 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Claude Code (skills are versioned; local overrides are not)
+/.claude/settings.local.json
