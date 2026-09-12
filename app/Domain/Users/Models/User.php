@@ -40,6 +40,18 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $guarded = ['id'];
 
     /**
+     * Mirrors the schema defaults so a freshly built model behaves the same
+     * before and after it is persisted. Without this, `platform_admin` is null
+     * in memory and isPlatformAdmin() has no boolean to return.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'enabled' => true,
+        'platform_admin' => false,
+    ];
+
+    /**
      * @var list<string>
      */
     protected $hidden = [

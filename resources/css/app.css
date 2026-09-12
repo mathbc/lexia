@@ -1,11 +1,58 @@
 @import 'tailwindcss';
 
-@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+/* Self-hosted rather than a CDN: a Brazilian legal product should not leak a
+   user's IP to a third party on every pageview (LGPD). */
+@import '@fontsource-variable/source-serif-4';
+@import '@fontsource-variable/archivo';
+
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';
-@source '../**/*.js';
+@source '../**/*.{js,ts,jsx,tsx}';
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    /* Source Serif 4 as specified. Acumin Pro is Adobe-only and cannot be
+       self-hosted, so Archivo stands in: a neo-grotesque with the same broad
+       weight range and similar proportions. */
+    --font-serif: 'Source Serif 4 Variable', ui-serif, Georgia, serif;
+    --font-sans: 'Archivo Variable', ui-sans-serif, system-ui, sans-serif;
+
+    --color-ink-50: oklch(0.985 0.002 260);
+    --color-ink-100: oklch(0.96 0.004 260);
+    --color-ink-200: oklch(0.91 0.006 260);
+    --color-ink-300: oklch(0.83 0.008 260);
+    --color-ink-400: oklch(0.65 0.012 260);
+    --color-ink-500: oklch(0.52 0.014 260);
+    --color-ink-600: oklch(0.42 0.016 260);
+    --color-ink-700: oklch(0.34 0.018 260);
+    --color-ink-800: oklch(0.25 0.018 260);
+    --color-ink-900: oklch(0.18 0.016 260);
+
+    /* Deep institutional blue — the register courts and firms present in. */
+    --color-brand-50: oklch(0.96 0.02 250);
+    --color-brand-100: oklch(0.91 0.04 250);
+    --color-brand-300: oklch(0.72 0.10 250);
+    --color-brand-500: oklch(0.52 0.14 250);
+    --color-brand-600: oklch(0.44 0.14 250);
+    --color-brand-700: oklch(0.36 0.12 250);
+    --color-brand-900: oklch(0.24 0.08 250);
+}
+
+@layer base {
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+        @apply bg-ink-50 text-ink-800 font-sans antialiased;
+    }
+
+    h1, h2, h3 {
+        @apply font-serif text-ink-900;
+    }
+
+    /* Numbers in tables must line up column-wise; the OAB number, CNPJ and
+       dates are all read by scanning down. */
+    .tabular {
+        font-variant-numeric: tabular-nums;
+    }
 }
