@@ -17,6 +17,7 @@ final class RegisterAccountTest extends TestCase
     use RefreshDatabase;
 
     /**
+     * @param  array<string, string>  $overrides
      * @return array<string, string>
      */
     private function payload(array $overrides = []): array

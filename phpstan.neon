@@ -1,0 +1,20 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - vendor/nesbot/carbon/extension.neon
+
+parameters:
+    paths:
+        - app
+        - database
+        - routes
+        - tests
+
+    # Level 6 for a greenfield project: it catches missing types and real
+    # mistakes without drowning the first weeks in Eloquent generics noise.
+    # Clean here with zero suppressions.
+    #
+    # Level 8 currently reports 19 findings, all one pattern: $request->user()
+    # is User|null and PHPStan cannot see that every route is behind `auth`.
+    # Raising the level means introducing a helper that asserts the actor once
+    # per Action — worth doing when the domain settles.
+    level: 6

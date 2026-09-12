@@ -9,6 +9,7 @@ use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Accounts\Policies\AccountPolicy;
 use App\Domain\Accounts\Scopes\VisibleAccountScope;
 use App\Domain\Users\Models\User;
+use Carbon\CarbonImmutable;
 use Database\Factories\AccountFactory;
 use Illuminate\Database\Eloquent\Attributes\ScopedBy;
 use Illuminate\Database\Eloquent\Attributes\UseFactory;
@@ -23,6 +24,25 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 /**
  * A tenant: either an individual practitioner or a law firm.
  *
+ * @property string $id
+ * @property string $name
+ * @property string|null $legal_name
+ * @property AccountType $type
+ * @property string|null $federal_id
+ * @property string|null $oab_number
+ * @property BrazilianState|null $oab_state
+ * @property string $email
+ * @property string $phone
+ * @property string $postal_code
+ * @property string $street
+ * @property string $number
+ * @property string|null $complement
+ * @property string $district
+ * @property string $city
+ * @property BrazilianState $state
+ * @property bool $active
+ * @property bool $enabled
+ * @property CarbonImmutable|null $deleted_at
  * @property-read Collection<int, User> $users
  */
 #[ScopedBy(VisibleAccountScope::class)]

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Domain\Accounts\Models\Account;
+use App\Domain\Shared\Tenancy\TenantContext;
 use App\Domain\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -92,7 +93,7 @@ final class TenantIsolationTest extends TestCase
         // No authenticated user: the scope deliberately does not apply.
         $this->assertSame(3, User::count());
 
-        $scoped = app(\App\Domain\Shared\Tenancy\TenantContext::class)
+        $scoped = app(TenantContext::class)
             ->actingAs($mine->id, fn (): int => User::count());
 
         $this->assertSame(1, $scoped);

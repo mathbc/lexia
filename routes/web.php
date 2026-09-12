@@ -3,17 +3,17 @@
 declare(strict_types=1);
 
 use App\Domain\Accounts\Actions\RegisterAccountWithOwner;
-use App\Domain\Accounts\Enums\AccountType;
-use App\Domain\Accounts\Enums\BrazilianState;
-use App\Domain\Users\Enums\UserType;
 use App\Domain\Accounts\Actions\ShowAccount;
 use App\Domain\Accounts\Actions\ToggleAccountStatus;
 use App\Domain\Accounts\Actions\UpdateAccount;
+use App\Domain\Accounts\Enums\AccountType;
+use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Users\Actions\CreateUser;
 use App\Domain\Users\Actions\ListUsers;
 use App\Domain\Users\Actions\ShowUserForm;
 use App\Domain\Users\Actions\ToggleUserStatus;
 use App\Domain\Users\Actions\UpdateUser;
+use App\Domain\Users\Enums\UserType;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 

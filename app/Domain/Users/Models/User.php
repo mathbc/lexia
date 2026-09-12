@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Domain\Users\Models;
 
+use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Accounts\Models\Account;
 use App\Domain\Shared\Concerns\BelongsToAccount;
 use App\Domain\Users\Enums\UserRole;
 use App\Domain\Users\Enums\UserType;
 use App\Domain\Users\Policies\UserPolicy;
+use Carbon\CarbonImmutable;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\UseFactory;
@@ -22,6 +24,19 @@ use Illuminate\Notifications\Notifiable;
 /**
  * A member of exactly one account.
  *
+ * @property string $id
+ * @property string $account_id
+ * @property string $name
+ * @property string $email
+ * @property CarbonImmutable|null $email_verified_at
+ * @property string $password
+ * @property string|null $oab_number
+ * @property BrazilianState|null $oab_state
+ * @property CarbonImmutable|null $birth_date
+ * @property UserRole $role
+ * @property UserType $type
+ * @property bool $enabled
+ * @property bool $platform_admin
  * @property-read Account $account
  */
 #[UsePolicy(UserPolicy::class)]

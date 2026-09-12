@@ -45,37 +45,46 @@ enum BrazilianState: string implements HasLabel
     case SE = 'SE';
     case TO = 'TO';
 
+    /**
+     * A flat lookup table rather than a 27-arm match: this is data, and a
+     * match here scores 28 on cyclomatic complexity while carrying no branch
+     * risk at all.
+     *
+     * @var array<string, string>
+     */
+    private const array NAMES = [
+        'AC' => 'Acre',
+        'AL' => 'Alagoas',
+        'AP' => 'Amapá',
+        'AM' => 'Amazonas',
+        'BA' => 'Bahia',
+        'CE' => 'Ceará',
+        'DF' => 'Distrito Federal',
+        'ES' => 'Espírito Santo',
+        'GO' => 'Goiás',
+        'MA' => 'Maranhão',
+        'MT' => 'Mato Grosso',
+        'MS' => 'Mato Grosso do Sul',
+        'MG' => 'Minas Gerais',
+        'PA' => 'Pará',
+        'PB' => 'Paraíba',
+        'PR' => 'Paraná',
+        'PE' => 'Pernambuco',
+        'PI' => 'Piauí',
+        'RJ' => 'Rio de Janeiro',
+        'RN' => 'Rio Grande do Norte',
+        'RS' => 'Rio Grande do Sul',
+        'RO' => 'Rondônia',
+        'RR' => 'Roraima',
+        'SC' => 'Santa Catarina',
+        'SP' => 'São Paulo',
+        'SE' => 'Sergipe',
+        'TO' => 'Tocantins',
+    ];
+
     public function label(): string
     {
-        return match ($this) {
-            self::AC => 'Acre',
-            self::AL => 'Alagoas',
-            self::AP => 'Amapá',
-            self::AM => 'Amazonas',
-            self::BA => 'Bahia',
-            self::CE => 'Ceará',
-            self::DF => 'Distrito Federal',
-            self::ES => 'Espírito Santo',
-            self::GO => 'Goiás',
-            self::MA => 'Maranhão',
-            self::MT => 'Mato Grosso',
-            self::MS => 'Mato Grosso do Sul',
-            self::MG => 'Minas Gerais',
-            self::PA => 'Pará',
-            self::PB => 'Paraíba',
-            self::PR => 'Paraná',
-            self::PE => 'Pernambuco',
-            self::PI => 'Piauí',
-            self::RJ => 'Rio de Janeiro',
-            self::RN => 'Rio Grande do Norte',
-            self::RS => 'Rio Grande do Sul',
-            self::RO => 'Rondônia',
-            self::RR => 'Roraima',
-            self::SC => 'Santa Catarina',
-            self::SP => 'São Paulo',
-            self::SE => 'Sergipe',
-            self::TO => 'Tocantins',
-        };
+        return self::NAMES[$this->value];
     }
 
     /**

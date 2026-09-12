@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Domain\Shared\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\ServiceProvider;
@@ -28,6 +29,6 @@ class AppServiceProvider extends ServiceProvider
         // by the Actions' validation rules, not by $fillable lists.
         Model::automaticallyEagerLoadRelationships();
 
-        Date::use(\Carbon\CarbonImmutable::class);
+        Date::use(CarbonImmutable::class);
     }
 }

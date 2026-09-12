@@ -8,6 +8,9 @@ use App\Domain\Shared\Rules\Cnpj;
 use App\Domain\Shared\Rules\Cpf;
 use App\Domain\Shared\Rules\OabNumber;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Translation\ArrayLoader;
+use Illuminate\Translation\PotentiallyTranslatedString;
+use Illuminate\Translation\Translator;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -18,13 +21,14 @@ final class BrazilianDocumentRulesTest extends TestCase
     {
         $failed = false;
 
-        $rule->validate('doc', $value, function () use (&$failed): object {
+        // A standalone translator keeps this a true unit test: the rules are
+        // pure and must not need the framework booted.
+        $translator = new Translator(new ArrayLoader, 'pt_BR');
+
+        $rule->validate('doc', $value, function (string $message) use (&$failed, $translator): PotentiallyTranslatedString {
             $failed = true;
 
-            return new class
-            {
-                public function translate(): void {}
-            };
+            return new PotentiallyTranslatedString($message, $translator);
         });
 
         return $failed;

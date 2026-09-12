@@ -17,6 +17,21 @@ class AccountFactory extends Factory
     protected $model = Account::class;
 
     /**
+     * Faker's pt_BR locale has no usable provider for either of these:
+     * secondaryAddress() returns a bare letter and citySuffix() returns
+     * fragments like "do Sul", which is a state suffix, not a bairro.
+     *
+     * @var list<string>
+     */
+    private const array COMPLEMENTS = ['Apto 42', 'Sala 12', 'Conj. 501', 'Bloco B', '3º andar'];
+
+    /** @var list<string> */
+    private const array DISTRICTS = [
+        'Centro', 'Bela Vista', 'Jardins', 'Moema', 'Pinheiros',
+        'Savassi', 'Boa Viagem', 'Batel', 'Meireles', 'Asa Sul',
+    ];
+
+    /**
      * Defaults to an individual practitioner; use ->lawFirm() for the other.
      *
      * @return array<string, mixed>
@@ -35,8 +50,8 @@ class AccountFactory extends Factory
             'postal_code' => fake()->numerify('########'),
             'street' => fake()->streetName(),
             'number' => (string) fake()->buildingNumber(),
-            'complement' => fake()->optional()->secondaryAddress(),
-            'district' => fake()->citySuffix(),
+            'complement' => fake()->optional()->randomElement(self::COMPLEMENTS),
+            'district' => fake()->randomElement(self::DISTRICTS),
             'city' => fake()->city(),
             'state' => fake()->randomElement(BrazilianState::cases()),
             'active' => true,

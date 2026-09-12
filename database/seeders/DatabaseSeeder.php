@@ -67,6 +67,6 @@ class DatabaseSeeder extends Seeder
             'email' => 'suporte@lexia.test',
         ]);
 
-        $this->command?->info('Seed pronto. Senha de todos os usuários: password');
+        $this->command->info('Seed pronto. Senha de todos os usuários: password');
     }
 }

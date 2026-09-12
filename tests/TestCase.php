@@ -26,6 +26,9 @@ abstract class TestCase extends BaseTestCase
         return $user;
     }
 
+    /**
+     * @return array{0: Account, 1: User}
+     */
     protected function accountWithOwner(): array
     {
         $account = Account::factory()->create();
