@@ -66,3 +66,31 @@ export const isValidCnpj = (value: string): boolean => {
 
     return nums[12] === first && nums[13] === second
 }
+
+/**
+ * How an account identifies itself legally: a firm by its CNPJ, an individual
+ * by their OAB enrolment. Mirrors Account::identifier() on the server.
+ */
+export const accountIdentifier = (account: {
+    type: string
+    federal_id: string | null
+    oab_number: string | null
+    oab_state: string | null
+}): string | null => {
+    if (account.type === 'law_firm') {
+        return account.federal_id ? formatCnpj(account.federal_id) : null
+    }
+
+    return account.oab_number && account.oab_state
+        ? `OAB/${account.oab_state} ${account.oab_number}`
+        : null
+}
+
+/** Iniciais para o avatar: as do primeiro e do último nome. */
+export const initials = (name: string): string => {
+    const parts = name.trim().split(/\s+/)
+    const first = parts[0]?.[0] ?? ''
+    const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : ''
+
+    return (first + last).toUpperCase()
+}

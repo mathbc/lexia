@@ -8,15 +8,18 @@ use App\Domain\Shared\Concerns\ProvidesOptions;
 use App\Domain\Shared\Contracts\HasLabel;
 
 /**
- * What a user may do inside their own account.
+ * What a user may do.
  *
- * All three roles are account-scoped: none of them grants visibility across
- * tenants. Platform-wide access is a separate flag on the user, deliberately
- * kept out of this enum.
+ * The bottom three roles are account-scoped: none of them grants visibility
+ * across tenants. PlatformAdmin is the exception and sits above all of them —
+ * it belongs to LexIA's own account and administers every other one.
  */
 enum UserRole: string implements HasLabel
 {
     use ProvidesOptions;
+
+    /** LexIA staff: every account, and every user inside them. */
+    case PlatformAdmin = 'platform_admin';
 
     /** Owns the account: every account setting, plus the other admins. */
     case AccountAdmin = 'account_admin';
@@ -30,6 +33,7 @@ enum UserRole: string implements HasLabel
     public function label(): string
     {
         return match ($this) {
+            self::PlatformAdmin => 'Admin do Sistema',
             self::AccountAdmin => 'Admin da Conta',
             self::Admin => 'Admin',
             self::Lawyer => 'Advogado',
@@ -42,6 +46,7 @@ enum UserRole: string implements HasLabel
     public function level(): int
     {
         return match ($this) {
+            self::PlatformAdmin => 4,
             self::AccountAdmin => 3,
             self::Admin => 2,
             self::Lawyer => 1,
@@ -62,5 +67,26 @@ enum UserRole: string implements HasLabel
     public function manages(): bool
     {
         return $this !== self::Lawyer;
+    }
+
+    /**
+     * The roles that live inside a customer account.
+     *
+     * PlatformAdmin is excluded: it is not a role a tenant hands out, so it
+     * has no business in a customer's filters or dropdowns.
+     *
+     * @return list<self>
+     */
+    public static function accountCases(): array
+    {
+        return [self::AccountAdmin, self::Admin, self::Lawyer];
+    }
+
+    /**
+     * @return list<array{value: string, label: string}>
+     */
+    public static function accountOptions(): array
+    {
+        return self::optionsFrom(self::accountCases());
     }
 }

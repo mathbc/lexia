@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
 
 /* Self-hosted rather than a CDN: a Brazilian legal product should not leak a
    user's IP to a third party on every pageview (LGPD). */
@@ -9,32 +10,171 @@
 @source '../**/*.blade.php';
 @source '../**/*.{js,ts,jsx,tsx}';
 
+/* O tema escuro é uma classe na raiz, não a media query: quem decide é o
+   usuário. É também o que os componentes do shadcn assumem. */
+@custom-variant dark (&:is(.dark *));
+
 @theme {
     /* Source Serif 4 as specified. Acumin Pro is Adobe-only and cannot be
        self-hosted, so Archivo stands in: a neo-grotesque with the same broad
        weight range and similar proportions. */
     --font-serif: 'Source Serif 4 Variable', ui-serif, Georgia, serif;
     --font-sans: 'Archivo Variable', ui-sans-serif, system-ui, sans-serif;
+}
 
-    --color-ink-50: oklch(0.985 0.002 260);
-    --color-ink-100: oklch(0.96 0.004 260);
-    --color-ink-200: oklch(0.91 0.006 260);
-    --color-ink-300: oklch(0.83 0.008 260);
-    --color-ink-400: oklch(0.65 0.012 260);
-    --color-ink-500: oklch(0.52 0.014 260);
-    --color-ink-600: oklch(0.42 0.016 260);
-    --color-ink-700: oklch(0.34 0.018 260);
-    --color-ink-800: oklch(0.25 0.018 260);
-    --color-ink-900: oklch(0.18 0.016 260);
+/* ---------------------------------------------------------------------------
+   Tokens semânticos do shadcn/ui.
 
-    /* Deep institutional blue — the register courts and firms present in. */
-    --color-brand-50: oklch(0.96 0.02 250);
-    --color-brand-100: oklch(0.91 0.04 250);
-    --color-brand-300: oklch(0.72 0.10 250);
-    --color-brand-500: oklch(0.52 0.14 250);
-    --color-brand-600: oklch(0.44 0.14 250);
-    --color-brand-700: oklch(0.36 0.12 250);
-    --color-brand-900: oklch(0.24 0.08 250);
+   A escala acima diz *que cinza existe*; esta camada diz *o que cada cinza
+   significa* — fundo, texto, borda, primário. Os componentes só falam a língua
+   semântica, de modo que o tema escuro (e uma eventual cor de marca) é uma
+   troca de valores aqui, e em nenhum outro arquivo.
+
+   A paleta continua a mesma: croma 0 do começo ao fim — preto, branco e
+   cinzas —, e a cor fica reservada ao que precisa significar alguma coisa,
+   erro e sucesso. É o `baseColor: neutral` do shadcn, que por sorte coincide
+   com a escala que o projeto já usava; para um cinza avulso fora dos papéis
+   abaixo, o `neutral-*` do próprio Tailwind está à mão. Uma cor de marca
+   futura entra aqui, e em nenhum outro lugar.
+   --------------------------------------------------------------------------- */
+:root {
+    --radius: 0.625rem;
+
+    /* O corpo é ink-50 e os cartões são brancos: é o contraste que separa
+       superfície de conteúdo num tema sem cor. */
+    --background: oklch(0.985 0 0);
+    --foreground: oklch(0.24 0 0);
+
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+
+    --primary: oklch(0.22 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.96 0 0);
+    --secondary-foreground: oklch(0.24 0 0);
+    --muted: oklch(0.96 0 0);
+    --muted-foreground: oklch(0.52 0 0);
+    --accent: oklch(0.96 0 0);
+    --accent-foreground: oklch(0.145 0 0);
+
+    /* As duas únicas cores do sistema, e ambas significam algo. */
+    --destructive: oklch(0.577 0.245 27.325);
+    --destructive-foreground: oklch(0.985 0 0);
+    --success: oklch(0.596 0.145 163.225);
+    --success-foreground: oklch(0.985 0 0);
+
+    --border: oklch(0.91 0 0);
+    --input: oklch(0.91 0 0);
+    --ring: oklch(0.38 0 0);
+
+    --chart-1: oklch(0.22 0 0);
+    --chart-2: oklch(0.42 0 0);
+    --chart-3: oklch(0.52 0 0);
+    --chart-4: oklch(0.65 0 0);
+    --chart-5: oklch(0.83 0 0);
+
+    /* O menu lateral é branco como os cartões, e não como o corpo: é o que o
+       separa da área de conteúdo sem precisar de uma sombra. */
+    --sidebar: oklch(1 0 0);
+    --sidebar-foreground: oklch(0.24 0 0);
+    --sidebar-primary: oklch(0.22 0 0);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.96 0 0);
+    --sidebar-accent-foreground: oklch(0.145 0 0);
+    --sidebar-border: oklch(0.91 0 0);
+    --sidebar-ring: oklch(0.38 0 0);
+}
+
+.dark {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+
+    --destructive: oklch(0.704 0.191 22.216);
+    --destructive-foreground: oklch(0.985 0 0);
+    --success: oklch(0.696 0.17 162.48);
+    --success-foreground: oklch(0.145 0 0);
+
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+
+    --chart-1: oklch(0.985 0 0);
+    --chart-2: oklch(0.83 0 0);
+    --chart-3: oklch(0.65 0 0);
+    --chart-4: oklch(0.52 0 0);
+    --chart-5: oklch(0.42 0 0);
+
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.985 0 0);
+    --sidebar-primary-foreground: oklch(0.205 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* `inline` porque os valores acima são variáveis CSS de tempo de execução: o
+   Tailwind gera `bg-background` apontando para `var(--background)`, e trocar a
+   classe `.dark` na raiz repinta tudo sem recompilar. */
+@theme inline {
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+
+    --color-chart-1: var(--chart-1);
+    --color-chart-2: var(--chart-2);
+    --color-chart-3: var(--chart-3);
+    --color-chart-4: var(--chart-4);
+    --color-chart-5: var(--chart-5);
+
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
 }
 
 @layer base {
@@ -42,12 +182,16 @@
         -webkit-text-size-adjust: 100%;
     }
 
+    * {
+        @apply border-border outline-ring/50;
+    }
+
     body {
-        @apply bg-ink-50 text-ink-800 font-sans antialiased;
+        @apply bg-background text-foreground font-sans antialiased;
     }
 
     h1, h2, h3 {
-        @apply font-serif text-ink-900;
+        @apply font-serif;
     }
 
     /* Numbers in tables must line up column-wise; the OAB number, CNPJ and

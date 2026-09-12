@@ -7,6 +7,18 @@
 
     <title inertia>{{ config('app.name', 'LexIA') }}</title>
 
+    {{-- Antes da primeira pintura: o tema escolhido vira classe na raiz aqui,
+         senão a tela pisca em claro antes do React assumir. --}}
+    <script>
+        (() => {
+            const saved = localStorage.getItem('appearance')
+            const dark = saved === 'dark'
+                || (saved !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+
+            document.documentElement.classList.toggle('dark', dark)
+        })()
+    </script>
+
     @vite(['resources/css/app.css', 'resources/js/app.tsx'])
 
     {{-- Component form rather than @inertiaHead/@inertia: the legacy

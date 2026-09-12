@@ -47,11 +47,91 @@ Duas consequências que já morderam:
 
 ## Papéis
 
-`AccountAdmin` > `Admin` > `Lawyer`, todos internos à conta. A regra
-transversal é que **ninguém gerencia um par ou um superior**
+`PlatformAdmin` > `AccountAdmin` > `Admin` > `Lawyer`. Os três últimos são
+internos à conta; `PlatformAdmin` é a equipe LexIA e o único papel que
+atravessa a fronteira do tenant — administra todas as contas e os usuários
+delas. A regra transversal é que **ninguém gerencia um par ou um superior**
 (`UserRole::outranks()` é estrito), o que impede dois admins de se trancarem
-mutuamente. `users.platform_admin` é a equipe LexIA e fica fora do enum de
-propósito.
+mutuamente; `User::canManage()` abre exceção apenas para o `PlatformAdmin`,
+que por definição age fora da própria conta.
+
+O papel é a única fonte de autoridade: não existe mais a coluna
+`users.platform_admin`, e `User::isPlatformAdmin()` deriva de
+`UserRole::PlatformAdmin`.
+
+## A conta da plataforma
+
+A LexIA tem sua própria conta (`AccountType::Platform`, id fixo em
+`Account::PLATFORM_ID`), criada por **migration** e não por seeder: produção
+também precisa dela. É onde vivem os `PlatformAdmin`.
+
+Nem o tipo nem o papel são oferecidos em formulário — cadastro público e
+edição de conta trabalham com `AccountType::customerCases()`, e a conta da
+plataforma não pode ser desativada nem excluída (desativá-la reprovaria
+`canAccessPlatform()` de toda a equipe). Testes que contam contas precisam
+descontá-la.
+
+## O design system
+
+A interface é **shadcn/ui** no estilo *new-york*: os componentes não vêm de um
+pacote, são código do projeto em `resources/js/components/ui/` — copiá-los é o
+ponto, já que a edição local é o mecanismo de customização. O `components.json`
+está configurado, então `npx shadcn@latest add <componente>` cai no lugar certo
+e encontra o `cn` em `@/lib/utils`.
+
+A paleta não mudou: continua croma 0 — preto, branco e cinzas —, com cor
+reservada a erro e sucesso. O que mudou é o vocabulário. As escalas `ink-*` e
+`brand-*` deram lugar aos **tokens semânticos** do shadcn em
+`resources/css/app.css`: `:root` e `.dark` guardam os valores, `@theme inline`
+os expõe como `bg-background`, `text-muted-foreground`, `border-border`. Um
+componente nunca nomeia um cinza, só o papel que ele cumpre — é o que permite
+trocar o tema (ou herdar uma cor de marca futura) num arquivo só. `--success`
+é acréscimo nosso ao conjunto padrão, para o par que a UI precisa significar.
+
+Três consequências práticas:
+
+1. **O menu lateral é o `Sidebar` do shadcn.** `SidebarProvider` guarda o
+   estado num cookie (`sidebar_state`), `ctrl/cmd+B` recolhe, e abaixo de
+   `md` ele vira uma gaveta (`Sheet`). Recolhido, vira trilha de ícones com
+   tooltip — daí todo item de navegação precisar de um ícone.
+2. **O tema é uma classe na raiz.** `useAppearance` (claro/escuro/sistema)
+   grava em `localStorage`, e um script inline no `app.blade.php` reaplica a
+   classe *antes* da primeira pintura; sem ele a tela pisca em claro a cada
+   navegação dura.
+3. **`Field` enxerta `id` e `aria-invalid` no controle que envolve.** É o que
+   liga rótulo e erro a um `Select` do Radix, que é um botão e não um
+   `<select>`. Esse Select (`SelectInput`) fala `onValueChange`, não
+   `onChange`, e reserva a string vazia para "nada escolhido" — o item que
+   limpa um filtro viaja com um valor sentinela e volta como `''`.
+
+As abas continuam sendo links, não o primitivo do Radix: quem guarda o estado
+é a URL (ver abaixo).
+
+## O painel
+
+`AppLayout` é uma grade de altura fixa: o `SidebarProvider` recebe `h-screen`
+com `overflow-hidden`, de modo que a página em si nunca rola. Só a coluna do
+meio tem `overflow-y-auto` — o menu da esquerda e o cabeçalho ficam parados,
+independentemente do conteúdo. Filtros de listagem não vão no corpo: a layout
+recebe `filters` e desenha um painel lateral à direita, aberto por um botão no
+cabeçalho que mostra quantos filtros estão ativos. Como toda navegação de
+filtro usa `preserveState`, o painel continua aberto enquanto os resultados
+mudam.
+
+A conta é a raiz de tudo o que é cadastro: `/contas` (só `PlatformAdmin`),
+`/contas/nova` e `/contas/{account}`, que tem duas abas — **Dados gerais**
+(`accounts/show`) e **Usuários** (`accounts/users`). As abas são URLs de
+verdade, não estado local, para que uma listagem filtrada sobreviva a um
+reload. Os usuários vivem sob `/contas/{account}/usuarios/...`: não existe mais
+listagem de usuários fora de uma conta.
+
+Consequência para as Actions de usuário: a URL carrega **dois** modelos, e o
+route-model binding resolve ambos antes do middleware de tenant. A conta da
+URL, e não a do ator, é a que vale — daí `UserIndexQuery` filtrar por
+`account_id` explicitamente, já que para a equipe LexIA o escopo está aberto.
+`ActsWithinAccount::withinRoutedAccount()` é o guarda que recusa uma conta
+alheia e um usuário que não pertence à conta da URL; ele só funciona se o
+`asController()` tipar `Account`, que é o que dispara o binding.
 
 ## Autenticação
 

@@ -42,10 +42,10 @@ final class TenantIsolationTest extends TestCase
         $stranger = User::factory()->forAccount($theirs)->create(['name' => 'Estranho']);
 
         $this->actingAs($owner)
-            ->get('/usuarios')
+            ->get("/contas/{$mine->id}/usuarios")
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->component('users/index')
+                ->component('accounts/users')
                 ->where('users.total', 1)
                 ->whereNot('users.data.0.name', $stranger->name));
     }
@@ -56,7 +56,7 @@ final class TenantIsolationTest extends TestCase
         [, $owner] = $this->accountWithOwner();
         $theirs = Account::factory()->create();
 
-        $this->actingAs($owner)->get("/conta/{$theirs->id}")->assertForbidden();
+        $this->actingAs($owner)->get("/contas/{$theirs->id}")->assertForbidden();
     }
 
     #[Test]
@@ -66,7 +66,7 @@ final class TenantIsolationTest extends TestCase
         $stranger = User::factory()->forAccount(Account::factory()->create())->create();
 
         $this->actingAs($owner)
-            ->put("/usuarios/{$stranger->id}", ['name' => 'Invadido', 'email' => 'x@x.test', 'type' => 'lawyer'])
+            ->put("/contas/{$stranger->account_id}/usuarios/{$stranger->id}", ['name' => 'Invadido', 'email' => 'x@x.test', 'type' => 'lawyer'])
             ->assertForbidden();
 
         $this->assertNotSame('Invadido', $stranger->fresh()->name);
@@ -78,7 +78,7 @@ final class TenantIsolationTest extends TestCase
         Account::factory()->count(2)->create();
         $staff = User::factory()->platformAdmin()->create();
 
-        $this->actingAs($staff)->get('/usuarios')->assertOk();
+        $this->actingAs($staff)->get('/contas')->assertOk();
 
         // Middleware widens the context for platform staff.
         $this->assertTrue($staff->isPlatformAdmin());

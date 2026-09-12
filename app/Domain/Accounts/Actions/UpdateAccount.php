@@ -51,7 +51,7 @@ final class UpdateAccount
     {
         $this->handle($account, AccountData::fromArray($request->validated()));
 
-        return to_route('accounts.edit', $account)
+        return to_route('accounts.show', $account)
             ->with('success', 'Dados da conta atualizados com sucesso.');
     }
 }

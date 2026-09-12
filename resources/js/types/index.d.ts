@@ -17,7 +17,7 @@ export interface AuthUser {
     }
 }
 
-export type UserRoleValue = 'account_admin' | 'admin' | 'lawyer'
+export type UserRoleValue = 'platform_admin' | 'account_admin' | 'admin' | 'lawyer'
 
 /** A backed enum published as {value,label} by the server. */
 export interface Option {
@@ -53,4 +53,37 @@ export interface UserRow {
     enabled: boolean
     oab_number: string | null
     oab_state: string | null
+}
+
+/** The accounts table, as the Account model serialises. */
+export interface Account {
+    id: string
+    name: string
+    legal_name: string | null
+    type: string
+    federal_id: string | null
+    oab_number: string | null
+    oab_state: string | null
+    email: string
+    phone: string
+    postal_code: string
+    street: string
+    number: string
+    complement: string | null
+    district: string
+    city: string
+    state: string
+    active: boolean
+    enabled: boolean
+}
+
+export interface AccountRow extends Account {
+    users_count: number
+}
+
+/** Mirrors AccountPageProps::for() — shared by both tabs of an account. */
+export interface AccountAbilities {
+    update: boolean
+    toggle_status: boolean
+    manage_users: boolean
 }

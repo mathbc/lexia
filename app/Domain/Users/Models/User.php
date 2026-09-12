@@ -36,7 +36,6 @@ use Illuminate\Notifications\Notifiable;
  * @property UserRole $role
  * @property UserType $type
  * @property bool $enabled
- * @property bool $platform_admin
  * @property-read Account $account
  */
 #[UsePolicy(UserPolicy::class)]
@@ -55,15 +54,13 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $guarded = ['id'];
 
     /**
-     * Mirrors the schema defaults so a freshly built model behaves the same
-     * before and after it is persisted. Without this, `platform_admin` is null
-     * in memory and isPlatformAdmin() has no boolean to return.
+     * Mirrors the schema default so a freshly built model behaves the same
+     * before and after it is persisted.
      *
      * @var array<string, mixed>
      */
     protected $attributes = [
         'enabled' => true,
-        'platform_admin' => false,
     ];
 
     /**
@@ -88,17 +85,15 @@ class User extends Authenticatable implements MustVerifyEmail
             'role' => UserRole::class,
             'type' => UserType::class,
             'enabled' => 'boolean',
-            'platform_admin' => 'boolean',
         ];
     }
 
     /**
-     * LexIA staff. Deliberately not a UserRole: the three business roles are
-     * all account-scoped, and this one exists to cross that boundary.
+     * LexIA staff: the one role that is not confined to a single account.
      */
     public function isPlatformAdmin(): bool
     {
-        return $this->platform_admin;
+        return $this->role === UserRole::PlatformAdmin;
     }
 
     /**

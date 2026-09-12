@@ -8,6 +8,7 @@ use App\Domain\Accounts\Enums\AccountType;
 use App\Domain\Accounts\Models\Account;
 use App\Domain\Users\Enums\UserRole;
 use App\Domain\Users\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -46,12 +47,26 @@ final class RegisterAccountTest extends TestCase
         ];
     }
 
+    /**
+     * Customer accounts only.
+     *
+     * LexIA's own account is created by migration, so it is there in every
+     * test and would otherwise be counted as a sign-up. Global scopes are
+     * dropped so soft-deleted rows count too.
+     *
+     * @return Builder<Account>
+     */
+    private function customerAccounts(): Builder
+    {
+        return Account::withoutGlobalScopes()->whereKeyNot(Account::PLATFORM_ID);
+    }
+
     #[Test]
     public function signing_up_creates_the_account_and_its_first_admin(): void
     {
         $this->post('/cadastro', $this->payload())->assertRedirect('/painel');
 
-        $account = Account::sole();
+        $account = $this->customerAccounts()->sole();
         $this->assertSame('Alfa Sociedade de Advogados Ltda.', $account->legal_name);
         $this->assertSame('11222333000181', $account->federal_id);
         $this->assertTrue($account->isOperational());
@@ -68,7 +83,7 @@ final class RegisterAccountTest extends TestCase
         $this->post('/cadastro', $this->payload(['federal_id' => '11222333000199']))
             ->assertSessionHasErrors('federal_id');
 
-        $this->assertSame(0, Account::count());
+        $this->assertSame(0, $this->customerAccounts()->count());
     }
 
     #[Test]
@@ -97,7 +112,7 @@ final class RegisterAccountTest extends TestCase
 
         $this->post('/cadastro', $this->payload())->assertSessionHasErrors('federal_id');
 
-        $this->assertSame(1, Account::withoutGlobalScopes()->count());
+        $this->assertSame(1, $this->customerAccounts()->count());
     }
 
     #[Test]
@@ -107,10 +122,9 @@ final class RegisterAccountTest extends TestCase
 
         $this->post('/cadastro', $this->payload())->assertRedirect('/painel');
 
-        // withoutGlobalScopes() also drops the SoftDeletes scope, so the
-        // trashed row is counted too: one live account, two rows in total.
-        $this->assertSame(2, Account::withoutGlobalScopes()->count());
-        $this->assertSame(1, Account::withoutGlobalScopes()->whereNull('deleted_at')->count());
+        // The trashed row is counted too: one live account, two rows in total.
+        $this->assertSame(2, $this->customerAccounts()->count());
+        $this->assertSame(1, $this->customerAccounts()->whereNull('deleted_at')->count());
     }
 
     #[Test]
@@ -122,6 +136,6 @@ final class RegisterAccountTest extends TestCase
 
         $this->post('/cadastro', $this->payload())->assertSessionHasErrors('owner_email');
 
-        $this->assertSame(1, Account::withoutGlobalScopes()->count());
+        $this->assertSame(1, $this->customerAccounts()->count());
     }
 }

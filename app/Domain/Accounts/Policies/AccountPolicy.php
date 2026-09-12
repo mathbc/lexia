@@ -36,24 +36,36 @@ final class AccountPolicy
         return $user->isPlatformAdmin();
     }
 
+    /**
+     * Inside a customer account this is the owner's; LexIA staff may edit any
+     * account, which is the point of the role.
+     */
     public function update(User $user, Account $account): bool
     {
+        if ($user->isPlatformAdmin()) {
+            return true;
+        }
+
         return $this->belongsTo($user, $account)
             && $user->role === UserRole::AccountAdmin;
     }
 
+    /**
+     * LexIA's own account is not one to switch off: an inactive account fails
+     * canAccessPlatform(), which would lock every platform admin out.
+     */
     public function toggleStatus(User $user, Account $account): bool
     {
-        return $this->update($user, $account);
+        return ! $account->isPlatform() && $this->update($user, $account);
     }
 
     /**
      * Deleting a tenant is destructive and irreversible from the UI; keep it
-     * with LexIA staff.
+     * with LexIA staff, and never let it reach LexIA's own account.
      */
     public function delete(User $user, Account $account): bool
     {
-        return $user->isPlatformAdmin();
+        return $user->isPlatformAdmin() && ! $account->isPlatform();
     }
 
     private function belongsTo(User $user, Account $account): bool

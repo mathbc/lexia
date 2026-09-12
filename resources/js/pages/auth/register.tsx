@@ -1,6 +1,7 @@
 import { Head, Link, useForm } from '@inertiajs/react'
 import type { FormEvent } from 'react'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, Input, Select } from '@/components/ui/field'
 import { digits, formatCnpj, formatPhone, formatPostalCode, isValidCnpj } from '@/lib/format'
 import type { Option } from '@/types'
@@ -75,18 +76,26 @@ export default function Register({ accountTypes, states, userTypes }: Props) {
         <div className="mx-auto max-w-3xl px-6 py-12">
             <Head title="Criar conta" />
 
-            <h1 className="text-center font-serif text-3xl font-semibold text-brand-700">Criar conta</h1>
-            <p className="mt-2 mb-8 text-center text-sm text-ink-500">
+            <h1 className="text-center font-serif text-3xl font-semibold text-foreground">Criar conta</h1>
+            <p className="mt-2 mb-8 text-center text-sm text-muted-foreground">
                 Já tem conta?{' '}
-                <Link href="/login" className="text-brand-600 hover:underline">Entre aqui</Link>
+                <Link href="/login" className="font-medium text-foreground underline-offset-4 hover:underline">
+                    Entre aqui
+                </Link>
             </p>
 
             <form onSubmit={submit} className="space-y-6">
-                <section className="rounded-lg bg-white p-6 ring-1 ring-ink-200">
-                    <h2 className="mb-4 text-lg font-semibold">Dados da conta</h2>
-                    <div className="grid gap-4 sm:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Dados da conta</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid gap-4 sm:grid-cols-2">
                         <Field label="Tipo de conta" error={form.errors.type} required>
-                            <Select value={form.data.type} onChange={(e) => form.setData('type', e.target.value)} options={accountTypes} />
+                            <Select
+                                value={form.data.type}
+                                onValueChange={(value) => form.setData('type', value)}
+                                options={accountTypes}
+                            />
                         </Field>
 
                         <Field label={isFirm ? 'Nome fantasia' : 'Nome'} error={form.errors.name} required>
@@ -113,7 +122,12 @@ export default function Register({ accountTypes, states, userTypes }: Props) {
                                     <Input value={form.data.oab_number} onChange={(e) => form.setData('oab_number', e.target.value.toUpperCase())} />
                                 </Field>
                                 <Field label="Seccional" error={form.errors.oab_state} required>
-                                    <Select value={form.data.oab_state} onChange={(e) => form.setData('oab_state', e.target.value)} options={states} placeholder="Selecione" />
+                                    <Select
+                                        value={form.data.oab_state}
+                                        onValueChange={(value) => form.setData('oab_state', value)}
+                                        options={states}
+                                        placeholder="Selecione"
+                                    />
                                 </Field>
                             </>
                         )}
@@ -129,55 +143,55 @@ export default function Register({ accountTypes, states, userTypes }: Props) {
                                 placeholder="(11) 90000-0000"
                             />
                         </Field>
-                    </div>
-                </section>
+                    </CardContent>
+                </Card>
 
-                <section className="rounded-lg bg-white p-6 ring-1 ring-ink-200">
-                    <h2 className="mb-4 text-lg font-semibold">Endereço</h2>
-                    <div className="grid gap-4 sm:grid-cols-6">
-                        <div className="sm:col-span-2">
-                            <Field label="CEP" error={form.errors.postal_code} required>
-                                <Input
-                                    value={formatPostalCode(form.data.postal_code)}
-                                    onChange={(e) => form.setData('postal_code', digits(e.target.value))}
-                                    onBlur={(e) => lookupPostalCode(e.target.value)}
-                                    inputMode="numeric"
-                                    placeholder="00000-000"
-                                />
-                            </Field>
-                        </div>
-                        <div className="sm:col-span-3">
-                            <Field label="Logradouro" error={form.errors.street} required>
-                                <Input value={form.data.street} onChange={(e) => form.setData('street', e.target.value)} />
-                            </Field>
-                        </div>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Endereço</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid gap-4 sm:grid-cols-6">
+                        <Field label="CEP" error={form.errors.postal_code} required className="sm:col-span-2">
+                            <Input
+                                value={formatPostalCode(form.data.postal_code)}
+                                onChange={(e) => form.setData('postal_code', digits(e.target.value))}
+                                onBlur={(e) => lookupPostalCode(e.target.value)}
+                                inputMode="numeric"
+                                placeholder="00000-000"
+                            />
+                        </Field>
+                        <Field label="Logradouro" error={form.errors.street} required className="sm:col-span-3">
+                            <Input value={form.data.street} onChange={(e) => form.setData('street', e.target.value)} />
+                        </Field>
                         <Field label="Número" error={form.errors.number} required>
                             <Input value={form.data.number} onChange={(e) => form.setData('number', e.target.value)} />
                         </Field>
-                        <div className="sm:col-span-2">
-                            <Field label="Complemento" error={form.errors.complement}>
-                                <Input value={form.data.complement} onChange={(e) => form.setData('complement', e.target.value)} />
-                            </Field>
-                        </div>
-                        <div className="sm:col-span-2">
-                            <Field label="Bairro" error={form.errors.district} required>
-                                <Input value={form.data.district} onChange={(e) => form.setData('district', e.target.value)} />
-                            </Field>
-                        </div>
+                        <Field label="Complemento" error={form.errors.complement} className="sm:col-span-2">
+                            <Input value={form.data.complement} onChange={(e) => form.setData('complement', e.target.value)} />
+                        </Field>
+                        <Field label="Bairro" error={form.errors.district} required className="sm:col-span-2">
+                            <Input value={form.data.district} onChange={(e) => form.setData('district', e.target.value)} />
+                        </Field>
                         <Field label="Cidade" error={form.errors.city} required>
                             <Input value={form.data.city} onChange={(e) => form.setData('city', e.target.value)} />
                         </Field>
                         <Field label="UF" error={form.errors.state} required>
-                            <Select value={form.data.state} onChange={(e) => form.setData('state', e.target.value)} options={states} placeholder="UF" />
+                            <Select
+                                value={form.data.state}
+                                onValueChange={(value) => form.setData('state', value)}
+                                options={states}
+                                placeholder="UF"
+                            />
                         </Field>
-                    </div>
-                </section>
+                    </CardContent>
+                </Card>
 
-                <section className="rounded-lg bg-white p-6 ring-1 ring-ink-200">
-                    <h2 className="mb-1 text-lg font-semibold">Responsável pela conta</h2>
-                    <p className="mb-4 text-xs text-ink-400">Este usuário será o Admin da Conta.</p>
-
-                    <div className="grid gap-4 sm:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Responsável pela conta</CardTitle>
+                        <CardDescription>Este usuário será o Admin da Conta.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid gap-4 sm:grid-cols-2">
                         <Field label="Nome completo" error={form.errors.owner_name} required>
                             <Input value={form.data.owner_name} onChange={(e) => form.setData('owner_name', e.target.value)} required />
                         </Field>
@@ -185,7 +199,11 @@ export default function Register({ accountTypes, states, userTypes }: Props) {
                             <Input type="email" value={form.data.owner_email} onChange={(e) => form.setData('owner_email', e.target.value)} required />
                         </Field>
                         <Field label="Tipo" error={form.errors.owner_type} required>
-                            <Select value={form.data.owner_type} onChange={(e) => form.setData('owner_type', e.target.value)} options={userTypes} />
+                            <Select
+                                value={form.data.owner_type}
+                                onValueChange={(value) => form.setData('owner_type', value)}
+                                options={userTypes}
+                            />
                         </Field>
                         <Field label="Data de nascimento" error={form.errors.owner_birth_date}>
                             <Input type="date" value={form.data.owner_birth_date} onChange={(e) => form.setData('owner_birth_date', e.target.value)} />
@@ -196,8 +214,8 @@ export default function Register({ accountTypes, states, userTypes }: Props) {
                         <Field label="Confirme a senha" error={form.errors.password_confirmation} required>
                             <Input type="password" value={form.data.password_confirmation} onChange={(e) => form.setData('password_confirmation', e.target.value)} autoComplete="new-password" required />
                         </Field>
-                    </div>
-                </section>
+                    </CardContent>
+                </Card>
 
                 <div className="flex justify-end">
                     <Button type="submit" disabled={form.processing}>

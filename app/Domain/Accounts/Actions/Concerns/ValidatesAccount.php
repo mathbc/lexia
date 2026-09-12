@@ -31,7 +31,7 @@ trait ValidatesAccount
 
         return [
             'name' => ['required', 'string', 'max:255'],
-            'type' => ['required', Rule::enum(AccountType::class)],
+            'type' => ['required', Rule::in($this->assignableTypes($ignoring))],
 
             'legal_name' => ["required_if:type,{$firm}", 'nullable', 'string', 'max:255'],
 
@@ -59,6 +59,24 @@ trait ValidatesAccount
 
             ...$this->addressRules(),
         ];
+    }
+
+    /**
+     * Which types a form may set.
+     *
+     * The platform type is never on offer: it belongs to the single account
+     * created by migration. The account that already has it keeps it, so
+     * editing LexIA's own details does not silently demote it to a customer.
+     *
+     * @return list<string>
+     */
+    private function assignableTypes(?Account $account): array
+    {
+        $types = AccountType::customerValues();
+
+        return $account?->type === AccountType::Platform
+            ? [...$types, AccountType::Platform->value]
+            : $types;
     }
 
     /**

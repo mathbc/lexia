@@ -11,7 +11,7 @@ use Illuminate\Database\Seeder;
 
 /**
  * Local development data: one law firm with a full role spread, one solo
- * practitioner, and a LexIA staff account.
+ * practitioner, and a LexIA staff user in the platform account.
  *
  * Every user shares the password "password".
  */
@@ -55,14 +55,9 @@ class DatabaseSeeder extends Seeder
             'type' => UserType::Lawyer,
         ]);
 
-        // LexIA staff: crosses the tenant boundary, so it lives on its own
-        // account rather than inside a customer's.
-        $platform = Account::factory()->create([
-            'name' => 'LexIA',
-            'email' => 'suporte@lexia.com.br',
-        ]);
-
-        User::factory()->forAccount($platform)->platformAdmin()->create([
+        // LexIA staff. The platform account itself is not seeded: it is created
+        // by migration, because production needs it too.
+        User::factory()->platformAdmin()->create([
             'name' => 'Suporte LexIA',
             'email' => 'suporte@lexia.test',
         ]);

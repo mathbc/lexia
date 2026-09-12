@@ -56,6 +56,13 @@ class Account extends Model
     use HasUuids;
     use SoftDeletes;
 
+    /**
+     * LexIA's own account, created by migration so that every environment —
+     * production included — has it. The id is fixed rather than looked up by
+     * name, so seeds, factories and staff tooling can point straight at it.
+     */
+    public const string PLATFORM_ID = '5bb42959-5e28-48dc-9dd5-3dae33a9dde9';
+
     protected $guarded = ['id'];
 
     /**
@@ -70,6 +77,26 @@ class Account extends Model
             'active' => 'boolean',
             'enabled' => 'boolean',
         ];
+    }
+
+    /**
+     * LexIA's own account.
+     *
+     * Bypasses VisibleAccountScope on purpose: the caller is by definition
+     * asking for an account other than the current tenant's.
+     */
+    public static function platform(): self
+    {
+        return self::withoutGlobalScope(VisibleAccountScope::class)
+            ->findOrFail(self::PLATFORM_ID);
+    }
+
+    /**
+     * Whether this is LexIA's own account rather than a customer's.
+     */
+    public function isPlatform(): bool
+    {
+        return $this->id === self::PLATFORM_ID;
     }
 
     /**

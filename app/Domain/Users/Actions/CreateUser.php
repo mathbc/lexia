@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Users\Actions;
 
 use App\Domain\Accounts\Models\Account;
+use App\Domain\Users\Actions\Concerns\ActsWithinAccount;
 use App\Domain\Users\Actions\Concerns\ValidatesUser;
 use App\Domain\Users\Data\UserData;
 use App\Domain\Users\Models\User;
@@ -24,6 +25,7 @@ use Lorisleiva\Actions\Concerns\AsAction;
  */
 final class CreateUser
 {
+    use ActsWithinAccount;
     use AsAction;
     use ValidatesUser;
 
@@ -43,7 +45,8 @@ final class CreateUser
 
     public function authorize(ActionRequest $request): bool
     {
-        return $request->user()->can('create', User::class);
+        return $this->withinRoutedAccount($request)
+            && $request->user()->can('create', User::class);
     }
 
     /**
@@ -75,19 +78,18 @@ final class CreateUser
         ];
     }
 
-    public function asController(ActionRequest $request): RedirectResponse
+    public function asController(Account $account, ActionRequest $request): RedirectResponse
     {
-        $user = $this->handle(
-            $request->user()->account,
-            UserData::fromArray($request->validated()),
-        );
+        // The account comes from the URL, not from the actor: LexIA staff
+        // invite people into a tenant that is not their own.
+        $user = $this->handle($account, UserData::fromArray($request->validated()));
 
         // Invitation and email verification both ride on the framework's
         // existing flows rather than a bespoke token.
         event(new Registered($user));
         Password::sendResetLink(['email' => $user->email]);
 
-        return to_route('users.index')
+        return to_route('users.index', $account)
             ->with('success', "Convite enviado para {$user->email}.");
     }
 }

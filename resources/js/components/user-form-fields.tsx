@@ -36,14 +36,19 @@ export function UserFormFields({ values, errors, onChange, types, states, roles,
             </Field>
 
             <Field label="Tipo" error={errors.type} hint="Informativo" required>
-                <Select value={values.type} onChange={(e) => onChange('type', e.target.value)} options={types} placeholder="Selecione" />
+                <Select
+                    value={values.type}
+                    onValueChange={(value) => onChange('type', value)}
+                    options={types}
+                    placeholder="Selecione"
+                />
             </Field>
 
             {canChangeRole && (
                 <Field label="Perfil" error={errors.role} hint="Define as permissões" required>
                     <Select
                         value={values.role}
-                        onChange={(e) => onChange('role', e.target.value)}
+                        onValueChange={(value) => onChange('role', value)}
                         options={roles}
                         placeholder="Selecione"
                     />
@@ -61,7 +66,7 @@ export function UserFormFields({ values, errors, onChange, types, states, roles,
             <Field label="Seccional" error={errors.oab_state}>
                 <Select
                     value={values.oab_state}
-                    onChange={(e) => onChange('oab_state', e.target.value)}
+                    onValueChange={(value) => onChange('oab_state', value)}
                     options={states}
                     placeholder="Selecione"
                 />

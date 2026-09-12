@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Users\Queries;
 
+use App\Domain\Accounts\Models\Account;
 use App\Domain\Users\Enums\UserRole;
 use App\Domain\Users\Enums\UserType;
 use App\Domain\Users\Models\User;
@@ -13,9 +14,10 @@ use Illuminate\Database\Eloquent\Builder;
 /**
  * The users listing: search, filters, sorting and pagination.
  *
- * The tenant filter is not applied here — AccountScope already does it on
- * every User query, and duplicating it would hide a regression if the scope
- * were ever dropped.
+ * The listing belongs to one account, which is the one in the URL — not the
+ * one in TenantContext. For platform staff the scope is deliberately open, so
+ * an explicit account_id filter is the only thing keeping the tab showing the
+ * tenant the page is about.
  */
 final class UserIndexQuery
 {
@@ -28,9 +30,10 @@ final class UserIndexQuery
      * @param  array<string, mixed>  $filters
      * @return LengthAwarePaginator<int, User>
      */
-    public function paginate(array $filters): LengthAwarePaginator
+    public function paginate(Account $account, array $filters): LengthAwarePaginator
     {
-        return User::query()
+        return User::acrossAllAccounts()
+            ->where('account_id', $account->id)
             ->when($filters['search'] ?? null, $this->search(...))
             ->when($filters['role'] ?? null, $this->byRole(...))
             ->when($filters['type'] ?? null, $this->byType(...))

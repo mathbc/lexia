@@ -1,30 +1,56 @@
-import type { ButtonHTMLAttributes } from 'react'
-import { cn } from '@/lib/cn'
+import * as React from 'react'
+import { Slot } from '@radix-ui/react-slot'
+import { cva, type VariantProps } from 'class-variance-authority'
+import { cn } from '@/lib/utils'
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
+/**
+ * Botão do shadcn/ui. As variantes falam em tokens semânticos (`primary`,
+ * `destructive`), nunca em cinzas concretos — é o que deixa o tema trocar sem
+ * tocar em call site nenhum.
+ */
+const buttonVariants = cva(
+    "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium outline-none transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20",
+    {
+        variants: {
+            variant: {
+                default: 'bg-primary text-primary-foreground shadow-xs hover:bg-primary/90',
+                destructive:
+                    'bg-destructive text-destructive-foreground shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20',
+                outline: 'border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground',
+                secondary: 'bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80',
+                ghost: 'hover:bg-accent hover:text-accent-foreground',
+                link: 'text-primary underline-offset-4 hover:underline',
+            },
+            size: {
+                default: 'h-9 px-4 py-2 has-[>svg]:px-3',
+                sm: 'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5',
+                lg: 'h-10 rounded-md px-6 has-[>svg]:px-4',
+                icon: 'size-9',
+            },
+        },
+        defaultVariants: {
+            variant: 'default',
+            size: 'default',
+        },
+    },
+)
 
-const VARIANTS: Record<Variant, string> = {
-    primary: 'bg-brand-600 text-white hover:bg-brand-700 focus-visible:outline-brand-600',
-    secondary: 'bg-white text-ink-800 ring-1 ring-ink-200 hover:bg-ink-50',
-    ghost: 'text-ink-600 hover:bg-ink-100',
-    danger: 'bg-red-600 text-white hover:bg-red-700',
-}
+function Button({
+    className,
+    variant,
+    size,
+    asChild = false,
+    ...props
+}: React.ComponentProps<'button'> &
+    VariantProps<typeof buttonVariants> & {
+        /** Empresta o estilo ao filho — um `<Link>` do Inertia, por exemplo. */
+        asChild?: boolean
+    }) {
+    const Comp = asChild ? Slot : 'button'
 
-interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
-    variant?: Variant
-}
-
-export function Button({ variant = 'primary', className, ...props }: Props) {
     return (
-        <button
-            {...props}
-            className={cn(
-                'inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-medium',
-                'transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-                'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2',
-                VARIANTS[variant],
-                className,
-            )}
-        />
+        <Comp data-slot="button" className={cn(buttonVariants({ variant, size, className }))} {...props} />
     )
 }
+
+export { Button, buttonVariants }

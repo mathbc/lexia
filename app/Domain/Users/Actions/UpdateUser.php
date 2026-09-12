@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Users\Actions;
 
+use App\Domain\Accounts\Models\Account;
+use App\Domain\Users\Actions\Concerns\ActsWithinAccount;
 use App\Domain\Users\Actions\Concerns\ValidatesUser;
 use App\Domain\Users\Data\UserData;
 use App\Domain\Users\Models\User;
@@ -21,6 +23,7 @@ use Lorisleiva\Actions\Concerns\AsAction;
  */
 final class UpdateUser
 {
+    use ActsWithinAccount;
     use AsAction;
     use ValidatesUser;
 
@@ -33,7 +36,8 @@ final class UpdateUser
 
     public function authorize(ActionRequest $request): bool
     {
-        return $request->user()->can('update', $request->route('user'));
+        return $this->withinRoutedAccount($request)
+            && $request->user()->can('update', $request->route('user'));
     }
 
     /**
@@ -59,13 +63,13 @@ final class UpdateUser
         return $this->userAttributes();
     }
 
-    public function asController(User $user, ActionRequest $request): RedirectResponse
+    public function asController(Account $account, User $user, ActionRequest $request): RedirectResponse
     {
         // validated() only contains `role` when the rule above was added, so
         // UserData leaves the role untouched for everyone else.
         $this->handle($user, UserData::fromArray($request->validated()));
 
-        return to_route('users.index')
+        return to_route('users.index', $account)
             ->with('success', 'Usuário atualizado com sucesso.');
     }
 }

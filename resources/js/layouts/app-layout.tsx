@@ -1,96 +1,139 @@
-import { Link, usePage } from '@inertiajs/react'
-import type { ReactNode } from 'react'
+import { usePage } from '@inertiajs/react'
+import { SlidersHorizontal, X } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { AppSidebar } from '@/components/app-sidebar'
+import { Alert } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import type { PageProps } from '@/types'
-import { cn } from '@/lib/cn'
+import { cn } from '@/lib/utils'
 
-interface NavItem {
-    label: string
-    href: string
-    /** Roles allowed to see the entry; omitted means everyone. */
-    roles?: string[]
+interface Props {
+    title: string
+    /** A line under the title: identifier, status, whatever names the record. */
+    subtitle?: ReactNode
+    actions?: ReactNode
+    /** Rendered under the header, above the scrolling area. */
+    tabs?: ReactNode
+    /** Contents of the right-hand filter panel; the toggle only appears with it. */
+    filters?: ReactNode
+    /** How many filters are on, shown on the toggle so a hidden panel is never silent. */
+    activeFilters?: number
+    children: ReactNode
 }
 
-const NAV: NavItem[] = [
-    { label: 'Painel', href: '/painel' },
-    { label: 'Usuários', href: '/usuarios', roles: ['account_admin', 'admin'] },
-    // Jurisprudência lands here once the module exists.
-]
+/** O menu recolhido é uma preferência, e o cookie que a guarda é lido aqui. */
+const sidebarDefaultOpen = (): boolean => {
+    if (typeof document === 'undefined') {
+        return true
+    }
 
-export function AppLayout({ title, actions, children }: { title: string; actions?: ReactNode; children: ReactNode }) {
+    return document.cookie.includes('sidebar_state=true') || !document.cookie.includes('sidebar_state=')
+}
+
+export function AppLayout({ title, subtitle, actions, tabs, filters, activeFilters = 0, children }: Props) {
     const { auth, flash, url } = usePage<PageProps>().props as PageProps & { url?: string }
     const currentPath = typeof window === 'undefined' ? (url ?? '') : window.location.pathname
     const user = auth.user
 
-    const visible = NAV.filter((item) => !item.roles || (user && item.roles.includes(user.role)))
+    // The panel is component state, and every filter navigation runs with
+    // preserveState, so it stays open while the results underneath change.
+    const [filtersOpen, setFiltersOpen] = useState(false)
 
     return (
-        <div className="flex min-h-full">
-            <aside className="hidden w-60 shrink-0 flex-col border-r border-ink-200 bg-white px-4 py-6 lg:flex">
-                <Link href="/painel" className="px-2 font-serif text-2xl font-semibold text-brand-700">
-                    LexIA
-                </Link>
+        // h-screen + overflow-hidden: the page itself never scrolls, so the
+        // sidebar keeps its height and only the middle column moves.
+        <SidebarProvider defaultOpen={sidebarDefaultOpen()} className="h-screen min-h-0 overflow-hidden">
+            {user && <AppSidebar user={user} currentPath={currentPath} />}
 
-                {user && (
-                    <p className="mt-1 truncate px-2 text-xs text-ink-400" title={user.account.name}>
-                        {user.account.name}
-                    </p>
-                )}
+            <SidebarInset className="flex min-w-0 flex-col overflow-hidden">
+                <header className="shrink-0 border-b bg-card px-4 pt-4 lg:px-6">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                            <SidebarTrigger className="-ml-1" />
+                            <Separator orientation="vertical" className="mr-1 !h-5" />
+                            <div className="min-w-0">
+                                <h1 className="truncate text-xl font-semibold text-foreground">{title}</h1>
+                                {subtitle && <div className="mt-0.5 text-sm text-muted-foreground">{subtitle}</div>}
+                            </div>
+                        </div>
 
-                <nav className="mt-8 flex flex-col gap-1">
-                    {visible.map((item) => (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            className={cn(
-                                'rounded-md px-2 py-2 text-sm font-medium transition-colors',
-                                currentPath.startsWith(item.href)
-                                    ? 'bg-brand-50 text-brand-700'
-                                    : 'text-ink-600 hover:bg-ink-100',
+                        <div className="flex items-center gap-2">
+                            {actions}
+                            {filters && (
+                                <Button
+                                    type="button"
+                                    variant={activeFilters > 0 ? 'secondary' : 'outline'}
+                                    onClick={() => setFiltersOpen((open) => !open)}
+                                    aria-expanded={filtersOpen}
+                                >
+                                    <SlidersHorizontal />
+                                    Filtros
+                                    {activeFilters > 0 && (
+                                        <Badge className="h-5 min-w-5 rounded-full px-1 tabular-nums">
+                                            {activeFilters}
+                                        </Badge>
+                                    )}
+                                </Button>
                             )}
-                        >
-                            {item.label}
-                        </Link>
-                    ))}
-                </nav>
-
-                {user && (
-                    <div className="mt-auto border-t border-ink-200 pt-4">
-                        <Link href={`/conta/${user.account.id}`} className="block px-2 text-sm font-medium text-ink-700 hover:text-brand-700">
-                            Minha conta
-                        </Link>
-                        <p className="mt-3 px-2 text-sm font-medium text-ink-800">{user.name}</p>
-                        <p className="px-2 text-xs text-ink-400">{user.role_label}</p>
-                        <Link
-                            href="/logout"
-                            method="post"
-                            as="button"
-                            className="mt-2 px-2 text-xs text-ink-500 hover:text-red-600"
-                        >
-                            Sair
-                        </Link>
+                        </div>
                     </div>
-                )}
-            </aside>
 
-            <main className="flex-1 px-6 py-8 lg:px-10">
-                <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
-                    <h1 className="text-2xl font-semibold">{title}</h1>
-                    {actions}
+                    {tabs ? <div className="mt-4 -mb-px pb-4">{tabs}</div> : <div className="h-4" />}
                 </header>
 
-                {flash.success && (
-                    <div role="status" className="mb-5 rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-800 ring-1 ring-emerald-100">
-                        {flash.success}
-                    </div>
-                )}
-                {flash.error && (
-                    <div role="alert" className="mb-5 rounded-md bg-red-50 px-4 py-3 text-sm text-red-800 ring-1 ring-red-100">
-                        {flash.error}
-                    </div>
-                )}
+                <div className="flex min-h-0 flex-1 overflow-hidden">
+                    <div className="min-w-0 flex-1 overflow-y-auto px-4 py-6 lg:px-6">
+                        {flash.success && (
+                            <Alert variant="success" role="status" className="mb-5">
+                                {flash.success}
+                            </Alert>
+                        )}
+                        {flash.error && (
+                            <Alert variant="destructive" className="mb-5">
+                                {flash.error}
+                            </Alert>
+                        )}
 
-                {children}
-            </main>
-        </div>
+                        {children}
+                    </div>
+
+                    {filters && filtersOpen && (
+                        <>
+                            {/* On a narrow screen the panel covers the content; the
+                                scrim is what closes it again. */}
+                            <button
+                                type="button"
+                                aria-label="Fechar filtros"
+                                onClick={() => setFiltersOpen(false)}
+                                className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+                            />
+                            <aside
+                                className={cn(
+                                    'fixed inset-y-0 right-0 z-40 flex w-80 max-w-full flex-col border-l bg-card',
+                                    'lg:static lg:z-auto lg:w-80',
+                                )}
+                            >
+                                <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
+                                    <h2 className="text-sm font-semibold">Filtros</h2>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => setFiltersOpen(false)}
+                                    >
+                                        <X />
+                                        <span className="sr-only">Fechar filtros</span>
+                                    </Button>
+                                </div>
+                                <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-5">{filters}</div>
+                            </aside>
+                        </>
+                    )}
+                </div>
+            </SidebarInset>
+        </SidebarProvider>
     )
 }

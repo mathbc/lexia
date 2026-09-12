@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
+use App\Domain\Accounts\Actions\CreateAccount;
+use App\Domain\Accounts\Actions\ListAccounts;
 use App\Domain\Accounts\Actions\RegisterAccountWithOwner;
 use App\Domain\Accounts\Actions\ShowAccount;
+use App\Domain\Accounts\Actions\ShowAccountForm;
 use App\Domain\Accounts\Actions\ToggleAccountStatus;
 use App\Domain\Accounts\Actions\UpdateAccount;
 use App\Domain\Accounts\Enums\AccountType;
@@ -24,7 +27,7 @@ Route::get('/', fn () => Inertia::render('welcome'))->name('home');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/cadastro', fn () => Inertia::render('auth/register', [
-        'accountTypes' => AccountType::options(),
+        'accountTypes' => AccountType::customerOptions(),
         'states' => BrazilianState::options(),
         'userTypes' => UserType::options(),
     ]))->name('register');
@@ -34,14 +37,23 @@ Route::middleware('guest')->group(function (): void {
 Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::get('/painel', fn () => Inertia::render('dashboard'))->name('dashboard');
 
-    Route::get('/conta/{account}', ShowAccount::class)->name('accounts.edit');
-    Route::put('/conta/{account}', UpdateAccount::class)->name('accounts.update');
-    Route::patch('/conta/{account}/status', ToggleAccountStatus::class)->name('accounts.toggle');
+    // O cadastro de contas. As rotas literais vêm antes de /contas/{account}
+    // para que "nova" não seja lida como o id de uma conta.
+    Route::get('/contas', ListAccounts::class)->name('accounts.index');
+    Route::get('/contas/nova', ShowAccountForm::class)->name('accounts.create');
+    Route::post('/contas', CreateAccount::class)->name('accounts.store');
 
-    Route::get('/usuarios', ListUsers::class)->name('users.index');
-    Route::get('/usuarios/novo', ShowUserForm::class)->name('users.create');
-    Route::post('/usuarios', CreateUser::class)->name('users.store');
-    Route::get('/usuarios/{user}/editar', ShowUserForm::class)->name('users.edit');
-    Route::put('/usuarios/{user}', UpdateUser::class)->name('users.update');
-    Route::patch('/usuarios/{user}/status', ToggleUserStatus::class)->name('users.toggle');
+    Route::prefix('/contas/{account}')->whereUuid('account')->group(function (): void {
+        Route::get('/', ShowAccount::class)->name('accounts.show');
+        Route::put('/', UpdateAccount::class)->name('accounts.update');
+        Route::patch('/status', ToggleAccountStatus::class)->name('accounts.toggle');
+
+        // Os usuários são uma aba da conta, não um cadastro à parte.
+        Route::get('/usuarios', ListUsers::class)->name('users.index');
+        Route::get('/usuarios/novo', ShowUserForm::class)->name('users.create');
+        Route::post('/usuarios', CreateUser::class)->name('users.store');
+        Route::get('/usuarios/{user}/editar', ShowUserForm::class)->name('users.edit');
+        Route::put('/usuarios/{user}', UpdateUser::class)->name('users.update');
+        Route::patch('/usuarios/{user}/status', ToggleUserStatus::class)->name('users.toggle');
+    });
 });

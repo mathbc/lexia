@@ -21,7 +21,7 @@ final class ManageUsersTest extends TestCase
         Notification::fake();
         [, $owner] = $this->accountWithOwner();
 
-        $this->actingAs($owner)->post('/usuarios', [
+        $this->actingAs($owner)->post("/contas/{$owner->account_id}/usuarios", [
             'name' => 'Novo Advogado',
             'email' => 'novo@lexia.test',
             'type' => 'lawyer',
@@ -29,7 +29,7 @@ final class ManageUsersTest extends TestCase
             'oab_number' => '123456',
             'oab_state' => 'SP',
             'birth_date' => '1990-01-01',
-        ])->assertRedirect('/usuarios');
+        ])->assertRedirect("/contas/{$owner->account_id}/usuarios");
 
         $invited = User::acrossAllAccounts()->where('email', 'novo@lexia.test')->sole();
         $this->assertSame($owner->account_id, $invited->account_id);
@@ -43,7 +43,7 @@ final class ManageUsersTest extends TestCase
         [$account] = $this->accountWithOwner();
         $admin = User::factory()->forAccount($account)->admin()->create();
 
-        $this->actingAs($admin)->post('/usuarios', [
+        $this->actingAs($admin)->post("/contas/{$account->id}/usuarios", [
             'name' => 'Outro Admin',
             'email' => 'outro@lexia.test',
             'type' => 'lawyer',
@@ -59,8 +59,8 @@ final class ManageUsersTest extends TestCase
         [$account] = $this->accountWithOwner();
         $lawyer = User::factory()->forAccount($account)->create();
 
-        $this->actingAs($lawyer)->get('/usuarios')->assertForbidden();
-        $this->actingAs($lawyer)->get('/usuarios/novo')->assertForbidden();
+        $this->actingAs($lawyer)->get("/contas/{$account->id}/usuarios")->assertForbidden();
+        $this->actingAs($lawyer)->get("/contas/{$account->id}/usuarios/novo")->assertForbidden();
     }
 
     #[Test]
@@ -69,7 +69,7 @@ final class ManageUsersTest extends TestCase
         [$account] = $this->accountWithOwner();
         $lawyer = User::factory()->forAccount($account)->create();
 
-        $this->actingAs($lawyer)->put("/usuarios/{$lawyer->id}", [
+        $this->actingAs($lawyer)->put("/contas/{$account->id}/usuarios/{$lawyer->id}", [
             'name' => 'Eu Mesmo',
             'email' => $lawyer->email,
             'type' => 'lawyer',
@@ -90,7 +90,7 @@ final class ManageUsersTest extends TestCase
         [$account, $owner] = $this->accountWithOwner();
         $second = User::factory()->forAccount($account)->accountAdmin()->create();
 
-        $this->actingAs($owner)->patch("/usuarios/{$second->id}/status")->assertForbidden();
+        $this->actingAs($owner)->patch("/contas/{$account->id}/usuarios/{$second->id}/status")->assertForbidden();
 
         $this->assertTrue($second->fresh()->enabled);
     }
@@ -103,13 +103,13 @@ final class ManageUsersTest extends TestCase
         $staff = User::factory()->platformAdmin()->create();
 
         // Platform staff outrank everyone, so the second admin goes down.
-        $this->actingAs($staff)->patch("/usuarios/{$second->id}/status")->assertRedirect();
+        $this->actingAs($staff)->patch("/contas/{$account->id}/usuarios/{$second->id}/status")->assertRedirect();
         $this->assertFalse($second->fresh()->enabled);
 
         // The last enabled admin is protected even from platform staff:
         // an account with none can never be administered again.
         $this->actingAs($staff)
-            ->patch("/usuarios/{$owner->id}/status")
+            ->patch("/contas/{$account->id}/usuarios/{$owner->id}/status")
             ->assertSessionHasErrors('enabled');
 
         $this->assertTrue($owner->fresh()->enabled);
@@ -122,11 +122,11 @@ final class ManageUsersTest extends TestCase
         User::factory()->forAccount($account)->create(['name' => 'Joana Pereira']);
         User::factory()->forAccount($account)->disabled()->create(['name' => 'Inativo Silva']);
 
-        $this->actingAs($owner)->get('/usuarios?search=Joana')
+        $this->actingAs($owner)->get("/contas/{$account->id}/usuarios?search=Joana")
             ->assertInertia(fn ($page) => $page->where('users.total', 1));
 
         // Regression guard: `enabled=0` must mean disabled, not enabled.
-        $this->actingAs($owner)->get('/usuarios?enabled=0')
+        $this->actingAs($owner)->get("/contas/{$account->id}/usuarios?enabled=0")
             ->assertInertia(fn ($page) => $page
                 ->where('users.total', 1)
                 ->where('users.data.0.name', 'Inativo Silva'));

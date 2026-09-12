@@ -29,15 +29,12 @@ return new class extends Migration
             $table->char('oab_state', 2)->nullable();
             $table->date('birth_date')->nullable();
 
+            // The role is the only source of authority: `platform_admin` is a
+            // UserRole case, not a second flag that could disagree with it.
             $table->string('role', 20);
             $table->string('type', 20);
 
             $table->boolean('enabled')->default(true);
-
-            // Platform staff, deliberately outside the UserRole enum: the three
-            // business roles are all account-scoped, so administering tenants
-            // needs a separate, rarely-granted flag.
-            $table->boolean('platform_admin')->default(false);
 
             $table->rememberToken();
             $table->timestamps();

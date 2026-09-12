@@ -13,12 +13,25 @@ final class UserRoleTest extends TestCase
     #[Test]
     public function the_hierarchy_is_strict(): void
     {
+        $this->assertTrue(UserRole::PlatformAdmin->outranks(UserRole::AccountAdmin));
         $this->assertTrue(UserRole::AccountAdmin->outranks(UserRole::Admin));
         $this->assertTrue(UserRole::AccountAdmin->outranks(UserRole::Lawyer));
         $this->assertTrue(UserRole::Admin->outranks(UserRole::Lawyer));
 
+        $this->assertFalse(UserRole::AccountAdmin->outranks(UserRole::PlatformAdmin));
         $this->assertFalse(UserRole::Admin->outranks(UserRole::AccountAdmin));
         $this->assertFalse(UserRole::Lawyer->outranks(UserRole::Admin));
+    }
+
+    #[Test]
+    public function the_platform_admin_outranks_every_account_role(): void
+    {
+        foreach (UserRole::accountCases() as $role) {
+            $this->assertTrue(
+                UserRole::PlatformAdmin->outranks($role),
+                "platform_admin does not outrank {$role->value}",
+            );
+        }
     }
 
     #[Test]
@@ -33,6 +46,7 @@ final class UserRoleTest extends TestCase
     #[Test]
     public function only_admin_roles_manage(): void
     {
+        $this->assertTrue(UserRole::PlatformAdmin->manages());
         $this->assertTrue(UserRole::AccountAdmin->manages());
         $this->assertTrue(UserRole::Admin->manages());
         $this->assertFalse(UserRole::Lawyer->manages());
@@ -47,11 +61,25 @@ final class UserRoleTest extends TestCase
 
         $this->assertSame(
             [
+                ['value' => 'platform_admin', 'label' => 'Admin do Sistema'],
                 ['value' => 'account_admin', 'label' => 'Admin da Conta'],
                 ['value' => 'admin', 'label' => 'Admin'],
                 ['value' => 'lawyer', 'label' => 'Advogado'],
             ],
             UserRole::options(),
+        );
+    }
+
+    #[Test]
+    public function a_tenant_is_never_offered_the_platform_role(): void
+    {
+        $this->assertSame(
+            [
+                ['value' => 'account_admin', 'label' => 'Admin da Conta'],
+                ['value' => 'admin', 'label' => 'Admin'],
+                ['value' => 'lawyer', 'label' => 'Advogado'],
+            ],
+            UserRole::accountOptions(),
         );
     }
 }

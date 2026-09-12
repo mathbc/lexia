@@ -1,59 +1,81 @@
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
-import { cn } from '@/lib/cn'
+import { Children, cloneElement, isValidElement, useId, type ReactElement, type ReactNode } from 'react'
+import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 
-const CONTROL =
-    'w-full rounded-md border-0 bg-white px-3 py-2 text-sm text-ink-900 ring-1 ring-inset ' +
-    'ring-ink-200 placeholder:text-ink-400 focus:ring-2 focus:ring-inset focus:ring-brand-500'
+interface ControlProps {
+    id?: string
+    'aria-invalid'?: boolean
+    'aria-describedby'?: string
+}
 
+/**
+ * Rótulo, controle, dica e erro — a unidade de um formulário.
+ *
+ * O `id` nasce aqui e é enxertado no controle, de modo que o rótulo aponte
+ * para ele mesmo quando o controle não é um `<input>` nativo (o Select do Radix
+ * é um botão). O mesmo enxerto marca `aria-invalid` quando há erro, o que é o
+ * que acende o anel vermelho nos componentes — a mensagem e o estilo não podem
+ * discordar.
+ */
 export function Field({
     label,
     error,
     hint,
     required,
+    className,
     children,
 }: {
     label: string
     error?: string
     hint?: string
     required?: boolean
+    className?: string
     children: ReactNode
 }) {
+    const id = useId()
+    const messageId = error ? `${id}-error` : hint ? `${id}-hint` : undefined
+
+    const child = Children.only(children)
+    const control = isValidElement<ControlProps>(child)
+        ? cloneElement(child as ReactElement<ControlProps>, {
+              id: child.props.id ?? id,
+              'aria-invalid': error ? true : child.props['aria-invalid'],
+              'aria-describedby': messageId ?? child.props['aria-describedby'],
+          })
+        : child
+
     return (
-        <label className="block">
-            <span className="mb-1.5 block text-sm font-medium text-ink-700">
-                {label}
-                {required && <span className="ml-0.5 text-red-600">*</span>}
-            </span>
-            {children}
-            {hint && !error && <span className="mt-1 block text-xs text-ink-400">{hint}</span>}
+        <div data-slot="form-field" className={cn('grid gap-2', className)}>
+            {/* Rótulo e asterisco num só nó: o `gap-2` do Label existe para
+                separar ícones, e descolaria o obrigatório da palavra. */}
+            <Label htmlFor={id}>
+                <span>
+                    {label}
+                    {required && (
+                        <span aria-hidden className="ml-0.5 text-destructive">
+                            *
+                        </span>
+                    )}
+                </span>
+            </Label>
+
+            {control}
+
+            {hint && !error && (
+                <p id={messageId} className="text-xs text-muted-foreground">
+                    {hint}
+                </p>
+            )}
+
             {/* role=alert so the message is announced, not just shown */}
             {error && (
-                <span role="alert" className="mt-1 block text-xs text-red-600">
+                <p id={messageId} role="alert" className="text-xs font-medium text-destructive">
                     {error}
-                </span>
+                </p>
             )}
-        </label>
+        </div>
     )
 }
 
-export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
-    return <input {...props} className={cn(CONTROL, className)} />
-}
-
-interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
-    options: { value: string; label: string }[]
-    placeholder?: string
-}
-
-export function Select({ options, placeholder, className, ...props }: SelectProps) {
-    return (
-        <select {...props} className={cn(CONTROL, className)}>
-            {placeholder && <option value="">{placeholder}</option>}
-            {options.map((option) => (
-                <option key={option.value} value={option.value}>
-                    {option.label}
-                </option>
-            ))}
-        </select>
-    )
-}
+export { Input } from '@/components/ui/input'
+export { SelectInput as Select } from '@/components/ui/select'

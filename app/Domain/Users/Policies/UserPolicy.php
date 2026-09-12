@@ -11,7 +11,7 @@ use App\Domain\Users\Models\User;
  * Who may do what to a user.
  *
  * Two invariants run through all of it:
- *  - nobody acts outside their own account;
+ *  - nobody acts outside their own account, LexIA staff excepted;
  *  - nobody manages a peer or a superior, so two admins cannot lock each
  *    other out. Both live in User::canManage().
  */
@@ -19,7 +19,7 @@ final class UserPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->role->manages() || $user->isPlatformAdmin();
+        return $user->role->manages();
     }
 
     public function view(User $user, User $target): bool
@@ -33,7 +33,7 @@ final class UserPolicy
 
     public function create(User $user): bool
     {
-        return $user->role->manages() || $user->isPlatformAdmin();
+        return $user->role->manages();
     }
 
     /**

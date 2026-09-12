@@ -42,7 +42,6 @@ class UserFactory extends Factory
             'role' => UserRole::Lawyer,
             'type' => UserType::Lawyer,
             'enabled' => true,
-            'platform_admin' => false,
             'remember_token' => Str::random(10),
         ];
     }
@@ -66,11 +65,15 @@ class UserFactory extends Factory
         ]);
     }
 
+    /**
+     * LexIA staff. They always sit in the platform account — the role exists
+     * to administer the other tenants, not to belong to one.
+     */
     public function platformAdmin(): static
     {
         return $this->state(fn (): array => [
-            'platform_admin' => true,
-            'role' => UserRole::AccountAdmin,
+            'account_id' => Account::PLATFORM_ID,
+            'role' => UserRole::PlatformAdmin,
         ]);
     }
 

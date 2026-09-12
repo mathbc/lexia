@@ -1,7 +1,11 @@
 import { Head, Link, useForm } from '@inertiajs/react'
 import type { FormEvent } from 'react'
+import { AuthLayout } from '@/layouts/auth-layout'
+import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Field, Input } from '@/components/ui/field'
+import { Label } from '@/components/ui/label'
 
 export default function Login({ status }: { status?: string }) {
     const form = useForm({ email: '', password: '', remember: false })
@@ -12,64 +16,70 @@ export default function Login({ status }: { status?: string }) {
     }
 
     return (
-        <div className="flex min-h-full items-center justify-center px-6 py-16">
+        <AuthLayout
+            title="Acesse sua conta"
+            description="Entre com o e-mail cadastrado."
+            footer={
+                <>
+                    Não tem conta?{' '}
+                    <Link href="/cadastro" className="font-medium text-foreground underline-offset-4 hover:underline">
+                        Criar conta
+                    </Link>
+                </>
+            }
+        >
             <Head title="Entrar" />
-            <div className="w-full max-w-sm">
-                <h1 className="text-center font-serif text-3xl font-semibold text-brand-700">LexIA</h1>
-                <p className="mt-2 mb-8 text-center text-sm text-ink-500">Acesse sua conta</p>
 
-                {status && (
-                    <div role="status" className="mb-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                        {status}
-                    </div>
-                )}
+            {status && (
+                <Alert variant="success" role="status" className="mb-4">
+                    {status}
+                </Alert>
+            )}
 
-                <form onSubmit={submit} className="space-y-4 rounded-lg bg-white p-6 ring-1 ring-ink-200">
-                    <Field label="E-mail" error={form.errors.email} required>
-                        <Input
-                            type="email"
-                            value={form.data.email}
-                            onChange={(e) => form.setData('email', e.target.value)}
-                            autoComplete="username"
-                            autoFocus
-                            required
-                        />
-                    </Field>
+            <form onSubmit={submit} className="grid gap-4">
+                <Field label="E-mail" error={form.errors.email} required>
+                    <Input
+                        type="email"
+                        value={form.data.email}
+                        onChange={(e) => form.setData('email', e.target.value)}
+                        autoComplete="username"
+                        autoFocus
+                        required
+                    />
+                </Field>
 
-                    <Field label="Senha" error={form.errors.password} required>
-                        <Input
-                            type="password"
-                            value={form.data.password}
-                            onChange={(e) => form.setData('password', e.target.value)}
-                            autoComplete="current-password"
-                            required
-                        />
-                    </Field>
+                <Field label="Senha" error={form.errors.password} required>
+                    <Input
+                        type="password"
+                        value={form.data.password}
+                        onChange={(e) => form.setData('password', e.target.value)}
+                        autoComplete="current-password"
+                        required
+                    />
+                </Field>
 
-                    <label className="flex items-center gap-2 text-sm text-ink-600">
-                        <input
-                            type="checkbox"
-                            checked={form.data.remember}
-                            onChange={(e) => form.setData('remember', e.target.checked)}
-                            className="rounded border-ink-300 text-brand-600 focus:ring-brand-500"
-                        />
+                <div className="flex items-center gap-2">
+                    <Checkbox
+                        id="remember"
+                        checked={form.data.remember}
+                        onCheckedChange={(checked) => form.setData('remember', checked === true)}
+                    />
+                    <Label htmlFor="remember" className="text-sm font-normal">
                         Manter conectado
-                    </label>
+                    </Label>
+                </div>
 
-                    <Button type="submit" disabled={form.processing} className="w-full">
-                        {form.processing ? 'Entrando…' : 'Entrar'}
-                    </Button>
+                <Button type="submit" disabled={form.processing} className="w-full">
+                    {form.processing ? 'Entrando…' : 'Entrar'}
+                </Button>
 
-                    <div className="flex justify-between text-xs text-ink-500">
-                        <Link href="/forgot-password" className="hover:text-brand-700">
-                            Esqueci minha senha
-                        </Link>
-                        <Link href="/cadastro" className="hover:text-brand-700">
-                            Criar conta
-                        </Link>
-                    </div>
-                </form>
-            </div>
-        </div>
+                <Link
+                    href="/forgot-password"
+                    className="text-center text-xs text-muted-foreground underline-offset-4 hover:underline"
+                >
+                    Esqueci minha senha
+                </Link>
+            </form>
+        </AuthLayout>
     )
 }
