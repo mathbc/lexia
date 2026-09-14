@@ -1,8 +1,9 @@
 import { Head, Link, router } from '@inertiajs/react'
-import { Plus } from 'lucide-react'
+import { Eye, Plus, Users } from 'lucide-react'
 import { useState } from 'react'
 import { AppLayout } from '@/layouts/app-layout'
 import { Pagination } from '@/components/pagination'
+import { RowActions } from '@/components/row-actions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -116,7 +117,9 @@ export default function AccountsIndex({ accounts, filters, accountTypes, canCrea
                             <TableHead>Cidade</TableHead>
                             <TableHead>Usuários</TableHead>
                             <TableHead>Status</TableHead>
-                            <TableHead />
+                            <TableHead className="w-12">
+                                <span className="sr-only">Ações</span>
+                            </TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -147,9 +150,21 @@ export default function AccountsIndex({ accounts, filters, accountTypes, canCrea
                                     </Badge>
                                 </TableCell>
                                 <TableCell className="py-3 text-right">
-                                    <Button asChild variant="ghost" size="sm">
-                                        <Link href={`/contas/${account.id}`}>Abrir</Link>
-                                    </Button>
+                                    <RowActions
+                                        label={`Ações de ${account.name}`}
+                                        actions={[
+                                            {
+                                                label: 'Abrir',
+                                                icon: Eye,
+                                                href: `/contas/${account.id}`,
+                                            },
+                                            {
+                                                label: 'Usuários',
+                                                icon: Users,
+                                                href: `/contas/${account.id}/usuarios`,
+                                            },
+                                        ]}
+                                    />
                                 </TableCell>
                             </TableRow>
                         ))}

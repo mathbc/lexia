@@ -14,6 +14,8 @@ PostgreSQL com pgvector, PHP 8.4+.
 - **DDD por pasta**, não por autoload: `app/Domain/{Accounts,Users,Shared}`,
   tudo sob o PSR-4 `App\`. Migrations e factories seguem em `database/`.
 - **Complexidade ciclomática ≤ 10** em `app/`. Ver a skill abaixo.
+- **Tela nova passa pela skill `layout`**: tokens de cor, Tailwind 4,
+  `AppLayout`, tabelas e o dropdown de ações de linha.
 
 ## Comandos
 
@@ -103,6 +105,13 @@ Três consequências práticas:
    `<select>`. Esse Select (`SelectInput`) fala `onValueChange`, não
    `onChange`, e reserva a string vazia para "nada escolhido" — o item que
    limpa um filtro viaja com um valor sentinela e volta como `''`.
+
+As ações de uma linha de tabela — visualizar, editar, excluir — ficam todas
+dentro de `RowActions` (`resources/js/components/row-actions.tsx`), o botão de
+três pontos: a coluna guarda um botão só, e uma operação nova entra na lista
+em vez de alargar a tabela. Quem não pode executar não vê o item, e a lista já
+chega filtrada pelo `can` que a Action publicou — a Policy segue sendo a defesa
+de verdade.
 
 As abas continuam sendo links, não o primitivo do Radix: quem guarda o estado
 é a URL (ver abaixo).

@@ -85,6 +85,16 @@
     --sidebar-accent-foreground: oklch(0.145 0 0);
     --sidebar-border: oklch(0.91 0 0);
     --sidebar-ring: oklch(0.38 0 0);
+
+    /* A home é a única tela sempre escura — ela força `.dark` na própria seção,
+       de modo que os tokens acima já resolvem no escuro e os botões continuam
+       corretos. O que não resolve por classe é o campo de partículas: quem o
+       pinta é o tsParticles, em JS, e o parser dele não lê `oklch`. Daí os dois
+       tons ficarem aqui, em hexadecimal, e em nenhum outro arquivo. São os
+       mesmos cinzas da escala — neutral-600 no ponto e neutral-800 na linha,
+       que é o "mais escuro" que mantém a balança em primeiro plano. */
+    --hero-particle: #525252;
+    --hero-link: #262626;
 }
 
 .dark {

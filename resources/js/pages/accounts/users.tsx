@@ -1,9 +1,10 @@
 import { Head, Link, router, usePage } from '@inertiajs/react'
-import { Plus } from 'lucide-react'
+import { Pencil, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { AppLayout } from '@/layouts/app-layout'
 import { AccountTabs } from '@/components/account-tabs'
 import { Pagination } from '@/components/pagination'
+import { RowActions } from '@/components/row-actions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -146,7 +147,9 @@ export default function AccountUsers({ account, can, users, filters, roles, type
                             <TableHead>Tipo</TableHead>
                             <TableHead>OAB</TableHead>
                             <TableHead>Status</TableHead>
-                            <TableHead />
+                            <TableHead className="w-12">
+                                <span className="sr-only">Ações</span>
+                            </TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -167,11 +170,19 @@ export default function AccountUsers({ account, can, users, filters, roles, type
                                     </Badge>
                                 </TableCell>
                                 <TableCell className="py-3 text-right">
-                                    {auth.user?.id !== user.id && (
-                                        <Button asChild variant="ghost" size="sm">
-                                            <Link href={`${base}/${user.id}/editar`}>Editar</Link>
-                                        </Button>
-                                    )}
+                                    <RowActions
+                                        label={`Ações de ${user.name}`}
+                                        actions={[
+                                            // Ninguém se gerencia a partir da
+                                            // listagem: o próprio cadastro vive
+                                            // no menu do usuário.
+                                            auth.user?.id !== user.id && {
+                                                label: 'Editar',
+                                                icon: Pencil,
+                                                href: `${base}/${user.id}/editar`,
+                                            },
+                                        ]}
+                                    />
                                 </TableCell>
                             </TableRow>
                         ))}
