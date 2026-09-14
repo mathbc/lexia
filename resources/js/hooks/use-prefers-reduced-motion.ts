@@ -5,8 +5,8 @@ const QUERY = '(prefers-reduced-motion: reduce)'
 /**
  * Se o sistema operacional pede menos movimento.
  *
- * O GSAP resolve isso sozinho com `gsap.matchMedia()`; este hook existe para o
- * que não é GSAP — hoje, o campo de partículas, que precisa da resposta já na
+ * Quem precisa disso é o campo de pontos da home: ele desenha num `<canvas>`,
+ * fora do alcance de qualquer media query de CSS, e precisa da resposta já na
  * primeira renderização para não montar animado e parar depois.
  */
 export function usePrefersReducedMotion() {
