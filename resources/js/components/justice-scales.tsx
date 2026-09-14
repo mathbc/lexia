@@ -6,10 +6,17 @@ import { cn } from '@/lib/utils'
  * A balança da justiça: linhas finas e pontos luminosos ligando as conexões,
  * desenhada em SVG e animada com GSAP. É peça decorativa de fundo.
  *
+ * A figura é uma constelação, não um desenho técnico: a travessa é uma reta com
+ * três pontos, cada prato é um leque de dois tirantes fechado por um arco, e a
+ * coluna cai num traço único até a base. Duas circunferências finas e levemente
+ * desencontradas orbitam o conjunto, junto do eco de cada prato — é o que dá
+ * profundidade sem acrescentar estrutura.
+ *
  * O SVG é escrito no estado *final*: linhas inteiras, pontos acesos. Quem
  * esconde e redesenha é o GSAP, e só quando o sistema operacional não pede
  * menos movimento — assim `prefers-reduced-motion` (e um erro de JS) caem no
- * desenho estático em vez de numa tela vazia.
+ * desenho estático em vez de numa tela vazia. A animação é só a da construção:
+ * a balança se desenha uma vez e fica parada.
  *
  * O brilho não é cor nova: é `currentColor` borrado por um filtro, de modo que
  * o ponto continua obedecendo ao token semântico de quem o pinta e o tema
@@ -23,20 +30,8 @@ import { cn } from '@/lib/utils'
  * o conteúdo acima dele não perca um toque.
  */
 
-/** Ordem do desenho: do chão para cima, terminando nos pratos. */
-const DRAW_SEQUENCE = ['base', 'column', 'beam', 'chain', 'pan'] as const
-
-/** O eixo, em coordenadas do viewBox — é em torno dele que a travessa gira. */
-const PIVOT = '200 64'
-
-/** Graus. Balanço de balança parada, não de gangorra. */
-const SWAY = 2.2
-
-/** Segundos de meia oscilação; o ciclo inteiro é o dobro (ida e volta). */
-const SWAY_DURATION = 3.4
-
-/** O atraso dos pratos em relação à travessa: é ele que faz o balanço. */
-const PAN_LAG = 0.25
+/** Ordem do desenho: do chão para cima, terminando nos pratos e nas órbitas. */
+const DRAW_SEQUENCE = ['base', 'column', 'beam', 'cord', 'pan', 'orbit'] as const
 
 /** Acima deste raio o ponto é junta de estrutura e ganha o halo largo. */
 const ANCHOR_RADIUS = 2.25
@@ -82,55 +77,7 @@ export function JusticeScales({ className }: { className?: string }) {
 
             gsap.set(dots, { opacity: 0, scale: 0, transformOrigin: 'center' })
 
-            const beam = svg.querySelector<SVGGElement>('[data-sway="beam"]')
-            const pans = select<SVGGElement>('[data-sway="pan"]')
-
-            // O movimento contínuo nasce pausado, mas dentro deste callback: é
-            // o que o deixa registrado no contexto e, portanto, desfeito no
-            // revert. Quem repete é cada tween, não a linha do tempo — assim a
-            // defasagem do prato é uma fase constante, e não um ciclo torto.
-            // `immediateRender: false` impede que o `fromTo` aplique o ângulo
-            // inicial antes da hora.
-            const idle = gsap.timeline({
-                paused: true,
-                defaults: { ease: 'sine.inOut', repeat: -1, yoyo: true, immediateRender: false },
-            })
-
-            idle.fromTo(
-                beam,
-                { rotation: -SWAY },
-                { rotation: SWAY, svgOrigin: PIVOT, duration: SWAY_DURATION },
-                0,
-            )
-
-            pans.forEach((pan) => {
-                // O prato desfaz o giro da travessa para continuar na
-                // horizontal; o atraso é o que sobra disso, e é o balanço.
-                idle.fromTo(
-                    pan,
-                    { rotation: SWAY },
-                    { rotation: -SWAY, svgOrigin: pan.dataset.origin ?? PIVOT, duration: SWAY_DURATION },
-                    PAN_LAG,
-                )
-            })
-
-            // O respiro dos pontos: a luz não fica parada, mas também não
-            // pisca junto — daí a ordem embaralhada.
-            idle.to(
-                dots,
-                {
-                    opacity: 0.55,
-                    duration: 1.9,
-                    stagger: { each: 0.22, from: 'random' },
-                },
-                0,
-            )
-
-            const entry = gsap.timeline({
-                delay: 0.15,
-                defaults: { ease: 'power2.out' },
-                onComplete: () => idle.play(),
-            })
+            const entry = gsap.timeline({ delay: 0.15, defaults: { ease: 'power2.out' } })
 
             DRAW_SEQUENCE.forEach((part, index) => {
                 entry.to(
@@ -140,25 +87,15 @@ export function JusticeScales({ className }: { className?: string }) {
                 )
             })
 
-            entry
-                .to(dots, { opacity: 1, scale: 1, duration: 0.4, stagger: 0.04, ease: 'back.out(2)' }, '-=1.2')
-                // O ângulo em que a oscilação começa, para que ela pegue o
-                // movimento em vez de estalar.
-                .to(beam, { rotation: -SWAY, svgOrigin: PIVOT, duration: 1, ease: 'sine.inOut' }, '-=0.3')
-
-            pans.forEach((pan) => {
-                entry.to(
-                    pan,
-                    { rotation: SWAY, svgOrigin: pan.dataset.origin ?? PIVOT, duration: 1, ease: 'sine.inOut' },
-                    '<',
-                )
-            })
+            entry.to(dots, { opacity: 1, scale: 1, duration: 0.4, stagger: 0.04, ease: 'back.out(2)' }, '-=1.4')
         })
 
         return () => media.revert()
     }, [])
 
-    /** Ponto luminoso: núcleo sólido e halo, ambos em `currentColor`. */
+    /** Ponto luminoso: núcleo e halo em `currentColor`, na opacidade do traço —
+     *  sem isso o `feMerge` empilha o borrão até estourar o ponto em branco e
+     *  ele deixa de acompanhar a cor das linhas. */
     const dot = (order: number, cx: number, cy: number, r: number) => (
         <circle
             key={`${cx}-${cy}`}
@@ -167,6 +104,7 @@ export function JusticeScales({ className }: { className?: string }) {
             cy={cy}
             r={r}
             fill="currentColor"
+            fillOpacity={0.8}
             stroke="none"
             filter={`url(#${r >= ANCHOR_RADIUS ? glowId : sparkId})`}
         />
@@ -183,6 +121,7 @@ export function JusticeScales({ className }: { className?: string }) {
             stroke="currentColor"
             strokeWidth={1.5}
             strokeOpacity={0.8}
+            strokeLinecap="round"
             strokeLinejoin="round"
             className={cn('h-auto w-full text-muted-foreground', className)}
         >
@@ -209,102 +148,67 @@ export function JusticeScales({ className }: { className?: string }) {
                 </filter>
             </defs>
 
+            {/* As órbitas vêm antes de tudo no DOM porque são fundo: dois anéis
+                finos e desencontrados em volta da figura, e o eco de cada prato
+                logo por fora do arco aceso. Não têm ponto e não tocam a
+                estrutura — por isso o traço mais fino e quase apagado. */}
+            <g strokeWidth={0.75} strokeOpacity={0.25}>
+                <circle data-part="orbit" cx="200" cy="154" r="108" />
+                <circle data-part="orbit" cx="202" cy="157" r="104" />
+
+                <path data-part="orbit" d="M105 161 A 48 48 0 0 1 58 124" />
+                <path data-part="orbit" d="M105 161 A 48 48 0 0 0 152 124" />
+                <path data-part="orbit" d="M295 161 A 48 48 0 0 1 248 124" />
+                <path data-part="orbit" d="M295 161 A 48 48 0 0 0 342 124" />
+            </g>
+
             {/* Toda linha horizontal está partida no eixo e toda diagonal tem a
                 sua espelhada: como o traço é desenhado a partir do primeiro
                 ponto, a figura nasce do centro para as bordas, e a simetria
                 aparece também durante a entrada — não só no fim dela. */}
 
-            {/* A coluna e o pedestal não giram. */}
+            {/* O pé é um traço só, e a coluna sobe dele até a travessa. */}
+            <line data-part="base" x1="200" y1="239" x2="140" y2="239" />
+            <line data-part="base" x1="200" y1="239" x2="260" y2="239" />
+            <line data-part="column" x1="200" y1="239" x2="200" y2="100" />
+
+            {dot(0, 140, 239, 1.75)}
+            {dot(0, 260, 239, 1.75)}
+            {dot(1, 200, 239, 2.75)}
+            {dot(2, 200, 170, 2)}
+
+            {/* A travessa: uma reta e três pontos, o do meio sobre o eixo. */}
+            <line data-part="beam" x1="200" y1="100" x2="105" y2="100" />
+            <line data-part="beam" x1="200" y1="100" x2="295" y2="100" />
+
+            {dot(3, 200, 100, 3.5)}
+            {dot(4, 105, 100, 2.75)}
+            {dot(4, 295, 100, 2.75)}
+
+            {/* Prato esquerdo: dois tirantes abrindo da ponta da travessa até a
+                borda, e o arco fechando por baixo — desenhado do fundo para as
+                bordas, como o resto. */}
             <g>
-                <line data-part="base" x1="200" y1="266" x2="140" y2="266" />
-                <line data-part="base" x1="200" y1="266" x2="260" y2="266" />
-                <line data-part="base" x1="160" y1="244" x2="140" y2="266" />
-                <line data-part="base" x1="240" y1="244" x2="260" y2="266" />
-                <line data-part="base" x1="200" y1="244" x2="160" y2="244" />
-                <line data-part="base" x1="200" y1="244" x2="240" y2="244" />
-                <line data-part="base" x1="180" y1="224" x2="160" y2="244" />
-                <line data-part="base" x1="220" y1="224" x2="240" y2="244" />
-                <line data-part="base" x1="200" y1="224" x2="180" y2="224" />
-                <line data-part="base" x1="200" y1="224" x2="220" y2="224" />
+                <line data-part="cord" x1="105" y1="100" x2="66" y2="124" />
+                <line data-part="cord" x1="105" y1="100" x2="144" y2="124" />
+                <path data-part="pan" d="M105 155 A 40 40 0 0 1 66 124" />
+                <path data-part="pan" d="M105 155 A 40 40 0 0 0 144 124" />
 
-                <line data-part="column" x1="200" y1="224" x2="200" y2="44" />
-
-                {dot(0, 140, 266, 1.5)}
-                {dot(0, 260, 266, 1.5)}
-                {dot(0, 160, 244, 1.5)}
-                {dot(0, 240, 244, 1.5)}
-                {dot(1, 180, 224, 1.75)}
-                {dot(1, 220, 224, 1.75)}
-                {dot(1, 200, 224, 2.5)}
-                {dot(2, 200, 184, 1.5)}
-                {dot(2, 200, 144, 1.5)}
-                {dot(2, 200, 104, 1.5)}
-                {dot(3, 200, 44, 2.75)}
+                {dot(5, 66, 124, 2.25)}
+                {dot(5, 144, 124, 2.25)}
+                {dot(6, 105, 155, 2.25)}
             </g>
 
-            {/* Travessa, tirantes e pratos giram juntos em torno do eixo. A sela
-                desce da travessa até o poste: é o que a faz parecer apoiada em
-                vez de flutuando — e o poste, que é estático, segue por cima
-                dela até o pináculo. */}
-            <g data-sway="beam">
-                <path data-part="beam" d="M200 84 L180 64" />
-                <path data-part="beam" d="M200 84 L220 64" />
-                <line data-part="beam" x1="200" y1="64" x2="84" y2="64" />
-                <line data-part="beam" x1="200" y1="64" x2="316" y2="64" />
-                <line data-part="beam" x1="84" y1="64" x2="84" y2="74" />
-                <line data-part="beam" x1="316" y1="64" x2="316" y2="74" />
+            {/* Prato direito, espelhado em x = 200. */}
+            <g>
+                <line data-part="cord" x1="295" y1="100" x2="334" y2="124" />
+                <line data-part="cord" x1="295" y1="100" x2="256" y2="124" />
+                <path data-part="pan" d="M295 155 A 40 40 0 0 1 256 124" />
+                <path data-part="pan" d="M295 155 A 40 40 0 0 0 334 124" />
 
-                {dot(3, 200, 64, 3.5)}
-                {dot(4, 142, 64, 1.75)}
-                {dot(4, 258, 64, 1.75)}
-                {dot(4, 84, 64, 2.75)}
-                {dot(4, 316, 64, 2.75)}
-
-                {/* Prato esquerdo: uma corda até o nó e três tirantes até a
-                    borda — é o que o V de duas linhas não dava, e é o que faz
-                    a suspensão parecer suspensão. */}
-                <g data-sway="pan" data-origin="84 74">
-                    <line data-part="chain" x1="84" y1="74" x2="84" y2="92" />
-                    <line data-part="chain" x1="84" y1="92" x2="56" y2="158" />
-                    <line data-part="chain" x1="84" y1="92" x2="84" y2="158" />
-                    <line data-part="chain" x1="84" y1="92" x2="112" y2="158" />
-                    <line data-part="pan" x1="84" y1="158" x2="50" y2="158" />
-                    <line data-part="pan" x1="84" y1="158" x2="118" y2="158" />
-                    <line data-part="pan" x1="50" y1="158" x2="46" y2="150" />
-                    <line data-part="pan" x1="118" y1="158" x2="122" y2="150" />
-                    <path data-part="pan" d="M84 181 Q 67 181 50 158" />
-                    <path data-part="pan" d="M84 181 Q 101 181 118 158" />
-
-                    {dot(5, 84, 92, 2.5)}
-                    {dot(6, 56, 158, 1.5)}
-                    {dot(6, 84, 158, 1.75)}
-                    {dot(6, 112, 158, 1.5)}
-                    {dot(7, 46, 150, 1.5)}
-                    {dot(7, 122, 150, 1.5)}
-                    {dot(7, 84, 181, 2.25)}
-                </g>
-
-                {/* Prato direito, espelhado em x = 200. */}
-                <g data-sway="pan" data-origin="316 74">
-                    <line data-part="chain" x1="316" y1="74" x2="316" y2="92" />
-                    <line data-part="chain" x1="316" y1="92" x2="288" y2="158" />
-                    <line data-part="chain" x1="316" y1="92" x2="316" y2="158" />
-                    <line data-part="chain" x1="316" y1="92" x2="344" y2="158" />
-                    <line data-part="pan" x1="316" y1="158" x2="282" y2="158" />
-                    <line data-part="pan" x1="316" y1="158" x2="350" y2="158" />
-                    <line data-part="pan" x1="282" y1="158" x2="278" y2="150" />
-                    <line data-part="pan" x1="350" y1="158" x2="354" y2="150" />
-                    <path data-part="pan" d="M316 181 Q 299 181 282 158" />
-                    <path data-part="pan" d="M316 181 Q 333 181 350 158" />
-
-                    {dot(5, 316, 92, 2.5)}
-                    {dot(6, 344, 158, 1.5)}
-                    {dot(6, 316, 158, 1.75)}
-                    {dot(6, 288, 158, 1.5)}
-                    {dot(7, 354, 150, 1.5)}
-                    {dot(7, 278, 150, 1.5)}
-                    {dot(7, 316, 181, 2.25)}
-                </g>
+                {dot(5, 334, 124, 2.25)}
+                {dot(5, 256, 124, 2.25)}
+                {dot(6, 295, 155, 2.25)}
             </g>
         </svg>
     )

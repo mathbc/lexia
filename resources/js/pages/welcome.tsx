@@ -24,14 +24,17 @@ export default function Welcome() {
                     className="pointer-events-none absolute inset-0 -z-10 flex items-center justify-center"
                 >
                     {/* Mais clara que as partículas: a balança é o assunto, o
-                        campo é textura.
+                        campo é textura. O tom é o `muted-foreground`, não o
+                        `foreground`: no tema escuro o branco puro serrilhava as
+                        linhas finas e estourava os pontos. A opacidade sobe
+                        junto para a figura não perder presença na troca.
 
                         O tamanho é o que protege a leitura. O vão entre os dois
                         pratos cresce junto com a marca, e é por dentro dele que
                         o texto passa — encolher a balança seria fechar o vão
                         sobre o subtítulo. No celular não há largura para isso,
                         e o que resolve é ela desbotar. */}
-                    <JusticeScales className="w-[150%] max-w-4xl text-foreground opacity-45 sm:w-[85%] sm:opacity-70" />
+                    <JusticeScales className="w-[150%] max-w-6xl text-muted-foreground opacity-45 sm:w-[95%] sm:opacity-70" />
                 </div>
 
                 <div className="flex w-full max-w-2xl flex-col items-center text-center">
