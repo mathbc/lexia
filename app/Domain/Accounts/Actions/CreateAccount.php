@@ -11,7 +11,6 @@ use App\Domain\Users\Actions\SendUserInvitation;
 use App\Domain\Users\Data\UserData;
 use App\Domain\Users\Enums\UserType;
 use App\Domain\Users\Models\User;
-use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\Rule;
 use Lorisleiva\Actions\ActionRequest;
@@ -82,7 +81,8 @@ final class CreateAccount
             UserData::forOwner($validated),
         );
 
-        event(new Registered($owner));
+        // The invitation replaces the framework's verification e-mail; see
+        // CreateUser for why the `Registered` event is not fired here.
         SendUserInvitation::run($owner);
 
         return to_route('accounts.show', $owner->account_id)

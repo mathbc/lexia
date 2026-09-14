@@ -7,6 +7,7 @@ namespace Tests\Feature\Users;
 use App\Domain\Users\Enums\UserRole;
 use App\Domain\Users\Models\User;
 use App\Domain\Users\Notifications\UserInvitation;
+use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
@@ -38,7 +39,28 @@ final class ManageUsersTest extends TestCase
         $this->assertSame(UserRole::Lawyer, $invited->role);
         $this->assertTrue($invited->enabled);
 
+        // Exactly one e-mail: the invitation, never the framework's
+        // "Verify Email Address" on top of it.
         Notification::assertSentTo($invited, UserInvitation::class);
+        Notification::assertNotSentTo($invited, VerifyEmail::class);
+    }
+
+    #[Test]
+    public function accepting_the_invitation_verifies_the_address(): void
+    {
+        [$account] = $this->accountWithOwner();
+        $invited = User::factory()->forAccount($account)->unverified()->create();
+
+        $this->post('/reset-password', [
+            'token' => Password::broker()->createToken($invited),
+            'email' => $invited->email,
+            'password' => 'senha-bem-secreta',
+            'password_confirmation' => 'senha-bem-secreta',
+        ])->assertSessionHasNoErrors();
+
+        // Without this the invited user would be stuck on /email/verify: no
+        // verification e-mail was ever sent to them.
+        $this->assertTrue($invited->fresh()->hasVerifiedEmail());
     }
 
     #[Test]

@@ -9,7 +9,6 @@ use App\Domain\Users\Actions\Concerns\ActsWithinAccount;
 use App\Domain\Users\Actions\Concerns\ValidatesUser;
 use App\Domain\Users\Data\UserData;
 use App\Domain\Users\Models\User;
-use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\Rule;
 use Lorisleiva\Actions\ActionRequest;
@@ -83,9 +82,10 @@ final class CreateUser
         // invite people into a tenant that is not their own.
         $user = $this->handle($account, UserData::fromArray($request->validated()));
 
-        // Invitation and email verification both ride on the framework's
-        // existing flows rather than a bespoke token.
-        event(new Registered($user));
+        // No `Registered` here: the event's default listener would send the
+        // framework's "Verify Email Address" on top of our invitation, and an
+        // invited user has no use for two links. The invitation is itself the
+        // proof of inbox ownership — accepting it verifies the address.
         SendUserInvitation::run($user);
 
         return to_route('users.index', $account)
