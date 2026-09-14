@@ -2,7 +2,7 @@ import { usePage } from '@inertiajs/react'
 import { SlidersHorizontal, X } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { AppSidebar } from '@/components/app-sidebar'
-import { Alert } from '@/components/ui/alert'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -88,12 +88,12 @@ export function AppLayout({ title, subtitle, actions, tabs, filters, activeFilte
                     <div className="min-w-0 flex-1 overflow-y-auto px-4 py-6 lg:px-6">
                         {flash.success && (
                             <Alert variant="success" role="status" className="mb-5">
-                                {flash.success}
+                                <AlertDescription>{flash.success}</AlertDescription>
                             </Alert>
                         )}
                         {flash.error && (
                             <Alert variant="destructive" className="mb-5">
-                                {flash.error}
+                                <AlertDescription>{flash.error}</AlertDescription>
                             </Alert>
                         )}
 

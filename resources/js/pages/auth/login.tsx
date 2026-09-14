@@ -1,7 +1,7 @@
 import { Head, Link, useForm } from '@inertiajs/react'
 import type { FormEvent } from 'react'
 import { AuthLayout } from '@/layouts/auth-layout'
-import { Alert } from '@/components/ui/alert'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field, Input } from '@/components/ui/field'
@@ -32,7 +32,7 @@ export default function Login({ status }: { status?: string }) {
 
             {status && (
                 <Alert variant="success" role="status" className="mb-4">
-                    {status}
+                    <AlertDescription>{status}</AlertDescription>
                 </Alert>
             )}
 

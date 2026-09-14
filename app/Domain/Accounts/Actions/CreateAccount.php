@@ -7,12 +7,12 @@ namespace App\Domain\Accounts\Actions;
 use App\Domain\Accounts\Actions\Concerns\ValidatesAccount;
 use App\Domain\Accounts\Data\AccountData;
 use App\Domain\Accounts\Models\Account;
+use App\Domain\Users\Actions\SendUserInvitation;
 use App\Domain\Users\Data\UserData;
 use App\Domain\Users\Enums\UserType;
 use App\Domain\Users\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\Rule;
 use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
@@ -83,7 +83,7 @@ final class CreateAccount
         );
 
         event(new Registered($owner));
-        Password::sendResetLink(['email' => $owner->email]);
+        SendUserInvitation::run($owner);
 
         return to_route('accounts.show', $owner->account_id)
             ->with('success', "Conta criada. Convite enviado para {$owner->email}.");

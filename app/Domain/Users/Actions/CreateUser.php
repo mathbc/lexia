@@ -11,7 +11,6 @@ use App\Domain\Users\Data\UserData;
 use App\Domain\Users\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Password;
 use Illuminate\Validation\Rule;
 use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
@@ -87,7 +86,7 @@ final class CreateUser
         // Invitation and email verification both ride on the framework's
         // existing flows rather than a bespoke token.
         event(new Registered($user));
-        Password::sendResetLink(['email' => $user->email]);
+        SendUserInvitation::run($user);
 
         return to_route('users.index', $account)
             ->with('success', "Convite enviado para {$user->email}.");

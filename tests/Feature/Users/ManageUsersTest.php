@@ -6,8 +6,10 @@ namespace Tests\Feature\Users;
 
 use App\Domain\Users\Enums\UserRole;
 use App\Domain\Users\Models\User;
+use App\Domain\Users\Notifications\UserInvitation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Password;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -35,6 +37,27 @@ final class ManageUsersTest extends TestCase
         $this->assertSame($owner->account_id, $invited->account_id);
         $this->assertSame(UserRole::Lawyer, $invited->role);
         $this->assertTrue($invited->enabled);
+
+        Notification::assertSentTo($invited, UserInvitation::class);
+    }
+
+    #[Test]
+    public function the_invitation_email_carries_a_working_reset_link(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $invited = User::factory()->forAccount($account)->create();
+
+        $message = (new UserInvitation(Password::broker()->createToken($invited)))
+            ->toMail($invited);
+
+        $mail = view($message->view, $message->viewData)->render();
+
+        // The reset screen needs both halves: without the e-mail in the query
+        // string the form has nothing to submit the new password against.
+        $this->assertStringContainsString('/reset-password/', $mail);
+        $this->assertStringContainsString(urlencode($invited->email), $mail);
+        $this->assertStringContainsString($account->displayName(), $mail);
+        $this->assertStringContainsString('Definir minha senha', $mail);
     }
 
     #[Test]

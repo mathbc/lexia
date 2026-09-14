@@ -1,7 +1,7 @@
 import { Head, Link, useForm } from '@inertiajs/react'
 import type { FormEvent } from 'react'
 import { AuthLayout } from '@/layouts/auth-layout'
-import { Alert } from '@/components/ui/alert'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 
 export default function VerifyEmail({ status }: { status?: string }) {
@@ -21,7 +21,7 @@ export default function VerifyEmail({ status }: { status?: string }) {
 
             {status === 'verification-link-sent' && (
                 <Alert variant="success" role="status" className="mb-4">
-                    Um novo link foi enviado.
+                    <AlertDescription>Um novo link foi enviado.</AlertDescription>
                 </Alert>
             )}
 
