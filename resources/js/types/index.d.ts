@@ -112,3 +112,48 @@ export interface CustomerAbilities {
     update: boolean
     delete: boolean
 }
+
+/** A practice area, as the PracticeArea model serialises. */
+export interface PracticeArea {
+    id: string
+    slug: string
+    label: string
+    cnj_subject_roots: number[]
+    position: number
+}
+
+/**
+ * A CNJ procedural class. `code` is the official identifier — the number that
+ * shows on the case record — and `scope` only comes through when the row was
+ * loaded from a practice area, where it says whether the class belongs to that
+ * area or is borrowed from the civil trunk.
+ */
+export interface ProceduralClass {
+    id: string
+    code: number
+    name: string
+    slug: string
+    root_code: number
+    path: string[]
+    abbreviation: string | null
+    nature: string | null
+    legal_norm: string | null
+    legal_article: string | null
+    active_party: string | null
+    passive_party: string | null
+    has_own_numbering: boolean
+    is_filing_class: boolean
+    is_cross_cutting: boolean
+    jurisdictions: string[]
+    pivot?: { scope: 'specific' | 'generic' }
+}
+
+/** A pleading, as the LegalCase model serialises. */
+export interface LegalCase {
+    id: string
+    customer_id: string
+    practice_area_id: string
+    procedural_class_id: string
+    created_at: string
+    updated_at: string
+}

@@ -6,6 +6,7 @@ namespace Database\Seeders;
 
 use App\Domain\Accounts\Models\Account;
 use App\Domain\Customers\Models\Customer;
+use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\Users\Enums\UserType;
 use App\Domain\Users\Models\User;
 use Illuminate\Database\Seeder;
@@ -44,8 +45,14 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // A carteira de clientes do escritório: pessoas e empresas.
-        Customer::factory()->forAccount($firm)->count(8)->create();
+        $clients = Customer::factory()->forAccount($firm)->count(8)->create();
         Customer::factory()->forAccount($firm)->company()->count(4)->create();
+
+        // As peças de parte da carteira. O catálogo de áreas e classes não é
+        // semeado aqui: vem por migration, porque produção também precisa dele.
+        $clients->take(5)->each(
+            fn (Customer $client) => LegalCase::factory()->forCustomer($client)->count(2)->create(),
+        );
 
         $solo = Account::factory()->create([
             'name' => 'Mariana Duarte',
@@ -60,7 +67,8 @@ class DatabaseSeeder extends Seeder
             'type' => UserType::Lawyer,
         ]);
 
-        Customer::factory()->forAccount($solo)->count(3)->create();
+        Customer::factory()->forAccount($solo)->count(3)->create()
+            ->each(fn (Customer $client) => LegalCase::factory()->forCustomer($client)->create());
 
         // LexIA staff. The platform account itself is not seeded: it is created
         // by migration, because production needs it too.

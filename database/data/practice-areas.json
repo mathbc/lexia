@@ -1,0 +1,5193 @@
+[
+ {
+  "slug": "civil",
+  "label": "Direito Civil",
+  "position": 1,
+  "cnj_subject_roots": [
+   899
+  ],
+  "classes": [
+   {
+    "code": 7,
+    "scope": "generic"
+   },
+   {
+    "code": 38,
+    "scope": "generic"
+   },
+   {
+    "code": 52,
+    "scope": "generic"
+   },
+   {
+    "code": 89,
+    "scope": "generic"
+   },
+   {
+    "code": 115,
+    "scope": "generic"
+   },
+   {
+    "code": 124,
+    "scope": "generic"
+   },
+   {
+    "code": 151,
+    "scope": "generic"
+   },
+   {
+    "code": 152,
+    "scope": "generic"
+   },
+   {
+    "code": 153,
+    "scope": "generic"
+   },
+   {
+    "code": 154,
+    "scope": "generic"
+   },
+   {
+    "code": 166,
+    "scope": "generic"
+   },
+   {
+    "code": 167,
+    "scope": "generic"
+   },
+   {
+    "code": 198,
+    "scope": "generic"
+   },
+   {
+    "code": 199,
+    "scope": "generic"
+   },
+   {
+    "code": 202,
+    "scope": "generic"
+   },
+   {
+    "code": 206,
+    "scope": "generic"
+   },
+   {
+    "code": 211,
+    "scope": "generic"
+   },
+   {
+    "code": 212,
+    "scope": "generic"
+   },
+   {
+    "code": 213,
+    "scope": "generic"
+   },
+   {
+    "code": 228,
+    "scope": "generic"
+   },
+   {
+    "code": 238,
+    "scope": "generic"
+   },
+   {
+    "code": 240,
+    "scope": "generic"
+   },
+   {
+    "code": 242,
+    "scope": "generic"
+   },
+   {
+    "code": 457,
+    "scope": "generic"
+   },
+   {
+    "code": 460,
+    "scope": "generic"
+   },
+   {
+    "code": 1117,
+    "scope": "generic"
+   },
+   {
+    "code": 1271,
+    "scope": "generic"
+   },
+   {
+    "code": 1294,
+    "scope": "generic"
+   },
+   {
+    "code": 1701,
+    "scope": "generic"
+   },
+   {
+    "code": 1728,
+    "scope": "generic"
+   },
+   {
+    "code": 10942,
+    "scope": "generic"
+   },
+   {
+    "code": 10980,
+    "scope": "generic"
+   },
+   {
+    "code": 12137,
+    "scope": "generic"
+   },
+   {
+    "code": 12139,
+    "scope": "generic"
+   },
+   {
+    "code": 12153,
+    "scope": "generic"
+   },
+   {
+    "code": 12154,
+    "scope": "generic"
+   },
+   {
+    "code": 12357,
+    "scope": "generic"
+   },
+   {
+    "code": 12761,
+    "scope": "generic"
+   },
+   {
+    "code": 15309,
+    "scope": "generic"
+   },
+   {
+    "code": 15731,
+    "scope": "generic"
+   },
+   {
+    "code": 15732,
+    "scope": "generic"
+   }
+  ]
+ },
+ {
+  "slug": "familia-sucessoes",
+  "label": "Direito de Família e Sucessões",
+  "position": 2,
+  "cnj_subject_roots": [
+   899
+  ],
+  "classes": [
+   {
+    "code": 7,
+    "scope": "generic"
+   },
+   {
+    "code": 30,
+    "scope": "specific"
+   },
+   {
+    "code": 31,
+    "scope": "specific"
+   },
+   {
+    "code": 38,
+    "scope": "generic"
+   },
+   {
+    "code": 39,
+    "scope": "specific"
+   },
+   {
+    "code": 48,
+    "scope": "specific"
+   },
+   {
+    "code": 51,
+    "scope": "specific"
+   },
+   {
+    "code": 52,
+    "scope": "generic"
+   },
+   {
+    "code": 53,
+    "scope": "specific"
+   },
+   {
+    "code": 54,
+    "scope": "specific"
+   },
+   {
+    "code": 55,
+    "scope": "specific"
+   },
+   {
+    "code": 57,
+    "scope": "specific"
+   },
+   {
+    "code": 58,
+    "scope": "specific"
+   },
+   {
+    "code": 60,
+    "scope": "specific"
+   },
+   {
+    "code": 69,
+    "scope": "specific"
+   },
+   {
+    "code": 74,
+    "scope": "specific"
+   },
+   {
+    "code": 87,
+    "scope": "specific"
+   },
+   {
+    "code": 89,
+    "scope": "generic"
+   },
+   {
+    "code": 115,
+    "scope": "generic"
+   },
+   {
+    "code": 123,
+    "scope": "specific"
+   },
+   {
+    "code": 124,
+    "scope": "generic"
+   },
+   {
+    "code": 142,
+    "scope": "specific"
+   },
+   {
+    "code": 143,
+    "scope": "specific"
+   },
+   {
+    "code": 151,
+    "scope": "generic"
+   },
+   {
+    "code": 152,
+    "scope": "generic"
+   },
+   {
+    "code": 153,
+    "scope": "generic"
+   },
+   {
+    "code": 154,
+    "scope": "generic"
+   },
+   {
+    "code": 166,
+    "scope": "generic"
+   },
+   {
+    "code": 167,
+    "scope": "generic"
+   },
+   {
+    "code": 198,
+    "scope": "generic"
+   },
+   {
+    "code": 199,
+    "scope": "generic"
+   },
+   {
+    "code": 202,
+    "scope": "generic"
+   },
+   {
+    "code": 206,
+    "scope": "generic"
+   },
+   {
+    "code": 211,
+    "scope": "generic"
+   },
+   {
+    "code": 212,
+    "scope": "generic"
+   },
+   {
+    "code": 213,
+    "scope": "generic"
+   },
+   {
+    "code": 228,
+    "scope": "generic"
+   },
+   {
+    "code": 234,
+    "scope": "specific"
+   },
+   {
+    "code": 238,
+    "scope": "generic"
+   },
+   {
+    "code": 239,
+    "scope": "specific"
+   },
+   {
+    "code": 240,
+    "scope": "generic"
+   },
+   {
+    "code": 242,
+    "scope": "generic"
+   },
+   {
+    "code": 251,
+    "scope": "specific"
+   },
+   {
+    "code": 457,
+    "scope": "generic"
+   },
+   {
+    "code": 460,
+    "scope": "generic"
+   },
+   {
+    "code": 1117,
+    "scope": "generic"
+   },
+   {
+    "code": 1271,
+    "scope": "generic"
+   },
+   {
+    "code": 1294,
+    "scope": "generic"
+   },
+   {
+    "code": 1701,
+    "scope": "generic"
+   },
+   {
+    "code": 1728,
+    "scope": "generic"
+   },
+   {
+    "code": 10942,
+    "scope": "generic"
+   },
+   {
+    "code": 10980,
+    "scope": "generic"
+   },
+   {
+    "code": 12137,
+    "scope": "generic"
+   },
+   {
+    "code": 12139,
+    "scope": "generic"
+   },
+   {
+    "code": 12153,
+    "scope": "generic"
+   },
+   {
+    "code": 12154,
+    "scope": "generic"
+   },
+   {
+    "code": 12233,
+    "scope": "specific"
+   },
+   {
+    "code": 12246,
+    "scope": "specific"
+   },
+   {
+    "code": 12247,
+    "scope": "specific"
+   },
+   {
+    "code": 12357,
+    "scope": "generic"
+   },
+   {
+    "code": 12370,
+    "scope": "specific"
+   },
+   {
+    "code": 12371,
+    "scope": "specific"
+   },
+   {
+    "code": 12372,
+    "scope": "specific"
+   },
+   {
+    "code": 12389,
+    "scope": "specific"
+   },
+   {
+    "code": 12541,
+    "scope": "specific"
+   },
+   {
+    "code": 12761,
+    "scope": "generic"
+   },
+   {
+    "code": 12762,
+    "scope": "specific"
+   },
+   {
+    "code": 12763,
+    "scope": "specific"
+   },
+   {
+    "code": 12764,
+    "scope": "specific"
+   },
+   {
+    "code": 14671,
+    "scope": "specific"
+   },
+   {
+    "code": 14677,
+    "scope": "specific"
+   },
+   {
+    "code": 15309,
+    "scope": "generic"
+   },
+   {
+    "code": 15731,
+    "scope": "generic"
+   },
+   {
+    "code": 15732,
+    "scope": "generic"
+   }
+  ]
+ },
+ {
+  "slug": "imobiliario",
+  "label": "Direito Imobiliário",
+  "position": 3,
+  "cnj_subject_roots": [
+   899
+  ],
+  "classes": [
+   {
+    "code": 7,
+    "scope": "generic"
+   },
+   {
+    "code": 34,
+    "scope": "specific"
+   },
+   {
+    "code": 38,
+    "scope": "generic"
+   },
+   {
+    "code": 49,
+    "scope": "specific"
+   },
+   {
+    "code": 52,
+    "scope": "generic"
+   },
+   {
+    "code": 86,
+    "scope": "specific"
+   },
+   {
+    "code": 89,
+    "scope": "generic"
+   },
+   {
+    "code": 90,
+    "scope": "specific"
+   },
+   {
+    "code": 91,
+    "scope": "specific"
+   },
+   {
+    "code": 92,
+    "scope": "specific"
+   },
+   {
+    "code": 93,
+    "scope": "specific"
+   },
+   {
+    "code": 94,
+    "scope": "specific"
+   },
+   {
+    "code": 96,
+    "scope": "specific"
+   },
+   {
+    "code": 113,
+    "scope": "specific"
+   },
+   {
+    "code": 115,
+    "scope": "generic"
+   },
+   {
+    "code": 124,
+    "scope": "generic"
+   },
+   {
+    "code": 134,
+    "scope": "specific"
+   },
+   {
+    "code": 136,
+    "scope": "specific"
+   },
+   {
+    "code": 137,
+    "scope": "specific"
+   },
+   {
+    "code": 140,
+    "scope": "specific"
+   },
+   {
+    "code": 151,
+    "scope": "generic"
+   },
+   {
+    "code": 152,
+    "scope": "generic"
+   },
+   {
+    "code": 153,
+    "scope": "generic"
+   },
+   {
+    "code": 154,
+    "scope": "generic"
+   },
+   {
+    "code": 166,
+    "scope": "generic"
+   },
+   {
+    "code": 167,
+    "scope": "generic"
+   },
+   {
+    "code": 198,
+    "scope": "generic"
+   },
+   {
+    "code": 199,
+    "scope": "generic"
+   },
+   {
+    "code": 202,
+    "scope": "generic"
+   },
+   {
+    "code": 206,
+    "scope": "generic"
+   },
+   {
+    "code": 211,
+    "scope": "generic"
+   },
+   {
+    "code": 212,
+    "scope": "generic"
+   },
+   {
+    "code": 213,
+    "scope": "generic"
+   },
+   {
+    "code": 228,
+    "scope": "generic"
+   },
+   {
+    "code": 238,
+    "scope": "generic"
+   },
+   {
+    "code": 240,
+    "scope": "generic"
+   },
+   {
+    "code": 242,
+    "scope": "generic"
+   },
+   {
+    "code": 457,
+    "scope": "generic"
+   },
+   {
+    "code": 460,
+    "scope": "generic"
+   },
+   {
+    "code": 1117,
+    "scope": "generic"
+   },
+   {
+    "code": 1271,
+    "scope": "generic"
+   },
+   {
+    "code": 1294,
+    "scope": "generic"
+   },
+   {
+    "code": 1683,
+    "scope": "specific"
+   },
+   {
+    "code": 1701,
+    "scope": "generic"
+   },
+   {
+    "code": 1707,
+    "scope": "specific"
+   },
+   {
+    "code": 1709,
+    "scope": "specific"
+   },
+   {
+    "code": 1728,
+    "scope": "generic"
+   },
+   {
+    "code": 10942,
+    "scope": "generic"
+   },
+   {
+    "code": 10980,
+    "scope": "generic"
+   },
+   {
+    "code": 12137,
+    "scope": "generic"
+   },
+   {
+    "code": 12138,
+    "scope": "specific"
+   },
+   {
+    "code": 12139,
+    "scope": "generic"
+   },
+   {
+    "code": 12153,
+    "scope": "generic"
+   },
+   {
+    "code": 12154,
+    "scope": "generic"
+   },
+   {
+    "code": 12357,
+    "scope": "generic"
+   },
+   {
+    "code": 12761,
+    "scope": "generic"
+   },
+   {
+    "code": 15309,
+    "scope": "generic"
+   },
+   {
+    "code": 15731,
+    "scope": "generic"
+   },
+   {
+    "code": 15732,
+    "scope": "generic"
+   }
+  ]
+ },
+ {
+  "slug": "consumidor",
+  "label": "Direito do Consumidor",
+  "position": 4,
+  "cnj_subject_roots": [
+   1156
+  ],
+  "classes": [
+   {
+    "code": 7,
+    "scope": "generic"
+   },
+   {
+    "code": 38,
+    "scope": "generic"
+   },
+   {
+    "code": 40,
+    "scope": "specific"
+   },
+   {
+    "code": 52,
+    "scope": "generic"
+   },
+   {
+    "code": 63,
+    "scope": "specific"
+   },
+   {
+    "code": 65,
+    "scope": "specific"
+   },
+   {
+    "code": 81,
+    "scope": "specific"
+   },
+   {
+    "code": 89,
+    "scope": "generic"
+   },
+   {
+    "code": 115,
+    "scope": "generic"
+   },
+   {
+    "code": 124,
+    "scope": "generic"
+   },
+   {
+    "code": 151,
+    "scope": "generic"
+   },
+   {
+    "code": 152,
+    "scope": "generic"
+   },
+   {
+    "code": 153,
+    "scope": "generic"
+   },
+   {
+    "code": 154,
+    "scope": "generic"
+   },
+   {
+    "code": 166,
+    "scope": "generic"
+   },
+   {
+    "code": 167,
+    "scope": "generic"
+   },
+   {
+    "code": 198,
+    "scope": "generic"
+   },
+   {
+    "code": 199,
+    "scope": "generic"
+   },
+   {
+    "code": 202,
+    "scope": "generic"
+   },
+   {
+    "code": 206,
+    "scope": "generic"
+   },
+   {
+    "code": 211,
+    "scope": "generic"
+   },
+   {
+    "code": 212,
+    "scope": "generic"
+   },
+   {
+    "code": 213,
+    "scope": "generic"
+   },
+   {
+    "code": 228,
+    "scope": "generic"
+   },
+   {
+    "code": 238,
+    "scope": "generic"
+   },
+   {
+    "code": 240,
+    "scope": "generic"
+   },
+   {
+    "code": 242,
+    "scope": "generic"
+   },
+   {
+    "code": 436,
+    "scope": "specific"
+   },
+   {
+    "code": 457,
+    "scope": "generic"
+   },
+   {
+    "code": 460,
+    "scope": "generic"
+   },
+   {
+    "code": 1117,
+    "scope": "generic"
+   },
+   {
+    "code": 1271,
+    "scope": "generic"
+   },
+   {
+    "code": 1294,
+    "scope": "generic"
+   },
+   {
+    "code": 1701,
+    "scope": "generic"
+   },
+   {
+    "code": 1728,
+    "scope": "generic"
+   },
+   {
+    "code": 10942,
+    "scope": "generic"
+   },
+   {
+    "code": 10980,
+    "scope": "generic"
+   },
+   {
+    "code": 12137,
+    "scope": "generic"
+   },
+   {
+    "code": 12139,
+    "scope": "generic"
+   },
+   {
+    "code": 12153,
+    "scope": "generic"
+   },
+   {
+    "code": 12154,
+    "scope": "generic"
+   },
+   {
+    "code": 12357,
+    "scope": "generic"
+   },
+   {
+    "code": 12761,
+    "scope": "generic"
+   },
+   {
+    "code": 15217,
+    "scope": "specific"
+   },
+   {
+    "code": 15309,
+    "scope": "generic"
+   },
+   {
+    "code": 15731,
+    "scope": "generic"
+   },
+   {
+    "code": 15732,
+    "scope": "generic"
+   }
+  ]
+ },
+ {
+  "slug": "empresarial",
+  "label": "Direito Empresarial e Falimentar",
+  "position": 5,
+  "cnj_subject_roots": [
+   899
+  ],
+  "classes": [
+   {
+    "code": 7,
+    "scope": "generic"
+   },
+   {
+    "code": 38,
+    "scope": "generic"
+   },
+   {
+    "code": 40,
+    "scope": "specific"
+   },
+   {
+    "code": 52,
+    "scope": "generic"
+   },
+   {
+    "code": 59,
+    "scope": "specific"
+   },
+   {
+    "code": 84,
+    "scope": "specific"
+   },
+   {
+    "code": 85,
+    "scope": "specific"
+   },
+   {
+    "code": 89,
+    "scope": "generic"
+   },
+   {
+    "code": 108,
+    "scope": "specific"
+   },
+   {
+    "code": 111,
+    "scope": "specific"
+   },
+   {
+    "code": 114,
+    "scope": "specific"
+   },
+   {
+    "code": 115,
+    "scope": "generic"
+   },
+   {
+    "code": 124,
+    "scope": "generic"
+   },
+   {
+    "code": 128,
+    "scope": "specific"
+   },
+   {
+    "code": 129,
+    "scope": "specific"
+   },
+   {
+    "code": 135,
+    "scope": "specific"
+   },
+   {
+    "code": 138,
+    "scope": "specific"
+   },
+   {
+    "code": 151,
+    "scope": "generic"
+   },
+   {
+    "code": 152,
+    "scope": "generic"
+   },
+   {
+    "code": 153,
+    "scope": "generic"
+   },
+   {
+    "code": 154,
+    "scope": "generic"
+   },
+   {
+    "code": 166,
+    "scope": "generic"
+   },
+   {
+    "code": 167,
+    "scope": "generic"
+   },
+   {
+    "code": 198,
+    "scope": "generic"
+   },
+   {
+    "code": 199,
+    "scope": "generic"
+   },
+   {
+    "code": 202,
+    "scope": "generic"
+   },
+   {
+    "code": 206,
+    "scope": "generic"
+   },
+   {
+    "code": 211,
+    "scope": "generic"
+   },
+   {
+    "code": 212,
+    "scope": "generic"
+   },
+   {
+    "code": 213,
+    "scope": "generic"
+   },
+   {
+    "code": 228,
+    "scope": "generic"
+   },
+   {
+    "code": 238,
+    "scope": "generic"
+   },
+   {
+    "code": 240,
+    "scope": "generic"
+   },
+   {
+    "code": 242,
+    "scope": "generic"
+   },
+   {
+    "code": 457,
+    "scope": "generic"
+   },
+   {
+    "code": 460,
+    "scope": "generic"
+   },
+   {
+    "code": 1117,
+    "scope": "generic"
+   },
+   {
+    "code": 1271,
+    "scope": "generic"
+   },
+   {
+    "code": 1294,
+    "scope": "generic"
+   },
+   {
+    "code": 1701,
+    "scope": "generic"
+   },
+   {
+    "code": 1728,
+    "scope": "generic"
+   },
+   {
+    "code": 10942,
+    "scope": "generic"
+   },
+   {
+    "code": 10980,
+    "scope": "generic"
+   },
+   {
+    "code": 11397,
+    "scope": "specific"
+   },
+   {
+    "code": 12082,
+    "scope": "specific"
+   },
+   {
+    "code": 12086,
+    "scope": "specific"
+   },
+   {
+    "code": 12137,
+    "scope": "generic"
+   },
+   {
+    "code": 12139,
+    "scope": "generic"
+   },
+   {
+    "code": 12153,
+    "scope": "generic"
+   },
+   {
+    "code": 12154,
+    "scope": "generic"
+   },
+   {
+    "code": 12231,
+    "scope": "specific"
+   },
+   {
+    "code": 12357,
+    "scope": "generic"
+   },
+   {
+    "code": 12761,
+    "scope": "generic"
+   },
+   {
+    "code": 15159,
+    "scope": "specific"
+   },
+   {
+    "code": 15309,
+    "scope": "generic"
+   },
+   {
+    "code": 15731,
+    "scope": "generic"
+   },
+   {
+    "code": 15732,
+    "scope": "generic"
+   }
+  ]
+ },
+ {
+  "slug": "trabalhista",
+  "label": "Direito do Trabalho",
+  "position": 6,
+  "cnj_subject_roots": [
+   864
+  ],
+  "classes": [
+   {
+    "code": 32,
+    "scope": "specific"
+   },
+   {
+    "code": 37,
+    "scope": "specific"
+   },
+   {
+    "code": 40,
+    "scope": "specific"
+   },
+   {
+    "code": 45,
+    "scope": "specific"
+   },
+   {
+    "code": 46,
+    "scope": "specific"
+   },
+   {
+    "code": 47,
+    "scope": "specific"
+   },
+   {
+    "code": 63,
+    "scope": "specific"
+   },
+   {
+    "code": 65,
+    "scope": "specific"
+   },
+   {
+    "code": 74,
+    "scope": "specific"
+   },
+   {
+    "code": 110,
+    "scope": "specific"
+   },
+   {
+    "code": 119,
+    "scope": "specific"
+   },
+   {
+    "code": 120,
+    "scope": "specific"
+   },
+   {
+    "code": 156,
+    "scope": "specific"
+   },
+   {
+    "code": 157,
+    "scope": "specific"
+   },
+   {
+    "code": 172,
+    "scope": "specific"
+   },
+   {
+    "code": 204,
+    "scope": "specific"
+   },
+   {
+    "code": 210,
+    "scope": "specific"
+   },
+   {
+    "code": 216,
+    "scope": "specific"
+   },
+   {
+    "code": 221,
+    "scope": "specific"
+   },
+   {
+    "code": 236,
+    "scope": "specific"
+   },
+   {
+    "code": 241,
+    "scope": "specific"
+   },
+   {
+    "code": 258,
+    "scope": "specific"
+   },
+   {
+    "code": 261,
+    "scope": "specific"
+   },
+   {
+    "code": 264,
+    "scope": "specific"
+   },
+   {
+    "code": 976,
+    "scope": "specific"
+   },
+   {
+    "code": 980,
+    "scope": "specific"
+   },
+   {
+    "code": 985,
+    "scope": "specific"
+   },
+   {
+    "code": 986,
+    "scope": "specific"
+   },
+   {
+    "code": 987,
+    "scope": "specific"
+   },
+   {
+    "code": 988,
+    "scope": "specific"
+   },
+   {
+    "code": 990,
+    "scope": "specific"
+   },
+   {
+    "code": 991,
+    "scope": "specific"
+   },
+   {
+    "code": 992,
+    "scope": "specific"
+   },
+   {
+    "code": 993,
+    "scope": "specific"
+   },
+   {
+    "code": 994,
+    "scope": "specific"
+   },
+   {
+    "code": 1000,
+    "scope": "specific"
+   },
+   {
+    "code": 1001,
+    "scope": "specific"
+   },
+   {
+    "code": 1002,
+    "scope": "specific"
+   },
+   {
+    "code": 1003,
+    "scope": "specific"
+   },
+   {
+    "code": 1004,
+    "scope": "specific"
+   },
+   {
+    "code": 1005,
+    "scope": "specific"
+   },
+   {
+    "code": 1006,
+    "scope": "specific"
+   },
+   {
+    "code": 1007,
+    "scope": "specific"
+   },
+   {
+    "code": 1008,
+    "scope": "specific"
+   },
+   {
+    "code": 1009,
+    "scope": "specific"
+   },
+   {
+    "code": 1072,
+    "scope": "specific"
+   },
+   {
+    "code": 1116,
+    "scope": "specific"
+   },
+   {
+    "code": 1125,
+    "scope": "specific"
+   },
+   {
+    "code": 1126,
+    "scope": "specific"
+   },
+   {
+    "code": 1202,
+    "scope": "specific"
+   },
+   {
+    "code": 1208,
+    "scope": "specific"
+   },
+   {
+    "code": 1233,
+    "scope": "specific"
+   },
+   {
+    "code": 1267,
+    "scope": "specific"
+   },
+   {
+    "code": 1269,
+    "scope": "specific"
+   },
+   {
+    "code": 1685,
+    "scope": "specific"
+   },
+   {
+    "code": 1689,
+    "scope": "specific"
+   },
+   {
+    "code": 1707,
+    "scope": "specific"
+   },
+   {
+    "code": 1709,
+    "scope": "specific"
+   },
+   {
+    "code": 11027,
+    "scope": "specific"
+   },
+   {
+    "code": 11400,
+    "scope": "specific"
+   },
+   {
+    "code": 11555,
+    "scope": "specific"
+   },
+   {
+    "code": 11556,
+    "scope": "specific"
+   },
+   {
+    "code": 11882,
+    "scope": "specific"
+   },
+   {
+    "code": 11886,
+    "scope": "specific"
+   },
+   {
+    "code": 12075,
+    "scope": "specific"
+   },
+   {
+    "code": 12080,
+    "scope": "specific"
+   },
+   {
+    "code": 12081,
+    "scope": "specific"
+   },
+   {
+    "code": 12085,
+    "scope": "specific"
+   },
+   {
+    "code": 12087,
+    "scope": "specific"
+   },
+   {
+    "code": 12119,
+    "scope": "specific"
+   },
+   {
+    "code": 12132,
+    "scope": "specific"
+   },
+   {
+    "code": 12134,
+    "scope": "specific"
+   },
+   {
+    "code": 12135,
+    "scope": "specific"
+   },
+   {
+    "code": 12226,
+    "scope": "specific"
+   },
+   {
+    "code": 12227,
+    "scope": "specific"
+   },
+   {
+    "code": 12228,
+    "scope": "specific"
+   },
+   {
+    "code": 12374,
+    "scope": "specific"
+   },
+   {
+    "code": 12375,
+    "scope": "specific"
+   },
+   {
+    "code": 12391,
+    "scope": "specific"
+   },
+   {
+    "code": 12760,
+    "scope": "specific"
+   },
+   {
+    "code": 14775,
+    "scope": "specific"
+   },
+   {
+    "code": 15159,
+    "scope": "specific"
+   },
+   {
+    "code": 15160,
+    "scope": "specific"
+   },
+   {
+    "code": 15161,
+    "scope": "specific"
+   },
+   {
+    "code": 15187,
+    "scope": "specific"
+   },
+   {
+    "code": 15430,
+    "scope": "specific"
+   },
+   {
+    "code": 15533,
+    "scope": "specific"
+   },
+   {
+    "code": 15534,
+    "scope": "specific"
+   },
+   {
+    "code": 15535,
+    "scope": "specific"
+   },
+   {
+    "code": 15620,
+    "scope": "specific"
+   }
+  ]
+ },
+ {
+  "slug": "previdenciario",
+  "label": "Direito Previdenciário",
+  "position": 7,
+  "cnj_subject_roots": [
+   195,
+   12734
+  ],
+  "classes": [
+   {
+    "code": 7,
+    "scope": "generic"
+   },
+   {
+    "code": 38,
+    "scope": "generic"
+   },
+   {
+    "code": 52,
+    "scope": "generic"
+   },
+   {
+    "code": 89,
+    "scope": "generic"
+   },
+   {
+    "code": 115,
+    "scope": "generic"
+   },
+   {
+    "code": 119,
+    "scope": "specific"
+   },
+   {
+    "code": 120,
+    "scope": "specific"
+   },
+   {
+    "code": 124,
+    "scope": "generic"
+   },
+   {
+    "code": 151,
+    "scope": "generic"
+   },
+   {
+    "code": 152,
+    "scope": "generic"
+   },
+   {
+    "code": 153,
+    "scope": "generic"
+   },
+   {
+    "code": 154,
+    "scope": "generic"
+   },
+   {
+    "code": 166,
+    "scope": "generic"
+   },
+   {
+    "code": 167,
+    "scope": "generic"
+   },
+   {
+    "code": 198,
+    "scope": "generic"
+   },
+   {
+    "code": 199,
+    "scope": "generic"
+   },
+   {
+    "code": 202,
+    "scope": "generic"
+   },
+   {
+    "code": 206,
+    "scope": "generic"
+   },
+   {
+    "code": 211,
+    "scope": "generic"
+   },
+   {
+    "code": 212,
+    "scope": "generic"
+   },
+   {
+    "code": 213,
+    "scope": "generic"
+   },
+   {
+    "code": 228,
+    "scope": "generic"
+   },
+   {
+    "code": 238,
+    "scope": "generic"
+   },
+   {
+    "code": 240,
+    "scope": "generic"
+   },
+   {
+    "code": 242,
+    "scope": "generic"
+   },
+   {
+    "code": 457,
+    "scope": "generic"
+   },
+   {
+    "code": 460,
+    "scope": "generic"
+   },
+   {
+    "code": 1117,
+    "scope": "generic"
+   },
+   {
+    "code": 1271,
+    "scope": "generic"
+   },
+   {
+    "code": 1294,
+    "scope": "generic"
+   },
+   {
+    "code": 1701,
+    "scope": "generic"
+   },
+   {
+    "code": 1728,
+    "scope": "generic"
+   },
+   {
+    "code": 10942,
+    "scope": "generic"
+   },
+   {
+    "code": 10980,
+    "scope": "generic"
+   },
+   {
+    "code": 12137,
+    "scope": "generic"
+   },
+   {
+    "code": 12139,
+    "scope": "generic"
+   },
+   {
+    "code": 12153,
+    "scope": "generic"
+   },
+   {
+    "code": 12154,
+    "scope": "generic"
+   },
+   {
+    "code": 12357,
+    "scope": "generic"
+   },
+   {
+    "code": 12761,
+    "scope": "generic"
+   },
+   {
+    "code": 15309,
+    "scope": "generic"
+   },
+   {
+    "code": 15731,
+    "scope": "generic"
+   },
+   {
+    "code": 15732,
+    "scope": "generic"
+   }
+  ]
+ },
+ {
+  "slug": "tributario",
+  "label": "Direito Tributário",
+  "position": 8,
+  "cnj_subject_roots": [
+   14
+  ],
+  "classes": [
+   {
+    "code": 7,
+    "scope": "generic"
+   },
+   {
+    "code": 38,
+    "scope": "generic"
+   },
+   {
+    "code": 52,
+    "scope": "generic"
+   },
+   {
+    "code": 83,
+    "scope": "specific"
+   },
+   {
+    "code": 89,
+    "scope": "generic"
+   },
+   {
+    "code": 115,
+    "scope": "generic"
+   },
+   {
+    "code": 119,
+    "scope": "specific"
+   },
+   {
+    "code": 120,
+    "scope": "specific"
+   },
+   {
+    "code": 124,
+    "scope": "generic"
+   },
+   {
+    "code": 151,
+    "scope": "generic"
+   },
+   {
+    "code": 152,
+    "scope": "generic"
+   },
+   {
+    "code": 153,
+    "scope": "generic"
+   },
+   {
+    "code": 154,
+    "scope": "generic"
+   },
+   {
+    "code": 166,
+    "scope": "generic"
+   },
+   {
+    "code": 167,
+    "scope": "generic"
+   },
+   {
+    "code": 198,
+    "scope": "generic"
+   },
+   {
+    "code": 199,
+    "scope": "generic"
+   },
+   {
+    "code": 202,
+    "scope": "generic"
+   },
+   {
+    "code": 206,
+    "scope": "generic"
+   },
+   {
+    "code": 210,
+    "scope": "specific"
+   },
+   {
+    "code": 211,
+    "scope": "generic"
+   },
+   {
+    "code": 212,
+    "scope": "generic"
+   },
+   {
+    "code": 213,
+    "scope": "generic"
+   },
+   {
+    "code": 228,
+    "scope": "generic"
+   },
+   {
+    "code": 238,
+    "scope": "generic"
+   },
+   {
+    "code": 240,
+    "scope": "generic"
+   },
+   {
+    "code": 242,
+    "scope": "generic"
+   },
+   {
+    "code": 457,
+    "scope": "generic"
+   },
+   {
+    "code": 460,
+    "scope": "generic"
+   },
+   {
+    "code": 1116,
+    "scope": "specific"
+   },
+   {
+    "code": 1117,
+    "scope": "generic"
+   },
+   {
+    "code": 1118,
+    "scope": "specific"
+   },
+   {
+    "code": 1271,
+    "scope": "generic"
+   },
+   {
+    "code": 1294,
+    "scope": "generic"
+   },
+   {
+    "code": 1701,
+    "scope": "generic"
+   },
+   {
+    "code": 1728,
+    "scope": "generic"
+   },
+   {
+    "code": 10942,
+    "scope": "generic"
+   },
+   {
+    "code": 10980,
+    "scope": "generic"
+   },
+   {
+    "code": 12137,
+    "scope": "generic"
+   },
+   {
+    "code": 12139,
+    "scope": "generic"
+   },
+   {
+    "code": 12153,
+    "scope": "generic"
+   },
+   {
+    "code": 12154,
+    "scope": "generic"
+   },
+   {
+    "code": 12357,
+    "scope": "generic"
+   },
+   {
+    "code": 12761,
+    "scope": "generic"
+   },
+   {
+    "code": 14991,
+    "scope": "specific"
+   },
+   {
+    "code": 15309,
+    "scope": "generic"
+   },
+   {
+    "code": 15731,
+    "scope": "generic"
+   },
+   {
+    "code": 15732,
+    "scope": "generic"
+   }
+  ]
+ },
+ {
+  "slug": "administrativo",
+  "label": "Direito Administrativo e Fazenda Pública",
+  "position": 9,
+  "cnj_subject_roots": [
+   9985
+  ],
+  "classes": [
+   {
+    "code": 7,
+    "scope": "generic"
+   },
+   {
+    "code": 38,
+    "scope": "generic"
+   },
+   {
+    "code": 52,
+    "scope": "generic"
+   },
+   {
+    "code": 63,
+    "scope": "specific"
+   },
+   {
+    "code": 64,
+    "scope": "specific"
+   },
+   {
+    "code": 65,
+    "scope": "specific"
+   },
+   {
+    "code": 66,
+    "scope": "specific"
+   },
+   {
+    "code": 82,
+    "scope": "specific"
+   },
+   {
+    "code": 89,
+    "scope": "generic"
+   },
+   {
+    "code": 90,
+    "scope": "specific"
+   },
+   {
+    "code": 91,
+    "scope": "specific"
+   },
+   {
+    "code": 107,
+    "scope": "specific"
+   },
+   {
+    "code": 115,
+    "scope": "generic"
+   },
+   {
+    "code": 119,
+    "scope": "specific"
+   },
+   {
+    "code": 120,
+    "scope": "specific"
+   },
+   {
+    "code": 121,
+    "scope": "specific"
+   },
+   {
+    "code": 122,
+    "scope": "specific"
+   },
+   {
+    "code": 124,
+    "scope": "generic"
+   },
+   {
+    "code": 151,
+    "scope": "generic"
+   },
+   {
+    "code": 152,
+    "scope": "generic"
+   },
+   {
+    "code": 153,
+    "scope": "generic"
+   },
+   {
+    "code": 154,
+    "scope": "generic"
+   },
+   {
+    "code": 166,
+    "scope": "generic"
+   },
+   {
+    "code": 167,
+    "scope": "generic"
+   },
+   {
+    "code": 198,
+    "scope": "generic"
+   },
+   {
+    "code": 199,
+    "scope": "generic"
+   },
+   {
+    "code": 202,
+    "scope": "generic"
+   },
+   {
+    "code": 206,
+    "scope": "generic"
+   },
+   {
+    "code": 211,
+    "scope": "generic"
+   },
+   {
+    "code": 212,
+    "scope": "generic"
+   },
+   {
+    "code": 213,
+    "scope": "generic"
+   },
+   {
+    "code": 228,
+    "scope": "generic"
+   },
+   {
+    "code": 238,
+    "scope": "generic"
+   },
+   {
+    "code": 240,
+    "scope": "generic"
+   },
+   {
+    "code": 242,
+    "scope": "generic"
+   },
+   {
+    "code": 457,
+    "scope": "generic"
+   },
+   {
+    "code": 460,
+    "scope": "generic"
+   },
+   {
+    "code": 1116,
+    "scope": "specific"
+   },
+   {
+    "code": 1117,
+    "scope": "generic"
+   },
+   {
+    "code": 1118,
+    "scope": "specific"
+   },
+   {
+    "code": 1271,
+    "scope": "generic"
+   },
+   {
+    "code": 1294,
+    "scope": "generic"
+   },
+   {
+    "code": 1297,
+    "scope": "specific"
+   },
+   {
+    "code": 1701,
+    "scope": "generic"
+   },
+   {
+    "code": 1728,
+    "scope": "generic"
+   },
+   {
+    "code": 10942,
+    "scope": "generic"
+   },
+   {
+    "code": 10980,
+    "scope": "generic"
+   },
+   {
+    "code": 12078,
+    "scope": "specific"
+   },
+   {
+    "code": 12079,
+    "scope": "specific"
+   },
+   {
+    "code": 12137,
+    "scope": "generic"
+   },
+   {
+    "code": 12139,
+    "scope": "generic"
+   },
+   {
+    "code": 12153,
+    "scope": "generic"
+   },
+   {
+    "code": 12154,
+    "scope": "generic"
+   },
+   {
+    "code": 12357,
+    "scope": "generic"
+   },
+   {
+    "code": 12761,
+    "scope": "generic"
+   },
+   {
+    "code": 14695,
+    "scope": "specific"
+   },
+   {
+    "code": 14775,
+    "scope": "specific"
+   },
+   {
+    "code": 15167,
+    "scope": "specific"
+   },
+   {
+    "code": 15215,
+    "scope": "specific"
+   },
+   {
+    "code": 15309,
+    "scope": "generic"
+   },
+   {
+    "code": 15731,
+    "scope": "generic"
+   },
+   {
+    "code": 15732,
+    "scope": "generic"
+   }
+  ]
+ },
+ {
+  "slug": "constitucional",
+  "label": "Direito Constitucional",
+  "position": 10,
+  "cnj_subject_roots": [
+   9985,
+   12467
+  ],
+  "classes": [
+   {
+    "code": 7,
+    "scope": "generic"
+   },
+   {
+    "code": 38,
+    "scope": "generic"
+   },
+   {
+    "code": 52,
+    "scope": "generic"
+   },
+   {
+    "code": 89,
+    "scope": "generic"
+   },
+   {
+    "code": 95,
+    "scope": "specific"
+   },
+   {
+    "code": 110,
+    "scope": "specific"
+   },
+   {
+    "code": 115,
+    "scope": "generic"
+   },
+   {
+    "code": 118,
+    "scope": "specific"
+   },
+   {
+    "code": 124,
+    "scope": "generic"
+   },
+   {
+    "code": 151,
+    "scope": "generic"
+   },
+   {
+    "code": 152,
+    "scope": "generic"
+   },
+   {
+    "code": 153,
+    "scope": "generic"
+   },
+   {
+    "code": 154,
+    "scope": "generic"
+   },
+   {
+    "code": 166,
+    "scope": "generic"
+   },
+   {
+    "code": 167,
+    "scope": "generic"
+   },
+   {
+    "code": 198,
+    "scope": "generic"
+   },
+   {
+    "code": 199,
+    "scope": "generic"
+   },
+   {
+    "code": 202,
+    "scope": "generic"
+   },
+   {
+    "code": 206,
+    "scope": "generic"
+   },
+   {
+    "code": 211,
+    "scope": "generic"
+   },
+   {
+    "code": 212,
+    "scope": "generic"
+   },
+   {
+    "code": 213,
+    "scope": "generic"
+   },
+   {
+    "code": 216,
+    "scope": "specific"
+   },
+   {
+    "code": 228,
+    "scope": "generic"
+   },
+   {
+    "code": 238,
+    "scope": "generic"
+   },
+   {
+    "code": 240,
+    "scope": "generic"
+   },
+   {
+    "code": 242,
+    "scope": "generic"
+   },
+   {
+    "code": 457,
+    "scope": "generic"
+   },
+   {
+    "code": 460,
+    "scope": "generic"
+   },
+   {
+    "code": 1117,
+    "scope": "generic"
+   },
+   {
+    "code": 1269,
+    "scope": "specific"
+   },
+   {
+    "code": 1271,
+    "scope": "generic"
+   },
+   {
+    "code": 1294,
+    "scope": "generic"
+   },
+   {
+    "code": 1296,
+    "scope": "specific"
+   },
+   {
+    "code": 1701,
+    "scope": "generic"
+   },
+   {
+    "code": 1728,
+    "scope": "generic"
+   },
+   {
+    "code": 10942,
+    "scope": "generic"
+   },
+   {
+    "code": 10980,
+    "scope": "generic"
+   },
+   {
+    "code": 11555,
+    "scope": "specific"
+   },
+   {
+    "code": 11556,
+    "scope": "specific"
+   },
+   {
+    "code": 12137,
+    "scope": "generic"
+   },
+   {
+    "code": 12139,
+    "scope": "generic"
+   },
+   {
+    "code": 12153,
+    "scope": "generic"
+   },
+   {
+    "code": 12154,
+    "scope": "generic"
+   },
+   {
+    "code": 12357,
+    "scope": "generic"
+   },
+   {
+    "code": 12761,
+    "scope": "generic"
+   },
+   {
+    "code": 15309,
+    "scope": "generic"
+   },
+   {
+    "code": 15543,
+    "scope": "specific"
+   },
+   {
+    "code": 15731,
+    "scope": "generic"
+   },
+   {
+    "code": 15732,
+    "scope": "generic"
+   }
+  ]
+ },
+ {
+  "slug": "ambiental",
+  "label": "Direito Ambiental",
+  "position": 11,
+  "cnj_subject_roots": [
+   10110
+  ],
+  "classes": [
+   {
+    "code": 7,
+    "scope": "generic"
+   },
+   {
+    "code": 38,
+    "scope": "generic"
+   },
+   {
+    "code": 52,
+    "scope": "generic"
+   },
+   {
+    "code": 64,
+    "scope": "specific"
+   },
+   {
+    "code": 65,
+    "scope": "specific"
+   },
+   {
+    "code": 66,
+    "scope": "specific"
+   },
+   {
+    "code": 89,
+    "scope": "generic"
+   },
+   {
+    "code": 115,
+    "scope": "generic"
+   },
+   {
+    "code": 124,
+    "scope": "generic"
+   },
+   {
+    "code": 151,
+    "scope": "generic"
+   },
+   {
+    "code": 152,
+    "scope": "generic"
+   },
+   {
+    "code": 153,
+    "scope": "generic"
+   },
+   {
+    "code": 154,
+    "scope": "generic"
+   },
+   {
+    "code": 166,
+    "scope": "generic"
+   },
+   {
+    "code": 167,
+    "scope": "generic"
+   },
+   {
+    "code": 198,
+    "scope": "generic"
+   },
+   {
+    "code": 199,
+    "scope": "generic"
+   },
+   {
+    "code": 202,
+    "scope": "generic"
+   },
+   {
+    "code": 206,
+    "scope": "generic"
+   },
+   {
+    "code": 211,
+    "scope": "generic"
+   },
+   {
+    "code": 212,
+    "scope": "generic"
+   },
+   {
+    "code": 213,
+    "scope": "generic"
+   },
+   {
+    "code": 228,
+    "scope": "generic"
+   },
+   {
+    "code": 238,
+    "scope": "generic"
+   },
+   {
+    "code": 240,
+    "scope": "generic"
+   },
+   {
+    "code": 242,
+    "scope": "generic"
+   },
+   {
+    "code": 457,
+    "scope": "generic"
+   },
+   {
+    "code": 460,
+    "scope": "generic"
+   },
+   {
+    "code": 1117,
+    "scope": "generic"
+   },
+   {
+    "code": 1271,
+    "scope": "generic"
+   },
+   {
+    "code": 1294,
+    "scope": "generic"
+   },
+   {
+    "code": 1701,
+    "scope": "generic"
+   },
+   {
+    "code": 1728,
+    "scope": "generic"
+   },
+   {
+    "code": 10942,
+    "scope": "generic"
+   },
+   {
+    "code": 10980,
+    "scope": "generic"
+   },
+   {
+    "code": 12137,
+    "scope": "generic"
+   },
+   {
+    "code": 12139,
+    "scope": "generic"
+   },
+   {
+    "code": 12153,
+    "scope": "generic"
+   },
+   {
+    "code": 12154,
+    "scope": "generic"
+   },
+   {
+    "code": 12357,
+    "scope": "generic"
+   },
+   {
+    "code": 12761,
+    "scope": "generic"
+   },
+   {
+    "code": 15309,
+    "scope": "generic"
+   },
+   {
+    "code": 15731,
+    "scope": "generic"
+   },
+   {
+    "code": 15732,
+    "scope": "generic"
+   }
+  ]
+ },
+ {
+  "slug": "saude",
+  "label": "Direito da Saúde",
+  "position": 12,
+  "cnj_subject_roots": [
+   12480
+  ],
+  "classes": [
+   {
+    "code": 7,
+    "scope": "generic"
+   },
+   {
+    "code": 38,
+    "scope": "generic"
+   },
+   {
+    "code": 52,
+    "scope": "generic"
+   },
+   {
+    "code": 63,
+    "scope": "specific"
+   },
+   {
+    "code": 65,
+    "scope": "specific"
+   },
+   {
+    "code": 89,
+    "scope": "generic"
+   },
+   {
+    "code": 115,
+    "scope": "generic"
+   },
+   {
+    "code": 119,
+    "scope": "specific"
+   },
+   {
+    "code": 120,
+    "scope": "specific"
+   },
+   {
+    "code": 124,
+    "scope": "generic"
+   },
+   {
+    "code": 151,
+    "scope": "generic"
+   },
+   {
+    "code": 152,
+    "scope": "generic"
+   },
+   {
+    "code": 153,
+    "scope": "generic"
+   },
+   {
+    "code": 154,
+    "scope": "generic"
+   },
+   {
+    "code": 166,
+    "scope": "generic"
+   },
+   {
+    "code": 167,
+    "scope": "generic"
+   },
+   {
+    "code": 198,
+    "scope": "generic"
+   },
+   {
+    "code": 199,
+    "scope": "generic"
+   },
+   {
+    "code": 202,
+    "scope": "generic"
+   },
+   {
+    "code": 206,
+    "scope": "generic"
+   },
+   {
+    "code": 211,
+    "scope": "generic"
+   },
+   {
+    "code": 212,
+    "scope": "generic"
+   },
+   {
+    "code": 213,
+    "scope": "generic"
+   },
+   {
+    "code": 228,
+    "scope": "generic"
+   },
+   {
+    "code": 238,
+    "scope": "generic"
+   },
+   {
+    "code": 240,
+    "scope": "generic"
+   },
+   {
+    "code": 242,
+    "scope": "generic"
+   },
+   {
+    "code": 457,
+    "scope": "generic"
+   },
+   {
+    "code": 460,
+    "scope": "generic"
+   },
+   {
+    "code": 1117,
+    "scope": "generic"
+   },
+   {
+    "code": 1271,
+    "scope": "generic"
+   },
+   {
+    "code": 1294,
+    "scope": "generic"
+   },
+   {
+    "code": 1701,
+    "scope": "generic"
+   },
+   {
+    "code": 1728,
+    "scope": "generic"
+   },
+   {
+    "code": 10942,
+    "scope": "generic"
+   },
+   {
+    "code": 10980,
+    "scope": "generic"
+   },
+   {
+    "code": 12137,
+    "scope": "generic"
+   },
+   {
+    "code": 12139,
+    "scope": "generic"
+   },
+   {
+    "code": 12153,
+    "scope": "generic"
+   },
+   {
+    "code": 12154,
+    "scope": "generic"
+   },
+   {
+    "code": 12357,
+    "scope": "generic"
+   },
+   {
+    "code": 12761,
+    "scope": "generic"
+   },
+   {
+    "code": 15309,
+    "scope": "generic"
+   },
+   {
+    "code": 15731,
+    "scope": "generic"
+   },
+   {
+    "code": 15732,
+    "scope": "generic"
+   }
+  ]
+ },
+ {
+  "slug": "registros-publicos",
+  "label": "Registros Públicos e Notarial",
+  "position": 13,
+  "cnj_subject_roots": [
+   7724
+  ],
+  "classes": [
+   {
+    "code": 7,
+    "scope": "generic"
+   },
+   {
+    "code": 38,
+    "scope": "generic"
+   },
+   {
+    "code": 52,
+    "scope": "generic"
+   },
+   {
+    "code": 89,
+    "scope": "generic"
+   },
+   {
+    "code": 100,
+    "scope": "specific"
+   },
+   {
+    "code": 115,
+    "scope": "generic"
+   },
+   {
+    "code": 124,
+    "scope": "generic"
+   },
+   {
+    "code": 151,
+    "scope": "generic"
+   },
+   {
+    "code": 152,
+    "scope": "generic"
+   },
+   {
+    "code": 153,
+    "scope": "generic"
+   },
+   {
+    "code": 154,
+    "scope": "generic"
+   },
+   {
+    "code": 166,
+    "scope": "generic"
+   },
+   {
+    "code": 167,
+    "scope": "generic"
+   },
+   {
+    "code": 198,
+    "scope": "generic"
+   },
+   {
+    "code": 199,
+    "scope": "generic"
+   },
+   {
+    "code": 202,
+    "scope": "generic"
+   },
+   {
+    "code": 206,
+    "scope": "generic"
+   },
+   {
+    "code": 211,
+    "scope": "generic"
+   },
+   {
+    "code": 212,
+    "scope": "generic"
+   },
+   {
+    "code": 213,
+    "scope": "generic"
+   },
+   {
+    "code": 228,
+    "scope": "generic"
+   },
+   {
+    "code": 238,
+    "scope": "generic"
+   },
+   {
+    "code": 240,
+    "scope": "generic"
+   },
+   {
+    "code": 242,
+    "scope": "generic"
+   },
+   {
+    "code": 251,
+    "scope": "specific"
+   },
+   {
+    "code": 457,
+    "scope": "generic"
+   },
+   {
+    "code": 460,
+    "scope": "generic"
+   },
+   {
+    "code": 1117,
+    "scope": "generic"
+   },
+   {
+    "code": 1271,
+    "scope": "generic"
+   },
+   {
+    "code": 1294,
+    "scope": "generic"
+   },
+   {
+    "code": 1682,
+    "scope": "specific"
+   },
+   {
+    "code": 1683,
+    "scope": "specific"
+   },
+   {
+    "code": 1701,
+    "scope": "generic"
+   },
+   {
+    "code": 1728,
+    "scope": "generic"
+   },
+   {
+    "code": 10942,
+    "scope": "generic"
+   },
+   {
+    "code": 10980,
+    "scope": "generic"
+   },
+   {
+    "code": 12137,
+    "scope": "generic"
+   },
+   {
+    "code": 12139,
+    "scope": "generic"
+   },
+   {
+    "code": 12153,
+    "scope": "generic"
+   },
+   {
+    "code": 12154,
+    "scope": "generic"
+   },
+   {
+    "code": 12357,
+    "scope": "generic"
+   },
+   {
+    "code": 12761,
+    "scope": "generic"
+   },
+   {
+    "code": 15309,
+    "scope": "generic"
+   },
+   {
+    "code": 15731,
+    "scope": "generic"
+   },
+   {
+    "code": 15732,
+    "scope": "generic"
+   }
+  ]
+ },
+ {
+  "slug": "maritimo",
+  "label": "Direito Marítimo",
+  "position": 14,
+  "cnj_subject_roots": [
+   1146
+  ],
+  "classes": [
+   {
+    "code": 7,
+    "scope": "generic"
+   },
+   {
+    "code": 38,
+    "scope": "generic"
+   },
+   {
+    "code": 52,
+    "scope": "generic"
+   },
+   {
+    "code": 89,
+    "scope": "generic"
+   },
+   {
+    "code": 115,
+    "scope": "generic"
+   },
+   {
+    "code": 124,
+    "scope": "generic"
+   },
+   {
+    "code": 151,
+    "scope": "generic"
+   },
+   {
+    "code": 152,
+    "scope": "generic"
+   },
+   {
+    "code": 153,
+    "scope": "generic"
+   },
+   {
+    "code": 154,
+    "scope": "generic"
+   },
+   {
+    "code": 166,
+    "scope": "generic"
+   },
+   {
+    "code": 167,
+    "scope": "generic"
+   },
+   {
+    "code": 198,
+    "scope": "generic"
+   },
+   {
+    "code": 199,
+    "scope": "generic"
+   },
+   {
+    "code": 202,
+    "scope": "generic"
+   },
+   {
+    "code": 206,
+    "scope": "generic"
+   },
+   {
+    "code": 211,
+    "scope": "generic"
+   },
+   {
+    "code": 212,
+    "scope": "generic"
+   },
+   {
+    "code": 213,
+    "scope": "generic"
+   },
+   {
+    "code": 228,
+    "scope": "generic"
+   },
+   {
+    "code": 238,
+    "scope": "generic"
+   },
+   {
+    "code": 240,
+    "scope": "generic"
+   },
+   {
+    "code": 242,
+    "scope": "generic"
+   },
+   {
+    "code": 457,
+    "scope": "generic"
+   },
+   {
+    "code": 460,
+    "scope": "generic"
+   },
+   {
+    "code": 1117,
+    "scope": "generic"
+   },
+   {
+    "code": 1271,
+    "scope": "generic"
+   },
+   {
+    "code": 1294,
+    "scope": "generic"
+   },
+   {
+    "code": 1701,
+    "scope": "generic"
+   },
+   {
+    "code": 1728,
+    "scope": "generic"
+   },
+   {
+    "code": 10942,
+    "scope": "generic"
+   },
+   {
+    "code": 10980,
+    "scope": "generic"
+   },
+   {
+    "code": 12137,
+    "scope": "generic"
+   },
+   {
+    "code": 12139,
+    "scope": "generic"
+   },
+   {
+    "code": 12153,
+    "scope": "generic"
+   },
+   {
+    "code": 12154,
+    "scope": "generic"
+   },
+   {
+    "code": 12229,
+    "scope": "specific"
+   },
+   {
+    "code": 12357,
+    "scope": "generic"
+   },
+   {
+    "code": 12376,
+    "scope": "specific"
+   },
+   {
+    "code": 12761,
+    "scope": "generic"
+   },
+   {
+    "code": 15309,
+    "scope": "generic"
+   },
+   {
+    "code": 15731,
+    "scope": "generic"
+   },
+   {
+    "code": 15732,
+    "scope": "generic"
+   }
+  ]
+ },
+ {
+  "slug": "internacional",
+  "label": "Direito Internacional",
+  "position": 15,
+  "cnj_subject_roots": [
+   6191
+  ],
+  "classes": [
+   {
+    "code": 7,
+    "scope": "generic"
+   },
+   {
+    "code": 38,
+    "scope": "generic"
+   },
+   {
+    "code": 52,
+    "scope": "generic"
+   },
+   {
+    "code": 89,
+    "scope": "generic"
+   },
+   {
+    "code": 115,
+    "scope": "generic"
+   },
+   {
+    "code": 124,
+    "scope": "generic"
+   },
+   {
+    "code": 151,
+    "scope": "generic"
+   },
+   {
+    "code": 152,
+    "scope": "generic"
+   },
+   {
+    "code": 153,
+    "scope": "generic"
+   },
+   {
+    "code": 154,
+    "scope": "generic"
+   },
+   {
+    "code": 166,
+    "scope": "generic"
+   },
+   {
+    "code": 167,
+    "scope": "generic"
+   },
+   {
+    "code": 198,
+    "scope": "generic"
+   },
+   {
+    "code": 199,
+    "scope": "generic"
+   },
+   {
+    "code": 202,
+    "scope": "generic"
+   },
+   {
+    "code": 206,
+    "scope": "generic"
+   },
+   {
+    "code": 211,
+    "scope": "generic"
+   },
+   {
+    "code": 212,
+    "scope": "generic"
+   },
+   {
+    "code": 213,
+    "scope": "generic"
+   },
+   {
+    "code": 228,
+    "scope": "generic"
+   },
+   {
+    "code": 238,
+    "scope": "generic"
+   },
+   {
+    "code": 240,
+    "scope": "generic"
+   },
+   {
+    "code": 242,
+    "scope": "generic"
+   },
+   {
+    "code": 264,
+    "scope": "specific"
+   },
+   {
+    "code": 457,
+    "scope": "generic"
+   },
+   {
+    "code": 460,
+    "scope": "generic"
+   },
+   {
+    "code": 1117,
+    "scope": "generic"
+   },
+   {
+    "code": 1271,
+    "scope": "generic"
+   },
+   {
+    "code": 1294,
+    "scope": "generic"
+   },
+   {
+    "code": 1701,
+    "scope": "generic"
+   },
+   {
+    "code": 1728,
+    "scope": "generic"
+   },
+   {
+    "code": 10942,
+    "scope": "generic"
+   },
+   {
+    "code": 10980,
+    "scope": "generic"
+   },
+   {
+    "code": 12137,
+    "scope": "generic"
+   },
+   {
+    "code": 12139,
+    "scope": "generic"
+   },
+   {
+    "code": 12153,
+    "scope": "generic"
+   },
+   {
+    "code": 12154,
+    "scope": "generic"
+   },
+   {
+    "code": 12357,
+    "scope": "generic"
+   },
+   {
+    "code": 12761,
+    "scope": "generic"
+   },
+   {
+    "code": 15309,
+    "scope": "generic"
+   },
+   {
+    "code": 15731,
+    "scope": "generic"
+   },
+   {
+    "code": 15732,
+    "scope": "generic"
+   }
+  ]
+ },
+ {
+  "slug": "penal",
+  "label": "Direito Penal e Processo Penal",
+  "position": 16,
+  "cnj_subject_roots": [
+   287,
+   1209
+  ],
+  "classes": [
+   {
+    "code": 272,
+    "scope": "specific"
+   },
+   {
+    "code": 275,
+    "scope": "specific"
+   },
+   {
+    "code": 276,
+    "scope": "specific"
+   },
+   {
+    "code": 278,
+    "scope": "specific"
+   },
+   {
+    "code": 279,
+    "scope": "specific"
+   },
+   {
+    "code": 280,
+    "scope": "specific"
+   },
+   {
+    "code": 282,
+    "scope": "specific"
+   },
+   {
+    "code": 283,
+    "scope": "specific"
+   },
+   {
+    "code": 287,
+    "scope": "specific"
+   },
+   {
+    "code": 288,
+    "scope": "specific"
+   },
+   {
+    "code": 289,
+    "scope": "specific"
+   },
+   {
+    "code": 291,
+    "scope": "specific"
+   },
+   {
+    "code": 293,
+    "scope": "specific"
+   },
+   {
+    "code": 294,
+    "scope": "specific"
+   },
+   {
+    "code": 295,
+    "scope": "specific"
+   },
+   {
+    "code": 297,
+    "scope": "specific"
+   },
+   {
+    "code": 300,
+    "scope": "specific"
+   },
+   {
+    "code": 302,
+    "scope": "specific"
+   },
+   {
+    "code": 305,
+    "scope": "specific"
+   },
+   {
+    "code": 306,
+    "scope": "specific"
+   },
+   {
+    "code": 307,
+    "scope": "specific"
+   },
+   {
+    "code": 309,
+    "scope": "specific"
+   },
+   {
+    "code": 310,
+    "scope": "specific"
+   },
+   {
+    "code": 311,
+    "scope": "specific"
+   },
+   {
+    "code": 313,
+    "scope": "specific"
+   },
+   {
+    "code": 314,
+    "scope": "specific"
+   },
+   {
+    "code": 318,
+    "scope": "specific"
+   },
+   {
+    "code": 319,
+    "scope": "specific"
+   },
+   {
+    "code": 320,
+    "scope": "specific"
+   },
+   {
+    "code": 321,
+    "scope": "specific"
+   },
+   {
+    "code": 322,
+    "scope": "specific"
+   },
+   {
+    "code": 323,
+    "scope": "specific"
+   },
+   {
+    "code": 324,
+    "scope": "specific"
+   },
+   {
+    "code": 325,
+    "scope": "specific"
+   },
+   {
+    "code": 326,
+    "scope": "specific"
+   },
+   {
+    "code": 327,
+    "scope": "specific"
+   },
+   {
+    "code": 329,
+    "scope": "specific"
+   },
+   {
+    "code": 330,
+    "scope": "specific"
+   },
+   {
+    "code": 332,
+    "scope": "specific"
+   },
+   {
+    "code": 333,
+    "scope": "specific"
+   },
+   {
+    "code": 335,
+    "scope": "specific"
+   },
+   {
+    "code": 355,
+    "scope": "specific"
+   },
+   {
+    "code": 375,
+    "scope": "specific"
+   },
+   {
+    "code": 386,
+    "scope": "specific"
+   },
+   {
+    "code": 413,
+    "scope": "specific"
+   },
+   {
+    "code": 417,
+    "scope": "specific"
+   },
+   {
+    "code": 418,
+    "scope": "specific"
+   },
+   {
+    "code": 419,
+    "scope": "specific"
+   },
+   {
+    "code": 420,
+    "scope": "specific"
+   },
+   {
+    "code": 421,
+    "scope": "specific"
+   },
+   {
+    "code": 424,
+    "scope": "specific"
+   },
+   {
+    "code": 426,
+    "scope": "specific"
+   },
+   {
+    "code": 427,
+    "scope": "specific"
+   },
+   {
+    "code": 432,
+    "scope": "specific"
+   },
+   {
+    "code": 1178,
+    "scope": "specific"
+   },
+   {
+    "code": 1268,
+    "scope": "specific"
+   },
+   {
+    "code": 1291,
+    "scope": "specific"
+   },
+   {
+    "code": 1710,
+    "scope": "specific"
+   },
+   {
+    "code": 1711,
+    "scope": "specific"
+   },
+   {
+    "code": 1715,
+    "scope": "specific"
+   },
+   {
+    "code": 1717,
+    "scope": "specific"
+   },
+   {
+    "code": 1719,
+    "scope": "specific"
+   },
+   {
+    "code": 1727,
+    "scope": "specific"
+   },
+   {
+    "code": 1729,
+    "scope": "specific"
+   },
+   {
+    "code": 1730,
+    "scope": "specific"
+   },
+   {
+    "code": 1731,
+    "scope": "specific"
+   },
+   {
+    "code": 1733,
+    "scope": "specific"
+   },
+   {
+    "code": 10943,
+    "scope": "specific"
+   },
+   {
+    "code": 10944,
+    "scope": "specific"
+   },
+   {
+    "code": 10967,
+    "scope": "specific"
+   },
+   {
+    "code": 11398,
+    "scope": "specific"
+   },
+   {
+    "code": 11788,
+    "scope": "specific"
+   },
+   {
+    "code": 11791,
+    "scope": "specific"
+   },
+   {
+    "code": 11793,
+    "scope": "specific"
+   },
+   {
+    "code": 11798,
+    "scope": "specific"
+   },
+   {
+    "code": 11955,
+    "scope": "specific"
+   },
+   {
+    "code": 12077,
+    "scope": "specific"
+   },
+   {
+    "code": 12121,
+    "scope": "specific"
+   },
+   {
+    "code": 12122,
+    "scope": "specific"
+   },
+   {
+    "code": 12394,
+    "scope": "specific"
+   },
+   {
+    "code": 12727,
+    "scope": "specific"
+   },
+   {
+    "code": 12728,
+    "scope": "specific"
+   },
+   {
+    "code": 12729,
+    "scope": "specific"
+   },
+   {
+    "code": 14123,
+    "scope": "specific"
+   },
+   {
+    "code": 14678,
+    "scope": "specific"
+   },
+   {
+    "code": 14696,
+    "scope": "specific"
+   },
+   {
+    "code": 14701,
+    "scope": "specific"
+   },
+   {
+    "code": 14734,
+    "scope": "specific"
+   },
+   {
+    "code": 15170,
+    "scope": "specific"
+   },
+   {
+    "code": 15710,
+    "scope": "specific"
+   }
+  ]
+ },
+ {
+  "slug": "execucao-penal",
+  "label": "Execução Penal",
+  "position": 17,
+  "cnj_subject_roots": [
+   1209
+  ],
+  "classes": [
+   {
+    "code": 386,
+    "scope": "specific"
+   },
+   {
+    "code": 12727,
+    "scope": "specific"
+   },
+   {
+    "code": 12728,
+    "scope": "specific"
+   },
+   {
+    "code": 12729,
+    "scope": "specific"
+   },
+   {
+    "code": 14696,
+    "scope": "specific"
+   },
+   {
+    "code": 15710,
+    "scope": "specific"
+   }
+  ]
+ },
+ {
+  "slug": "penal-militar",
+  "label": "Direito Penal Militar",
+  "position": 18,
+  "cnj_subject_roots": [
+   11068,
+   11049
+  ],
+  "classes": [
+   {
+    "code": 11034,
+    "scope": "specific"
+   },
+   {
+    "code": 11035,
+    "scope": "specific"
+   },
+   {
+    "code": 11036,
+    "scope": "specific"
+   },
+   {
+    "code": 11037,
+    "scope": "specific"
+   },
+   {
+    "code": 11038,
+    "scope": "specific"
+   },
+   {
+    "code": 11039,
+    "scope": "specific"
+   },
+   {
+    "code": 11040,
+    "scope": "specific"
+   },
+   {
+    "code": 11041,
+    "scope": "specific"
+   },
+   {
+    "code": 11042,
+    "scope": "specific"
+   },
+   {
+    "code": 11044,
+    "scope": "specific"
+   },
+   {
+    "code": 11045,
+    "scope": "specific"
+   },
+   {
+    "code": 11046,
+    "scope": "specific"
+   },
+   {
+    "code": 11799,
+    "scope": "specific"
+   },
+   {
+    "code": 11800,
+    "scope": "specific"
+   },
+   {
+    "code": 15321,
+    "scope": "specific"
+   },
+   {
+    "code": 15423,
+    "scope": "specific"
+   }
+  ]
+ },
+ {
+  "slug": "eleitoral",
+  "label": "Direito Eleitoral",
+  "position": 19,
+  "cnj_subject_roots": [
+   11428,
+   10739
+  ],
+  "classes": [
+   {
+    "code": 11526,
+    "scope": "specific"
+   },
+   {
+    "code": 11527,
+    "scope": "specific"
+   },
+   {
+    "code": 11528,
+    "scope": "specific"
+   },
+   {
+    "code": 11530,
+    "scope": "specific"
+   },
+   {
+    "code": 11532,
+    "scope": "specific"
+   },
+   {
+    "code": 11533,
+    "scope": "specific"
+   },
+   {
+    "code": 11535,
+    "scope": "specific"
+   },
+   {
+    "code": 11536,
+    "scope": "specific"
+   },
+   {
+    "code": 11537,
+    "scope": "specific"
+   },
+   {
+    "code": 11539,
+    "scope": "specific"
+   },
+   {
+    "code": 11541,
+    "scope": "specific"
+   },
+   {
+    "code": 11542,
+    "scope": "specific"
+   },
+   {
+    "code": 11543,
+    "scope": "specific"
+   },
+   {
+    "code": 11544,
+    "scope": "specific"
+   },
+   {
+    "code": 11545,
+    "scope": "specific"
+   },
+   {
+    "code": 11546,
+    "scope": "specific"
+   },
+   {
+    "code": 11548,
+    "scope": "specific"
+   },
+   {
+    "code": 11549,
+    "scope": "specific"
+   },
+   {
+    "code": 11550,
+    "scope": "specific"
+   },
+   {
+    "code": 11551,
+    "scope": "specific"
+   },
+   {
+    "code": 11552,
+    "scope": "specific"
+   },
+   {
+    "code": 12059,
+    "scope": "specific"
+   },
+   {
+    "code": 12060,
+    "scope": "specific"
+   },
+   {
+    "code": 12193,
+    "scope": "specific"
+   },
+   {
+    "code": 12377,
+    "scope": "specific"
+   },
+   {
+    "code": 12465,
+    "scope": "specific"
+   },
+   {
+    "code": 12466,
+    "scope": "specific"
+   },
+   {
+    "code": 12549,
+    "scope": "specific"
+   },
+   {
+    "code": 12550,
+    "scope": "specific"
+   },
+   {
+    "code": 12552,
+    "scope": "specific"
+   },
+   {
+    "code": 12553,
+    "scope": "specific"
+   },
+   {
+    "code": 12554,
+    "scope": "specific"
+   },
+   {
+    "code": 12555,
+    "scope": "specific"
+   },
+   {
+    "code": 12556,
+    "scope": "specific"
+   },
+   {
+    "code": 12557,
+    "scope": "specific"
+   },
+   {
+    "code": 12559,
+    "scope": "specific"
+   },
+   {
+    "code": 12560,
+    "scope": "specific"
+   },
+   {
+    "code": 12561,
+    "scope": "specific"
+   },
+   {
+    "code": 12562,
+    "scope": "specific"
+   },
+   {
+    "code": 12625,
+    "scope": "specific"
+   },
+   {
+    "code": 12626,
+    "scope": "specific"
+   },
+   {
+    "code": 12627,
+    "scope": "specific"
+   },
+   {
+    "code": 12628,
+    "scope": "specific"
+   },
+   {
+    "code": 12629,
+    "scope": "specific"
+   },
+   {
+    "code": 12630,
+    "scope": "specific"
+   },
+   {
+    "code": 12631,
+    "scope": "specific"
+   },
+   {
+    "code": 12633,
+    "scope": "specific"
+   },
+   {
+    "code": 14208,
+    "scope": "specific"
+   },
+   {
+    "code": 14209,
+    "scope": "specific"
+   },
+   {
+    "code": 15011,
+    "scope": "specific"
+   },
+   {
+    "code": 15090,
+    "scope": "specific"
+   },
+   {
+    "code": 15303,
+    "scope": "specific"
+   },
+   {
+    "code": 15323,
+    "scope": "specific"
+   },
+   {
+    "code": 15694,
+    "scope": "specific"
+   }
+  ]
+ },
+ {
+  "slug": "infancia-juventude",
+  "label": "Infância e Juventude",
+  "position": 20,
+  "cnj_subject_roots": [
+   9633
+  ],
+  "classes": [
+   {
+    "code": 1389,
+    "scope": "specific"
+   },
+   {
+    "code": 1390,
+    "scope": "specific"
+   },
+   {
+    "code": 1391,
+    "scope": "specific"
+   },
+   {
+    "code": 1392,
+    "scope": "specific"
+   },
+   {
+    "code": 1396,
+    "scope": "specific"
+   },
+   {
+    "code": 1399,
+    "scope": "specific"
+   },
+   {
+    "code": 1414,
+    "scope": "specific"
+   },
+   {
+    "code": 1415,
+    "scope": "specific"
+   },
+   {
+    "code": 1417,
+    "scope": "specific"
+   },
+   {
+    "code": 1420,
+    "scope": "specific"
+   },
+   {
+    "code": 1424,
+    "scope": "specific"
+   },
+   {
+    "code": 1425,
+    "scope": "specific"
+   },
+   {
+    "code": 1432,
+    "scope": "specific"
+   },
+   {
+    "code": 1434,
+    "scope": "specific"
+   },
+   {
+    "code": 1435,
+    "scope": "specific"
+   },
+   {
+    "code": 1438,
+    "scope": "specific"
+   },
+   {
+    "code": 1440,
+    "scope": "specific"
+   },
+   {
+    "code": 1451,
+    "scope": "specific"
+   },
+   {
+    "code": 1455,
+    "scope": "specific"
+   },
+   {
+    "code": 1461,
+    "scope": "specific"
+   },
+   {
+    "code": 1462,
+    "scope": "specific"
+   },
+   {
+    "code": 1463,
+    "scope": "specific"
+   },
+   {
+    "code": 1464,
+    "scope": "specific"
+   },
+   {
+    "code": 1474,
+    "scope": "specific"
+   },
+   {
+    "code": 1478,
+    "scope": "specific"
+   },
+   {
+    "code": 1690,
+    "scope": "specific"
+   },
+   {
+    "code": 1691,
+    "scope": "specific"
+   },
+   {
+    "code": 1703,
+    "scope": "specific"
+   },
+   {
+    "code": 1704,
+    "scope": "specific"
+   },
+   {
+    "code": 1705,
+    "scope": "specific"
+   },
+   {
+    "code": 1706,
+    "scope": "specific"
+   },
+   {
+    "code": 10933,
+    "scope": "specific"
+   },
+   {
+    "code": 10960,
+    "scope": "specific"
+   },
+   {
+    "code": 10970,
+    "scope": "specific"
+   },
+   {
+    "code": 10972,
+    "scope": "specific"
+   },
+   {
+    "code": 10973,
+    "scope": "specific"
+   },
+   {
+    "code": 10974,
+    "scope": "specific"
+   },
+   {
+    "code": 10979,
+    "scope": "specific"
+   },
+   {
+    "code": 11026,
+    "scope": "specific"
+   },
+   {
+    "code": 11794,
+    "scope": "specific"
+   },
+   {
+    "code": 12070,
+    "scope": "specific"
+   },
+   {
+    "code": 12072,
+    "scope": "specific"
+   },
+   {
+    "code": 12073,
+    "scope": "specific"
+   },
+   {
+    "code": 12074,
+    "scope": "specific"
+   },
+   {
+    "code": 12076,
+    "scope": "specific"
+   },
+   {
+    "code": 12230,
+    "scope": "specific"
+   },
+   {
+    "code": 12386,
+    "scope": "specific"
+   },
+   {
+    "code": 12388,
+    "scope": "specific"
+   },
+   {
+    "code": 12423,
+    "scope": "specific"
+   },
+   {
+    "code": 12424,
+    "scope": "specific"
+   },
+   {
+    "code": 14676,
+    "scope": "specific"
+   },
+   {
+    "code": 15140,
+    "scope": "specific"
+   },
+   {
+    "code": 15171,
+    "scope": "specific"
+   },
+   {
+    "code": 15172,
+    "scope": "specific"
+   },
+   {
+    "code": 15190,
+    "scope": "specific"
+   },
+   {
+    "code": 15191,
+    "scope": "specific"
+   },
+   {
+    "code": 15192,
+    "scope": "specific"
+   },
+   {
+    "code": 15193,
+    "scope": "specific"
+   },
+   {
+    "code": 15194,
+    "scope": "specific"
+   },
+   {
+    "code": 15196,
+    "scope": "specific"
+   }
+  ]
+ },
+ {
+  "slug": "educacao",
+  "label": "Direito à Educação",
+  "position": 21,
+  "cnj_subject_roots": [
+   12775
+  ],
+  "classes": [
+   {
+    "code": 7,
+    "scope": "generic"
+   },
+   {
+    "code": 38,
+    "scope": "generic"
+   },
+   {
+    "code": 52,
+    "scope": "generic"
+   },
+   {
+    "code": 63,
+    "scope": "specific"
+   },
+   {
+    "code": 65,
+    "scope": "specific"
+   },
+   {
+    "code": 89,
+    "scope": "generic"
+   },
+   {
+    "code": 115,
+    "scope": "generic"
+   },
+   {
+    "code": 119,
+    "scope": "specific"
+   },
+   {
+    "code": 120,
+    "scope": "specific"
+   },
+   {
+    "code": 124,
+    "scope": "generic"
+   },
+   {
+    "code": 151,
+    "scope": "generic"
+   },
+   {
+    "code": 152,
+    "scope": "generic"
+   },
+   {
+    "code": 153,
+    "scope": "generic"
+   },
+   {
+    "code": 154,
+    "scope": "generic"
+   },
+   {
+    "code": 166,
+    "scope": "generic"
+   },
+   {
+    "code": 167,
+    "scope": "generic"
+   },
+   {
+    "code": 198,
+    "scope": "generic"
+   },
+   {
+    "code": 199,
+    "scope": "generic"
+   },
+   {
+    "code": 202,
+    "scope": "generic"
+   },
+   {
+    "code": 206,
+    "scope": "generic"
+   },
+   {
+    "code": 211,
+    "scope": "generic"
+   },
+   {
+    "code": 212,
+    "scope": "generic"
+   },
+   {
+    "code": 213,
+    "scope": "generic"
+   },
+   {
+    "code": 228,
+    "scope": "generic"
+   },
+   {
+    "code": 238,
+    "scope": "generic"
+   },
+   {
+    "code": 240,
+    "scope": "generic"
+   },
+   {
+    "code": 242,
+    "scope": "generic"
+   },
+   {
+    "code": 457,
+    "scope": "generic"
+   },
+   {
+    "code": 460,
+    "scope": "generic"
+   },
+   {
+    "code": 1117,
+    "scope": "generic"
+   },
+   {
+    "code": 1271,
+    "scope": "generic"
+   },
+   {
+    "code": 1294,
+    "scope": "generic"
+   },
+   {
+    "code": 1701,
+    "scope": "generic"
+   },
+   {
+    "code": 1728,
+    "scope": "generic"
+   },
+   {
+    "code": 10942,
+    "scope": "generic"
+   },
+   {
+    "code": 10980,
+    "scope": "generic"
+   },
+   {
+    "code": 12137,
+    "scope": "generic"
+   },
+   {
+    "code": 12139,
+    "scope": "generic"
+   },
+   {
+    "code": 12153,
+    "scope": "generic"
+   },
+   {
+    "code": 12154,
+    "scope": "generic"
+   },
+   {
+    "code": 12357,
+    "scope": "generic"
+   },
+   {
+    "code": 12761,
+    "scope": "generic"
+   },
+   {
+    "code": 15309,
+    "scope": "generic"
+   },
+   {
+    "code": 15731,
+    "scope": "generic"
+   },
+   {
+    "code": 15732,
+    "scope": "generic"
+   }
+  ]
+ },
+ {
+  "slug": "administrativo-judiciario",
+  "label": "Procedimentos Administrativos do Judiciário",
+  "position": 22,
+  "cnj_subject_roots": [
+   9985
+  ],
+  "classes": [
+   {
+    "code": 88,
+    "scope": "specific"
+   },
+   {
+    "code": 256,
+    "scope": "specific"
+   },
+   {
+    "code": 1199,
+    "scope": "specific"
+   },
+   {
+    "code": 1262,
+    "scope": "specific"
+   },
+   {
+    "code": 1264,
+    "scope": "specific"
+   },
+   {
+    "code": 1265,
+    "scope": "specific"
+   },
+   {
+    "code": 1266,
+    "scope": "specific"
+   },
+   {
+    "code": 1298,
+    "scope": "specific"
+   },
+   {
+    "code": 1299,
+    "scope": "specific"
+   },
+   {
+    "code": 1301,
+    "scope": "specific"
+   },
+   {
+    "code": 1303,
+    "scope": "specific"
+   },
+   {
+    "code": 1304,
+    "scope": "specific"
+   },
+   {
+    "code": 1306,
+    "scope": "specific"
+   },
+   {
+    "code": 1307,
+    "scope": "specific"
+   },
+   {
+    "code": 1308,
+    "scope": "specific"
+   },
+   {
+    "code": 1680,
+    "scope": "specific"
+   },
+   {
+    "code": 11887,
+    "scope": "specific"
+   },
+   {
+    "code": 11888,
+    "scope": "specific"
+   },
+   {
+    "code": 11889,
+    "scope": "specific"
+   },
+   {
+    "code": 11890,
+    "scope": "specific"
+   },
+   {
+    "code": 11891,
+    "scope": "specific"
+   },
+   {
+    "code": 11892,
+    "scope": "specific"
+   },
+   {
+    "code": 11893,
+    "scope": "specific"
+   },
+   {
+    "code": 11894,
+    "scope": "specific"
+   },
+   {
+    "code": 11953,
+    "scope": "specific"
+   },
+   {
+    "code": 12248,
+    "scope": "specific"
+   },
+   {
+    "code": 15239,
+    "scope": "specific"
+   },
+   {
+    "code": 15240,
+    "scope": "specific"
+   },
+   {
+    "code": 15241,
+    "scope": "specific"
+   },
+   {
+    "code": 15242,
+    "scope": "specific"
+   },
+   {
+    "code": 15243,
+    "scope": "specific"
+   },
+   {
+    "code": 15545,
+    "scope": "specific"
+   },
+   {
+    "code": 15708,
+    "scope": "specific"
+   }
+  ]
+ },
+ {
+  "slug": "tribunais-superiores",
+  "label": "Tribunais Superiores (STF/STJ)",
+  "position": 23,
+  "cnj_subject_roots": [],
+  "classes": [
+   {
+    "code": 1013,
+    "scope": "specific"
+   },
+   {
+    "code": 1016,
+    "scope": "specific"
+   },
+   {
+    "code": 1017,
+    "scope": "specific"
+   },
+   {
+    "code": 1018,
+    "scope": "specific"
+   },
+   {
+    "code": 1019,
+    "scope": "specific"
+   },
+   {
+    "code": 1020,
+    "scope": "specific"
+   },
+   {
+    "code": 1021,
+    "scope": "specific"
+   },
+   {
+    "code": 1022,
+    "scope": "specific"
+   },
+   {
+    "code": 1023,
+    "scope": "specific"
+   },
+   {
+    "code": 1024,
+    "scope": "specific"
+   },
+   {
+    "code": 1025,
+    "scope": "specific"
+   },
+   {
+    "code": 1026,
+    "scope": "specific"
+   },
+   {
+    "code": 1027,
+    "scope": "specific"
+   },
+   {
+    "code": 1028,
+    "scope": "specific"
+   },
+   {
+    "code": 1029,
+    "scope": "specific"
+   },
+   {
+    "code": 1030,
+    "scope": "specific"
+   },
+   {
+    "code": 1031,
+    "scope": "specific"
+   },
+   {
+    "code": 1032,
+    "scope": "specific"
+   },
+   {
+    "code": 1033,
+    "scope": "specific"
+   },
+   {
+    "code": 1034,
+    "scope": "specific"
+   },
+   {
+    "code": 1036,
+    "scope": "specific"
+   },
+   {
+    "code": 1038,
+    "scope": "specific"
+   },
+   {
+    "code": 1040,
+    "scope": "specific"
+   },
+   {
+    "code": 1042,
+    "scope": "specific"
+   },
+   {
+    "code": 1044,
+    "scope": "specific"
+   },
+   {
+    "code": 1045,
+    "scope": "specific"
+   },
+   {
+    "code": 1046,
+    "scope": "specific"
+   },
+   {
+    "code": 1047,
+    "scope": "specific"
+   },
+   {
+    "code": 1049,
+    "scope": "specific"
+   },
+   {
+    "code": 1053,
+    "scope": "specific"
+   },
+   {
+    "code": 1054,
+    "scope": "specific"
+   },
+   {
+    "code": 1057,
+    "scope": "specific"
+   },
+   {
+    "code": 1062,
+    "scope": "specific"
+   },
+   {
+    "code": 1063,
+    "scope": "specific"
+   },
+   {
+    "code": 1064,
+    "scope": "specific"
+   },
+   {
+    "code": 1137,
+    "scope": "specific"
+   },
+   {
+    "code": 1311,
+    "scope": "specific"
+   },
+   {
+    "code": 1312,
+    "scope": "specific"
+   },
+   {
+    "code": 1313,
+    "scope": "specific"
+   },
+   {
+    "code": 1314,
+    "scope": "specific"
+   },
+   {
+    "code": 1315,
+    "scope": "specific"
+   },
+   {
+    "code": 1316,
+    "scope": "specific"
+   },
+   {
+    "code": 1317,
+    "scope": "specific"
+   },
+   {
+    "code": 1318,
+    "scope": "specific"
+   },
+   {
+    "code": 1320,
+    "scope": "specific"
+   },
+   {
+    "code": 1321,
+    "scope": "specific"
+   },
+   {
+    "code": 1322,
+    "scope": "specific"
+   },
+   {
+    "code": 1323,
+    "scope": "specific"
+   },
+   {
+    "code": 1325,
+    "scope": "specific"
+   },
+   {
+    "code": 1326,
+    "scope": "specific"
+   },
+   {
+    "code": 1327,
+    "scope": "specific"
+   },
+   {
+    "code": 1328,
+    "scope": "specific"
+   },
+   {
+    "code": 1329,
+    "scope": "specific"
+   },
+   {
+    "code": 1330,
+    "scope": "specific"
+   },
+   {
+    "code": 1331,
+    "scope": "specific"
+   },
+   {
+    "code": 1332,
+    "scope": "specific"
+   },
+   {
+    "code": 1333,
+    "scope": "specific"
+   },
+   {
+    "code": 1334,
+    "scope": "specific"
+   },
+   {
+    "code": 1335,
+    "scope": "specific"
+   },
+   {
+    "code": 1336,
+    "scope": "specific"
+   },
+   {
+    "code": 1337,
+    "scope": "specific"
+   },
+   {
+    "code": 1338,
+    "scope": "specific"
+   },
+   {
+    "code": 1339,
+    "scope": "specific"
+   },
+   {
+    "code": 1341,
+    "scope": "specific"
+   },
+   {
+    "code": 1342,
+    "scope": "specific"
+   },
+   {
+    "code": 1343,
+    "scope": "specific"
+   },
+   {
+    "code": 1344,
+    "scope": "specific"
+   },
+   {
+    "code": 1345,
+    "scope": "specific"
+   },
+   {
+    "code": 1346,
+    "scope": "specific"
+   },
+   {
+    "code": 1347,
+    "scope": "specific"
+   },
+   {
+    "code": 1348,
+    "scope": "specific"
+   },
+   {
+    "code": 1349,
+    "scope": "specific"
+   },
+   {
+    "code": 1352,
+    "scope": "specific"
+   },
+   {
+    "code": 1353,
+    "scope": "specific"
+   },
+   {
+    "code": 1354,
+    "scope": "specific"
+   },
+   {
+    "code": 1356,
+    "scope": "specific"
+   },
+   {
+    "code": 1357,
+    "scope": "specific"
+   },
+   {
+    "code": 1358,
+    "scope": "specific"
+   },
+   {
+    "code": 1359,
+    "scope": "specific"
+   },
+   {
+    "code": 1360,
+    "scope": "specific"
+   },
+   {
+    "code": 1361,
+    "scope": "specific"
+   },
+   {
+    "code": 1362,
+    "scope": "specific"
+   },
+   {
+    "code": 1363,
+    "scope": "specific"
+   },
+   {
+    "code": 1364,
+    "scope": "specific"
+   },
+   {
+    "code": 1365,
+    "scope": "specific"
+   },
+   {
+    "code": 1366,
+    "scope": "specific"
+   },
+   {
+    "code": 1367,
+    "scope": "specific"
+   },
+   {
+    "code": 1368,
+    "scope": "specific"
+   },
+   {
+    "code": 1369,
+    "scope": "specific"
+   },
+   {
+    "code": 1370,
+    "scope": "specific"
+   },
+   {
+    "code": 1371,
+    "scope": "specific"
+   },
+   {
+    "code": 1372,
+    "scope": "specific"
+   },
+   {
+    "code": 1373,
+    "scope": "specific"
+   },
+   {
+    "code": 1374,
+    "scope": "specific"
+   },
+   {
+    "code": 1375,
+    "scope": "specific"
+   },
+   {
+    "code": 1376,
+    "scope": "specific"
+   },
+   {
+    "code": 1377,
+    "scope": "specific"
+   },
+   {
+    "code": 1378,
+    "scope": "specific"
+   },
+   {
+    "code": 1379,
+    "scope": "specific"
+   },
+   {
+    "code": 1380,
+    "scope": "specific"
+   },
+   {
+    "code": 1381,
+    "scope": "specific"
+   },
+   {
+    "code": 1382,
+    "scope": "specific"
+   },
+   {
+    "code": 1383,
+    "scope": "specific"
+   },
+   {
+    "code": 1384,
+    "scope": "specific"
+   },
+   {
+    "code": 1669,
+    "scope": "specific"
+   },
+   {
+    "code": 1670,
+    "scope": "specific"
+   },
+   {
+    "code": 1671,
+    "scope": "specific"
+   },
+   {
+    "code": 1672,
+    "scope": "specific"
+   },
+   {
+    "code": 1673,
+    "scope": "specific"
+   },
+   {
+    "code": 1674,
+    "scope": "specific"
+   },
+   {
+    "code": 1675,
+    "scope": "specific"
+   },
+   {
+    "code": 1677,
+    "scope": "specific"
+   },
+   {
+    "code": 1678,
+    "scope": "specific"
+   },
+   {
+    "code": 1679,
+    "scope": "specific"
+   },
+   {
+    "code": 1720,
+    "scope": "specific"
+   },
+   {
+    "code": 1721,
+    "scope": "specific"
+   },
+   {
+    "code": 1722,
+    "scope": "specific"
+   },
+   {
+    "code": 11880,
+    "scope": "specific"
+   },
+   {
+    "code": 11881,
+    "scope": "specific"
+   },
+   {
+    "code": 11956,
+    "scope": "specific"
+   },
+   {
+    "code": 12118,
+    "scope": "specific"
+   },
+   {
+    "code": 12190,
+    "scope": "specific"
+   },
+   {
+    "code": 12191,
+    "scope": "specific"
+   },
+   {
+    "code": 12192,
+    "scope": "specific"
+   },
+   {
+    "code": 12775,
+    "scope": "specific"
+   },
+   {
+    "code": 12776,
+    "scope": "specific"
+   },
+   {
+    "code": 12777,
+    "scope": "specific"
+   },
+   {
+    "code": 12778,
+    "scope": "specific"
+   },
+   {
+    "code": 12779,
+    "scope": "specific"
+   },
+   {
+    "code": 12780,
+    "scope": "specific"
+   },
+   {
+    "code": 12781,
+    "scope": "specific"
+   },
+   {
+    "code": 12782,
+    "scope": "specific"
+   },
+   {
+    "code": 12783,
+    "scope": "specific"
+   },
+   {
+    "code": 12784,
+    "scope": "specific"
+   },
+   {
+    "code": 12785,
+    "scope": "specific"
+   },
+   {
+    "code": 12788,
+    "scope": "specific"
+   },
+   {
+    "code": 12789,
+    "scope": "specific"
+   },
+   {
+    "code": 12790,
+    "scope": "specific"
+   },
+   {
+    "code": 12791,
+    "scope": "specific"
+   },
+   {
+    "code": 15224,
+    "scope": "specific"
+   },
+   {
+    "code": 15228,
+    "scope": "specific"
+   }
+  ]
+ },
+ {
+  "slug": "processual-geral",
+  "label": "Processual (transversal)",
+  "position": 24,
+  "cnj_subject_roots": [
+   8826
+  ],
+  "classes": [
+   {
+    "code": 11875,
+    "scope": "specific"
+   },
+   {
+    "code": 15709,
+    "scope": "specific"
+   }
+  ]
+ }
+]

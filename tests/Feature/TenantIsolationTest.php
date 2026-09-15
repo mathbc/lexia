@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Domain\Accounts\Models\Account;
+use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\Shared\Tenancy\TenantContext;
 use App\Domain\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -70,6 +71,20 @@ final class TenantIsolationTest extends TestCase
             ->assertForbidden();
 
         $this->assertNotSame('Invadido', $stranger->fresh()->name);
+    }
+
+    #[Test]
+    public function a_user_only_sees_pleadings_from_their_own_account(): void
+    {
+        [$mine, $owner] = $this->accountWithOwner();
+        LegalCase::factory()->forAccount($mine)->count(2)->create();
+
+        LegalCase::factory()->forAccount(Account::factory()->create())->count(4)->create();
+
+        $this->actingAsUser($owner);
+
+        $this->assertSame(2, LegalCase::count());
+        $this->assertSame(6, LegalCase::acrossAllAccounts()->count());
     }
 
     #[Test]

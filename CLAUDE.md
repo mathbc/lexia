@@ -25,7 +25,7 @@ php artisan migrate:fresh --seed     # senha de todos os usuários: password
 composer dev                         # serve + queue + pail + vite
 php artisan test                     # PHPUnit contra o banco lexia_testing
 ./vendor/bin/pint                    # formatação
-./vendor/bin/phpstan analyse         # nível 6, sem supressões
+composer analyse                     # phpstan nível 6, sem supressões
 npm run types:check                  # tsc --noEmit
 php .claude/skills/cyclomatic-complexity/scripts/analyze.php app
 ```
