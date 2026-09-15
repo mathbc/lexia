@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Seeders;
 
 use App\Domain\Accounts\Models\Account;
+use App\Domain\Customers\Models\Customer;
 use App\Domain\Users\Enums\UserType;
 use App\Domain\Users\Models\User;
 use Illuminate\Database\Seeder;
@@ -42,6 +43,10 @@ class DatabaseSeeder extends Seeder
             'email' => 'desabilitado@lexia.test',
         ]);
 
+        // A carteira de clientes do escritório: pessoas e empresas.
+        Customer::factory()->forAccount($firm)->count(8)->create();
+        Customer::factory()->forAccount($firm)->company()->count(4)->create();
+
         $solo = Account::factory()->create([
             'name' => 'Mariana Duarte',
             'email' => 'mariana@duarte.adv.br',
@@ -54,6 +59,8 @@ class DatabaseSeeder extends Seeder
             'email' => 'mariana@lexia.test',
             'type' => UserType::Lawyer,
         ]);
+
+        Customer::factory()->forAccount($solo)->count(3)->create();
 
         // LexIA staff. The platform account itself is not seeded: it is created
         // by migration, because production needs it too.

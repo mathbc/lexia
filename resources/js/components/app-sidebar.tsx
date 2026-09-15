@@ -1,5 +1,19 @@
 import { Link } from '@inertiajs/react'
-import { Building2, ChevronsUpDown, LayoutDashboard, LogOut, Monitor, Moon, Scale, Sun, UserCog, Users } from 'lucide-react'
+import {
+    BookUser,
+    Building2,
+    ChevronRight,
+    ChevronsUpDown,
+    FolderCog,
+    LayoutDashboard,
+    LogOut,
+    Monitor,
+    Moon,
+    Scale,
+    Sun,
+    UserCog,
+    Users,
+} from 'lucide-react'
 import type { ComponentType } from 'react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -28,6 +42,7 @@ import {
 } from '@/components/ui/sidebar'
 import { useAppearance, type Appearance } from '@/hooks/use-appearance'
 import { initials } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import type { AuthUser } from '@/types'
 
 interface NavItem {
@@ -38,17 +53,16 @@ interface NavItem {
 }
 
 /**
- * Monta a navegação a partir do que o usuário pode ver.
+ * Os cadastros da plataforma, agrupados sob um item só.
  *
  * Um item que o papel não alcança não aparece desabilitado: some. A rota já é
  * barrada no servidor, e um menu cheio de portas fechadas só ensina o que não
  * se pode fazer.
  */
-function navigationFor(user: AuthUser): NavItem[] {
+function registrationsFor(user: AuthUser): NavItem[] {
     const usersHref = `/contas/${user.account.id}/usuarios`
 
     return [
-        { label: 'Painel', href: '/painel', icon: LayoutDashboard, isActive: (path) => path.startsWith('/painel') },
         ...(user.is_platform_admin
             ? [{
                 label: 'Contas',
@@ -66,6 +80,13 @@ function navigationFor(user: AuthUser): NavItem[] {
                 isActive: (path: string) => path.startsWith(usersHref),
             }]
             : []),
+        // Todo mundo da conta trabalha com os clientes dela.
+        {
+            label: 'Clientes',
+            href: '/clientes',
+            icon: BookUser,
+            isActive: (path: string) => path.startsWith('/clientes'),
+        },
     ]
 }
 
@@ -78,6 +99,9 @@ const THEMES: { value: Appearance; label: string; icon: ComponentType<{ classNam
 export function AppSidebar({ user, currentPath }: { user: AuthUser; currentPath: string }) {
     const { isMobile } = useSidebar()
     const { appearance, updateAppearance } = useAppearance()
+
+    const registrations = registrationsFor(user)
+    const inRegistrations = registrations.some((item) => item.isActive(currentPath))
 
     return (
         <Sidebar collapsible="icon">
@@ -106,20 +130,58 @@ export function AppSidebar({ user, currentPath }: { user: AuthUser; currentPath:
                     <SidebarGroupLabel>Navegação</SidebarGroupLabel>
                     <SidebarGroupContent>
                         <SidebarMenu>
-                            {navigationFor(user).map((item) => (
-                                <SidebarMenuItem key={item.href}>
-                                    <SidebarMenuButton
-                                        asChild
-                                        isActive={item.isActive(currentPath)}
-                                        tooltip={item.label}
-                                    >
-                                        <Link href={item.href}>
-                                            <item.icon />
-                                            <span>{item.label}</span>
-                                        </Link>
-                                    </SidebarMenuButton>
+                            <SidebarMenuItem>
+                                <SidebarMenuButton
+                                    asChild
+                                    isActive={currentPath.startsWith('/painel')}
+                                    tooltip="Painel"
+                                >
+                                    <Link href="/painel">
+                                        <LayoutDashboard />
+                                        <span>Painel</span>
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+
+                            {/* Os cadastros num menu só: um dropdown em vez de
+                                um submenu que se abre, porque recolhido a
+                                trilha de ícones não teria onde desdobrá-lo. */}
+                            {registrations.length > 0 && (
+                                <SidebarMenuItem>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <SidebarMenuButton isActive={inRegistrations} tooltip="Cadastros">
+                                                <FolderCog />
+                                                <span>Cadastros</span>
+                                                <ChevronRight className="ml-auto" />
+                                            </SidebarMenuButton>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent
+                                            side={isMobile ? 'bottom' : 'right'}
+                                            align="start"
+                                            sideOffset={4}
+                                            className="min-w-48"
+                                        >
+                                            {registrations.map((item) => (
+                                                <DropdownMenuItem key={item.href} asChild>
+                                                    <Link
+                                                        href={item.href}
+                                                        aria-current={item.isActive(currentPath) ? 'page' : undefined}
+                                                        className={cn(
+                                                            'w-full',
+                                                            item.isActive(currentPath) &&
+                                                                'bg-accent text-accent-foreground',
+                                                        )}
+                                                    >
+                                                        <item.icon />
+                                                        {item.label}
+                                                    </Link>
+                                                </DropdownMenuItem>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
                                 </SidebarMenuItem>
-                            ))}
+                            )}
                         </SidebarMenu>
                     </SidebarGroupContent>
                 </SidebarGroup>

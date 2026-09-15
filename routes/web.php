@@ -11,6 +11,12 @@ use App\Domain\Accounts\Actions\ToggleAccountStatus;
 use App\Domain\Accounts\Actions\UpdateAccount;
 use App\Domain\Accounts\Enums\AccountType;
 use App\Domain\Accounts\Enums\BrazilianState;
+use App\Domain\Customers\Actions\CreateCustomer;
+use App\Domain\Customers\Actions\DeleteCustomer;
+use App\Domain\Customers\Actions\ListCustomers;
+use App\Domain\Customers\Actions\ShowCustomer;
+use App\Domain\Customers\Actions\ShowCustomerForm;
+use App\Domain\Customers\Actions\UpdateCustomer;
 use App\Domain\Users\Actions\CreateUser;
 use App\Domain\Users\Actions\ListUsers;
 use App\Domain\Users\Actions\ShowUserForm;
@@ -55,5 +61,17 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::get('/usuarios/{user}/editar', ShowUserForm::class)->name('users.edit');
         Route::put('/usuarios/{user}', UpdateUser::class)->name('users.update');
         Route::patch('/usuarios/{user}/status', ToggleUserStatus::class)->name('users.toggle');
+    });
+
+    // Os clientes da conta do próprio ator: não há conta na URL porque não há
+    // tela de cliente para a equipe LexIA — a CustomerPolicy fecha a fronteira.
+    Route::get('/clientes', ListCustomers::class)->name('customers.index');
+    Route::get('/clientes/novo', ShowCustomerForm::class)->name('customers.create');
+    Route::post('/clientes', CreateCustomer::class)->name('customers.store');
+
+    Route::prefix('/clientes/{customer}')->whereUuid('customer')->group(function (): void {
+        Route::get('/', ShowCustomer::class)->name('customers.show');
+        Route::put('/', UpdateCustomer::class)->name('customers.update');
+        Route::delete('/', DeleteCustomer::class)->name('customers.destroy');
     });
 });

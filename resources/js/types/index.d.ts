@@ -87,3 +87,28 @@ export interface AccountAbilities {
     toggle_status: boolean
     manage_users: boolean
 }
+
+/** The clients table, as the Customer model serialises. */
+export interface Customer {
+    id: string
+    name: string
+    legal_name: string | null
+    type: string
+    cpf: string | null
+    cnpj: string | null
+    email: string
+    phone: string
+    postal_code: string
+    street: string
+    number: string
+    complement: string | null
+    district: string
+    city: string
+    state: string
+}
+
+/** Mirrors CustomerPageProps::abilities(); the listing adds `create`. */
+export interface CustomerAbilities {
+    update: boolean
+    delete: boolean
+}

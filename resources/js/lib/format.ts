@@ -94,3 +94,19 @@ export const initials = (name: string): string => {
 
     return (first + last).toUpperCase()
 }
+
+/**
+ * How a client identifies themselves: a company by its CNPJ, a person by their
+ * CPF. Mirrors Customer::identifier() on the server.
+ */
+export const customerIdentifier = (customer: {
+    type: string
+    cpf: string | null
+    cnpj: string | null
+}): string | null => {
+    if (customer.type === 'company') {
+        return customer.cnpj ? formatCnpj(customer.cnpj) : null
+    }
+
+    return customer.cpf ? formatCpf(customer.cpf) : null
+}

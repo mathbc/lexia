@@ -7,6 +7,7 @@ namespace App\Domain\Accounts\Actions\Concerns;
 use App\Domain\Accounts\Enums\AccountType;
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Accounts\Models\Account;
+use App\Domain\Shared\Concerns\ValidatesAddress;
 use App\Domain\Shared\Rules\Cnpj;
 use App\Domain\Shared\Rules\OabNumber;
 use Illuminate\Validation\Rule;
@@ -21,6 +22,8 @@ use Illuminate\Validation\Rules\Unique;
  */
 trait ValidatesAccount
 {
+    use ValidatesAddress;
+
     /**
      * @return array<string, mixed>
      */
@@ -80,22 +83,6 @@ trait ValidatesAccount
     }
 
     /**
-     * @return array<string, mixed>
-     */
-    protected function addressRules(): array
-    {
-        return [
-            'postal_code' => ['required', 'string', 'regex:/^\d{5}-?\d{3}$/'],
-            'street' => ['required', 'string', 'max:255'],
-            'number' => ['required', 'string', 'max:20'],
-            'complement' => ['nullable', 'string', 'max:100'],
-            'district' => ['required', 'string', 'max:120'],
-            'city' => ['required', 'string', 'max:120'],
-            'state' => ['required', Rule::enum(BrazilianState::class)],
-        ];
-    }
-
-    /**
      * Uniqueness has to bypass the tenant scope: a CNPJ already taken by
      * another account is still a conflict, even though that account is
      * invisible to the current user.
@@ -121,13 +108,7 @@ trait ValidatesAccount
             'oab_state' => 'seccional da OAB',
             'email' => 'e-mail',
             'phone' => 'telefone',
-            'postal_code' => 'CEP',
-            'street' => 'logradouro',
-            'number' => 'número',
-            'complement' => 'complemento',
-            'district' => 'bairro',
-            'city' => 'cidade',
-            'state' => 'UF',
+            ...$this->addressAttributes(),
         ];
     }
 }

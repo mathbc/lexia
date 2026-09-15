@@ -4,26 +4,21 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
-use App\Domain\Accounts\Enums\AccountType;
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Accounts\Models\Account;
+use App\Domain\Customers\Enums\CustomerType;
+use App\Domain\Customers\Models\Customer;
 use Database\Factories\Support\BrazilianDocuments;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<Account>
+ * @extends Factory<Customer>
  */
-class AccountFactory extends Factory
+class CustomerFactory extends Factory
 {
-    protected $model = Account::class;
+    protected $model = Customer::class;
 
-    /**
-     * Faker's pt_BR locale has no usable provider for either of these:
-     * secondaryAddress() returns a bare letter and citySuffix() returns
-     * fragments like "do Sul", which is a state suffix, not a bairro.
-     *
-     * @var list<string>
-     */
+    /** @var list<string> */
     private const array COMPLEMENTS = ['Apto 42', 'Sala 12', 'Conj. 501', 'Bloco B', '3º andar'];
 
     /** @var list<string> */
@@ -33,20 +28,20 @@ class AccountFactory extends Factory
     ];
 
     /**
-     * Defaults to an individual practitioner; use ->lawFirm() for the other.
+     * Defaults to a natural person; use ->company() for the other.
      *
      * @return array<string, mixed>
      */
     public function definition(): array
     {
         return [
+            'account_id' => Account::factory(),
             'name' => fake()->name(),
             'legal_name' => null,
-            'type' => AccountType::Individual,
-            'federal_id' => null,
-            'oab_number' => (string) fake()->unique()->numberBetween(1000, 999999),
-            'oab_state' => fake()->randomElement(BrazilianState::cases()),
-            'email' => fake()->unique()->companyEmail(),
+            'type' => CustomerType::Individual,
+            'cpf' => BrazilianDocuments::cpf(),
+            'cnpj' => null,
+            'email' => fake()->unique()->safeEmail(),
             'phone' => fake()->numerify('###########'),
             'postal_code' => fake()->numerify('########'),
             'street' => fake()->streetName(),
@@ -55,30 +50,28 @@ class AccountFactory extends Factory
             'district' => fake()->randomElement(self::DISTRICTS),
             'city' => fake()->city(),
             'state' => fake()->randomElement(BrazilianState::cases()),
-            'active' => true,
-            'enabled' => true,
         ];
     }
 
-    public function lawFirm(): static
+    public function company(): static
     {
         return $this->state(fn (): array => [
             'name' => fake()->company(),
-            'legal_name' => fake()->company().' Sociedade de Advogados Ltda.',
-            'type' => AccountType::LawFirm,
-            'federal_id' => BrazilianDocuments::cnpj(),
-            'oab_number' => null,
-            'oab_state' => null,
+            // finish() and not concatenation: under the pt_BR locale faker
+            // already hands back a name ending in "Ltda.", and appending a
+            // second one reads like a bug in the seed data.
+            'legal_name' => (string) str(fake()->company())->finish(' Ltda.'),
+            'type' => CustomerType::Company,
+            'cpf' => null,
+            'cnpj' => BrazilianDocuments::cnpj(),
         ]);
     }
 
-    public function disabled(): static
+    /**
+     * Attach to an existing account instead of creating a fresh one.
+     */
+    public function forAccount(Account $account): static
     {
-        return $this->state(fn (): array => ['enabled' => false]);
-    }
-
-    public function inactive(): static
-    {
-        return $this->state(fn (): array => ['active' => false]);
+        return $this->state(fn (): array => ['account_id' => $account->id]);
     }
 }

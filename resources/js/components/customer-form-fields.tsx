@@ -1,42 +1,46 @@
 import { AddressFields, type AddressFormValues } from '@/components/address-fields'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, Input, Select } from '@/components/ui/field'
-import { digits, formatCnpj, formatPhone, isValidCnpj } from '@/lib/format'
+import { digits, formatCnpj, formatCpf, formatPhone, isValidCnpj, isValidCpf } from '@/lib/format'
 import type { Option } from '@/types'
 
-export interface AccountFormValues extends AddressFormValues {
+export interface CustomerFormValues extends AddressFormValues {
     name: string
     legal_name: string
     type: string
-    federal_id: string
-    oab_number: string
-    oab_state: string
+    cpf: string
+    cnpj: string
     email: string
     phone: string
 }
 
-type Errors = Partial<Record<keyof AccountFormValues, string>>
+type Errors = Partial<Record<keyof CustomerFormValues, string>>
 
 interface Props {
-    values: AccountFormValues
+    values: CustomerFormValues
     errors: Errors
-    /** Patches one or more fields; the CEP lookup fills four at once. */
-    set: (patch: Partial<AccountFormValues>) => void
-    accountTypes: Option[]
+    /** Aplica um patch; a consulta de CEP preenche quatro campos de uma vez. */
+    set: (patch: Partial<CustomerFormValues>) => void
+    customerTypes: Option[]
     states: Option[]
     disabled?: boolean
 }
 
 /**
- * Shared between creating an account and editing one, so the two screens
- * cannot drift.
+ * Compartilhado entre cadastrar um cliente e editá-lo, para que as duas telas
+ * não divirjam.
+ *
+ * O tipo decide qual documento aparece: pessoa física traz CPF, pessoa
+ * jurídica traz razão social e CNPJ. É a mesma regra que o `required_if` do
+ * servidor aplica — aqui ela só evita pedir o que não vale.
  */
-export function AccountFormFields({ values, errors, set, accountTypes, states, disabled = false }: Props) {
-    const isFirm = values.type === 'law_firm'
+export function CustomerFormFields({ values, errors, set, customerTypes, states, disabled = false }: Props) {
+    const isCompany = values.type === 'company'
 
-    // Client-side only for immediate feedback; the Cnpj rule on the server
-    // remains the source of truth.
-    const cnpjLooksWrong = isFirm && values.federal_id.length > 0 && !isValidCnpj(values.federal_id)
+    // Só para resposta imediata; as regras Cpf e Cnpj no servidor continuam
+    // sendo a fonte da verdade.
+    const cpfLooksWrong = !isCompany && values.cpf.length > 0 && !isValidCpf(values.cpf)
+    const cnpjLooksWrong = isCompany && values.cnpj.length > 0 && !isValidCnpj(values.cnpj)
 
     return (
         <>
@@ -45,21 +49,21 @@ export function AccountFormFields({ values, errors, set, accountTypes, states, d
                     <CardTitle>Identificação</CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Tipo de conta" error={errors.type} required>
+                    <Field label="Tipo de cliente" error={errors.type} required>
                         <Select
                             value={values.type}
                             onValueChange={(value) => set({ type: value })}
-                            options={accountTypes}
+                            options={customerTypes}
                             placeholder="Selecione"
                             disabled={disabled}
                         />
                     </Field>
 
-                    <Field label="Nome" error={errors.name} required>
+                    <Field label="Nome" error={errors.name} hint={isCompany ? 'Nome fantasia' : undefined} required>
                         <Input value={values.name} onChange={(e) => set({ name: e.target.value })} disabled={disabled} />
                     </Field>
 
-                    {isFirm ? (
+                    {isCompany ? (
                         <>
                             <Field label="Razão social" error={errors.legal_name} required>
                                 <Input
@@ -72,11 +76,11 @@ export function AccountFormFields({ values, errors, set, accountTypes, states, d
                             <Field
                                 label="CNPJ"
                                 required
-                                error={errors.federal_id ?? (cnpjLooksWrong ? 'CNPJ inválido.' : undefined)}
+                                error={errors.cnpj ?? (cnpjLooksWrong ? 'CNPJ inválido.' : undefined)}
                             >
                                 <Input
-                                    value={formatCnpj(values.federal_id)}
-                                    onChange={(e) => set({ federal_id: digits(e.target.value) })}
+                                    value={formatCnpj(values.cnpj)}
+                                    onChange={(e) => set({ cnpj: digits(e.target.value) })}
                                     inputMode="numeric"
                                     placeholder="00.000.000/0000-00"
                                     disabled={disabled}
@@ -84,26 +88,15 @@ export function AccountFormFields({ values, errors, set, accountTypes, states, d
                             </Field>
                         </>
                     ) : (
-                        <>
-                            <Field label="Número da OAB" error={errors.oab_number} required>
-                                <Input
-                                    value={values.oab_number}
-                                    onChange={(e) => set({ oab_number: e.target.value.toUpperCase() })}
-                                    placeholder="123456"
-                                    disabled={disabled}
-                                />
-                            </Field>
-
-                            <Field label="Seccional" error={errors.oab_state} required>
-                                <Select
-                                    value={values.oab_state}
-                                    onValueChange={(value) => set({ oab_state: value })}
-                                    options={states}
-                                    placeholder="Selecione"
-                                    disabled={disabled}
-                                />
-                            </Field>
-                        </>
+                        <Field label="CPF" required error={errors.cpf ?? (cpfLooksWrong ? 'CPF inválido.' : undefined)}>
+                            <Input
+                                value={formatCpf(values.cpf)}
+                                onChange={(e) => set({ cpf: digits(e.target.value) })}
+                                inputMode="numeric"
+                                placeholder="000.000.000-00"
+                                disabled={disabled}
+                            />
+                        </Field>
                     )}
                 </CardContent>
             </Card>
