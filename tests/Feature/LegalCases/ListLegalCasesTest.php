@@ -137,9 +137,11 @@ final class ListLegalCasesTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('selectedArea', 'trabalhista')
-                // Trabalhista is a branch with its own rite: 90 classes of its
-                // own and none of the civil trunk.
-                ->has('proceduralClasses', 90)
+                // Trabalhista has a rite of its own — 43 classes the CNJ puts
+                // under its own subtree — and on top of that the civil trunk
+                // classes the CNJ marks as valid in just_trab_*, which is how
+                // Embargos à Execução reaches a labour matter.
+                ->has('proceduralClasses', 86)
                 ->where('proceduralClasses.0.scope', 'specific'));
     }
 

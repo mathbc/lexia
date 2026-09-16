@@ -6,7 +6,7 @@ peça pode ser montada sem ele.
 
 | Arquivo | Conteúdo |
 |---|---|
-| `practice-areas.json` | 24 áreas de atuação e os 1.237 vínculos com as classes |
+| `practice-areas.json` | 24 áreas de atuação e os 1.756 vínculos com as classes |
 | `procedural-classes.json` | 615 classes processuais ativas |
 
 ## Origem
@@ -49,6 +49,52 @@ Consequência: a relação área ↔ classe é **muitos-para-muitos**. O código
   dois booleanos acima são o que o produto consulta.
 - **`jurisdictions`** — as 29 competências do CNJ (ramo de justiça × grau). Filtre por
   aqui antes de exibir a lista.
+
+## Como o vínculo área ↔ classe é decidido
+
+O CNJ não classifica classe por ramo do direito — o registro de uma classe não tem
+campo de área, só as 29 competências e a posição na árvore. Quem decide o vínculo,
+então, é o **`path`**, que é a árvore oficial, mais duas regras:
+
+1. **A raiz do `path` resolve o caso fácil.** `PROCESSO CRIMINAL` é penal,
+   `PROCESSO ELEITORAL` é eleitoral, `SUPREMO TRIBUNAL FEDERAL` e
+   `SUPERIOR TRIBUNAL DE JUSTIÇA` são Tribunais Superiores, e assim por diante. Sete
+   das dez raízes se esgotam aqui.
+
+2. **`PROCESSO CÍVEL E DO TRABALHO` se parte em três**, e é onde mora a dificuldade:
+   - qualquer nó com *Trabalhista* no `path` (`Procedimentos Trabalhistas`,
+     `Recursos Trabalhistas`, `Processo de Execução Trabalhista`,
+     `Incidentes Trabalhistas`) é `specific` de Direito do Trabalho;
+   - `Procedimentos Especiais` é o ramo em que a classe **tem matéria própria** —
+     Despejo é imobiliário, Divórcio é família, Recuperação Judicial é empresarial.
+     É a única parte que exige curadoria, classe a classe;
+   - **todo o resto é o tronco cível** — procedimento comum, cumprimento de sentença,
+     liquidação, execução, embargos, recursos, cartas, incidentes, tutela provisória —
+     e entra como `generic` em **todas** as áreas cíveis. É o que estava quebrado:
+     `Embargos à Execução` (172), `Cumprimento de sentença` (156) e
+     `Embargos de Declaração Cível` (1689) não alcançavam nenhuma área cível.
+
+Duas ressalvas sobre o tronco, ambas necessárias:
+
+- **A competência oficial é o filtro.** Uma classe do tronco só chega ao Direito do
+  Trabalho se o CNJ a marcar em `just_trab_*` — por isso `Procedimento Comum Cível`
+  não aparece lá (a Justiça do Trabalho usa `Ação Trabalhista - Rito Ordinário`), mas
+  `Embargos à Execução` aparece. E uma classe confinada a `just_trab`, `just_elei` ou
+  `just_mil` não chega às áreas comuns.
+- **Nem tudo que está no tronco é genérico.** `Execução Fiscal`, `Embargos à Execução
+  Fiscal` e `Cautelar Fiscal` são tributário e administrativo; `Execução Hipotecária
+  do SFH` é imobiliário; `Medidas Protetivas (Maria da Penha)` é família e penal — o
+  glossário do CNJ diz "medida protetiva CÍVEL", e o da classe 124 (Lei de Imprensa)
+  diz, com todas as letras, "a matéria é CRIMINAL". Essas ficam presas às suas áreas.
+
+No caminho inverso, um punhado de `Procedimentos Especiais` é instrumento processual e
+não matéria — Monitória, Mandado de Segurança, Embargos de Terceiro, Ação Rescisória,
+Consignação em Pagamento. Esses guardam a área de origem como `specific` **e** viajam
+como `generic` para as demais áreas cíveis.
+
+O resultado é que nenhuma das 615 classes fica órfã, e o tronco cível — 74 classes —
+está presente em toda área cível, em vez de ter sido despejado só em Direito do
+Trabalho, que era o estado anterior.
 
 ## Ressincronização
 
