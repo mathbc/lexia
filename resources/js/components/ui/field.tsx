@@ -114,3 +114,4 @@ export function Field({
 
 export { Input } from '@/components/ui/input'
 export { SelectInput as Select } from '@/components/ui/select'
+export { Textarea } from '@/components/ui/textarea'

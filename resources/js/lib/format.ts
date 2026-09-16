@@ -16,6 +16,17 @@ export const formatCpf = (value: string): string =>
         .replace(/(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
         .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
 
+/**
+ * Um documento que pode ser CPF ou CNPJ, sem ninguém dizer qual.
+ *
+ * É o caso do réu: a máscara é escolhida pela quantidade de dígitos já
+ * digitados — até onze, CPF; a partir do décimo segundo, CNPJ. A troca
+ * acontece enquanto se digita, o que é o comportamento certo: o campo se
+ * revela conforme o documento, em vez de exigir a escolha antes.
+ */
+export const formatDocument = (value: string): string =>
+    digits(value).length > 11 ? formatCnpj(value) : formatCpf(value)
+
 export const formatPostalCode = (value: string): string =>
     digits(value).slice(0, 8).replace(/^(\d{5})(\d)/, '$1-$2')
 

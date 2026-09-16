@@ -21,15 +21,27 @@ interface Props {
     set: (patch: Partial<AddressFormValues>) => void
     states: Option[]
     disabled?: boolean
+    /** De quem é o endereço, quando a tela tem mais de um. */
+    title?: string
+    /** Nem todo endereço é obrigatório: o do réu é justamente o que se procura. */
+    required?: boolean
 }
 
 /**
  * O endereço postal, igual em todo cadastro que tem um.
  *
- * A forma é fixada pelos Correios, então conta e cliente desenham o mesmo
- * cartão em vez de manterem duas cópias que divergem.
+ * A forma é fixada pelos Correios, então conta, cliente e réu desenham o mesmo
+ * cartão em vez de manterem três cópias que divergem.
  */
-export function AddressFields({ values, errors, set, states, disabled = false }: Props) {
+export function AddressFields({
+    values,
+    errors,
+    set,
+    states,
+    disabled = false,
+    title = 'Endereço',
+    required = true,
+}: Props) {
     const fillFromPostalCode = async (value: string) => {
         const patch = await lookupPostalCode(value)
 
@@ -41,10 +53,16 @@ export function AddressFields({ values, errors, set, states, disabled = false }:
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Endereço</CardTitle>
+                <CardTitle>{title}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-6">
-                <Field label="CEP" error={errors.postal_code} hint="Preenche o endereço" required className="sm:col-span-2">
+                <Field
+                    label="CEP"
+                    error={errors.postal_code}
+                    hint="Preenche o endereço"
+                    required={required}
+                    className="sm:col-span-2"
+                >
                     <Input
                         value={formatPostalCode(values.postal_code)}
                         onChange={(e) => set({ postal_code: digits(e.target.value) })}
@@ -55,11 +73,11 @@ export function AddressFields({ values, errors, set, states, disabled = false }:
                     />
                 </Field>
 
-                <Field label="Logradouro" error={errors.street} required className="sm:col-span-3">
+                <Field label="Logradouro" error={errors.street} required={required} className="sm:col-span-3">
                     <Input value={values.street} onChange={(e) => set({ street: e.target.value })} disabled={disabled} />
                 </Field>
 
-                <Field label="Número" error={errors.number} required>
+                <Field label="Número" error={errors.number} required={required}>
                     <Input value={values.number} onChange={(e) => set({ number: e.target.value })} disabled={disabled} />
                 </Field>
 
@@ -71,15 +89,15 @@ export function AddressFields({ values, errors, set, states, disabled = false }:
                     />
                 </Field>
 
-                <Field label="Bairro" error={errors.district} required className="sm:col-span-2">
+                <Field label="Bairro" error={errors.district} required={required} className="sm:col-span-2">
                     <Input value={values.district} onChange={(e) => set({ district: e.target.value })} disabled={disabled} />
                 </Field>
 
-                <Field label="Cidade" error={errors.city} required>
+                <Field label="Cidade" error={errors.city} required={required}>
                     <Input value={values.city} onChange={(e) => set({ city: e.target.value })} disabled={disabled} />
                 </Field>
 
-                <Field label="UF" error={errors.state} required>
+                <Field label="UF" error={errors.state} required={required}>
                     <Select
                         value={values.state}
                         onValueChange={(value) => set({ state: value })}

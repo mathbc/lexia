@@ -2,6 +2,7 @@ import { Head, Link, router } from '@inertiajs/react'
 import { useState } from 'react'
 import { AppLayout } from '@/layouts/app-layout'
 import { CustomerCreateDialog } from '@/components/customer-create-dialog'
+import { DefendantFormFields, type DefendantFormValues } from '@/components/defendant-form-fields'
 import { LegalCaseSteps, type LegalCaseStep } from '@/components/legal-case-steps'
 import { PracticeAreaPicker } from '@/components/practice-area-picker'
 import { ProceduralClassPicker } from '@/components/procedural-class-picker'
@@ -12,9 +13,26 @@ import type { Option, ProceduralClassOption } from '@/types'
 
 const STEPS: LegalCaseStep[] = [
     { label: 'Dados básicos', description: 'Cliente, área de atuação e classe processual' },
-    { label: 'Preenchimento da peça', description: 'Partes, fatos, fundamentos e pedidos' },
+    { label: 'Dados do réu', description: 'Quem é a parte contrária e como localizá-la' },
+    { label: 'Preenchimento da peça', description: 'Fatos, fundamentos e pedidos' },
     { label: 'Revisão forense', description: 'Conferência final antes do protocolo' },
 ]
+
+/** Nada do réu é obrigatório — ver `DefendantFormFields`. */
+const EMPTY_DEFENDANT: DefendantFormValues = {
+    defendant_name: '',
+    defendant_document: '',
+    defendant_email: '',
+    defendant_phone: '',
+    defendant_postal_code: '',
+    defendant_street: '',
+    defendant_number: '',
+    defendant_complement: '',
+    defendant_district: '',
+    defendant_city: '',
+    defendant_state: '',
+    defendant_notes: '',
+}
 
 interface Props {
     customers: Option[]
@@ -44,6 +62,11 @@ export default function LegalCaseCreate({
     const [step, setStep] = useState(0)
     const [customerId, setCustomerId] = useState('')
     const [proceduralClassId, setProceduralClassId] = useState('')
+
+    // Ainda não há persistência: o réu mora em estado local até existir uma
+    // Action que o receba. Fica fora do `useForm` de propósito — não há para
+    // onde enviar, e um formulário sem destino só esconderia isso.
+    const [defendant, setDefendant] = useState<DefendantFormValues>(EMPTY_DEFENDANT)
 
     /**
      * A área vive na URL, não em estado local: é ela que diz ao servidor quais
@@ -158,7 +181,18 @@ export default function LegalCaseCreate({
                         </Card>
                     )}
 
-                    {step > 0 && (
+                    {step === 1 && (
+                        <DefendantFormFields
+                            values={defendant}
+                            // Sem servidor ainda, não há erro para mostrar: a
+                            // validação do réu nasce junto com a Action.
+                            errors={{}}
+                            set={(patch) => setDefendant((current) => ({ ...current, ...patch }))}
+                            states={states}
+                        />
+                    )}
+
+                    {step > 1 && (
                         <Card>
                             <CardHeader>
                                 <CardTitle>{STEPS[step]?.label}</CardTitle>
@@ -172,19 +206,24 @@ export default function LegalCaseCreate({
                         </Card>
                     )}
 
+                    {/* Cancelar só no primeiro passo, onde ainda não se andou
+                        nada; dali em diante o par é Voltar/Continuar. O
+                        Continuar some no último passo porque não há para onde
+                        ir enquanto a peça não for salva. */}
                     <div className="flex justify-end gap-3">
                         {step === 0 ? (
-                            <>
-                                <Button asChild variant="outline">
-                                    <Link href="/pecas">Cancelar</Link>
-                                </Button>
-                                <Button type="button" disabled={!complete} onClick={() => setStep(1)}>
-                                    Continuar
-                                </Button>
-                            </>
+                            <Button asChild variant="outline">
+                                <Link href="/pecas">Cancelar</Link>
+                            </Button>
                         ) : (
                             <Button type="button" variant="outline" onClick={() => setStep(step - 1)}>
                                 Voltar
+                            </Button>
+                        )}
+
+                        {step < STEPS.length - 1 && (
+                            <Button type="button" disabled={!complete} onClick={() => setStep(step + 1)}>
+                                Continuar
                             </Button>
                         )}
                     </div>

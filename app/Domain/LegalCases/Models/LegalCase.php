@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Domain\LegalCases\Models;
 
+use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Accounts\Models\Account;
+use App\Domain\Customers\Enums\CustomerType;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\LegalCases\Policies\LegalCasePolicy;
 use App\Domain\PracticeAreas\Models\PracticeArea;
@@ -31,11 +33,28 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * the class belongs to the area; that pairing lives in the pivot and is the
  * Action's to validate.
  *
+ * The `defendant_*` columns describe the other party inline. They are all
+ * nullable because a defendant is described rather than registered: what the
+ * lawyer knows at drafting time is often a name and little else, and
+ * `defendant_notes` is where the rest of that partial knowledge goes.
+ *
  * @property string $id
  * @property string $account_id
  * @property string $customer_id
  * @property string $practice_area_id
  * @property string $procedural_class_id
+ * @property string|null $defendant_name
+ * @property string|null $defendant_document
+ * @property string|null $defendant_email
+ * @property string|null $defendant_phone
+ * @property string|null $defendant_postal_code
+ * @property string|null $defendant_street
+ * @property string|null $defendant_number
+ * @property string|null $defendant_complement
+ * @property string|null $defendant_district
+ * @property string|null $defendant_city
+ * @property BrazilianState|null $defendant_state
+ * @property string|null $defendant_notes
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property CarbonImmutable|null $deleted_at
@@ -59,6 +78,16 @@ class LegalCase extends Model
     protected $guarded = ['id'];
 
     /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'defendant_state' => BrazilianState::class,
+        ];
+    }
+
+    /**
      * @return BelongsTo<Customer, $this>
      */
     public function customer(): BelongsTo
@@ -80,5 +109,21 @@ class LegalCase extends Model
     public function proceduralClass(): BelongsTo
     {
         return $this->belongsTo(ProceduralClass::class);
+    }
+
+    /**
+     * Which document the defendant was identified by, if any.
+     *
+     * The column holds digits only and does not say which kind it is; the
+     * length does, because a CPF has eleven and a CNPJ fourteen. Nothing is
+     * validated here — this only reads back what was stored.
+     */
+    public function defendantDocumentType(): ?CustomerType
+    {
+        return match (strlen((string) $this->defendant_document)) {
+            11 => CustomerType::Individual,
+            14 => CustomerType::Company,
+            default => null,
+        };
     }
 }
