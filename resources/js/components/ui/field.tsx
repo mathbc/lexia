@@ -16,12 +16,18 @@ interface ControlProps {
  * é um botão). O mesmo enxerto marca `aria-invalid` quando há erro, o que é o
  * que acende o anel vermelho nos componentes — a mensagem e o estilo não podem
  * discordar.
+ *
+ * `action` é o atalho que pertence ao campo, e não à tela: um "Novo cliente"
+ * ao lado do rótulo do select de cliente, por exemplo. Fica na linha do rótulo
+ * de propósito — dentro do controle atrapalharia o teclado do Radix, e abaixo
+ * dele se confundiria com a dica.
  */
 export function Field({
     label,
     error,
     hint,
     required,
+    action,
     className,
     children,
 }: {
@@ -29,6 +35,7 @@ export function Field({
     error?: string
     hint?: string
     required?: boolean
+    action?: ReactNode
     className?: string
     children: ReactNode
 }) {
@@ -44,6 +51,19 @@ export function Field({
           })
         : child
 
+    const labelNode = (
+        <Label htmlFor={id}>
+            <span>
+                {label}
+                {required && (
+                    <span aria-hidden className="ml-0.5 text-destructive">
+                        *
+                    </span>
+                )}
+            </span>
+        </Label>
+    )
+
     return (
         /* `content-start` e `grid-cols-1` seguram as duas deformações que um
            campo sofre por ser item de grade. Esticado para a altura da linha
@@ -58,17 +78,21 @@ export function Field({
            pelo campo dentro da grade do formulário. */
         <div data-slot="form-field" className={cn('grid min-w-0 grid-cols-1 content-start gap-2', className)}>
             {/* Rótulo e asterisco num só nó: o `gap-2` do Label existe para
-                separar ícones, e descolaria o obrigatório da palavra. */}
-            <Label htmlFor={id}>
-                <span>
-                    {label}
-                    {required && (
-                        <span aria-hidden className="ml-0.5 text-destructive">
-                            *
-                        </span>
-                    )}
-                </span>
-            </Label>
+                separar ícones, e descolaria o obrigatório da palavra.
+
+                Com uma ação, a faixa do rótulo vira uma linha com os dois
+                extremos; sem ela, continua sendo o Label puro, para que campo
+                nenhum mude de marcação por causa deste acréscimo. A altura
+                mínima é a do rótulo sozinho: assim um botão baixo ao lado não
+                desalinha este campo dos vizinhos na mesma grade. */}
+            {action ? (
+                <div className="flex min-h-5 items-center justify-between gap-2">
+                    {labelNode}
+                    {action}
+                </div>
+            ) : (
+                labelNode
+            )}
 
             {control}
 

@@ -92,6 +92,24 @@ final class ProceduralCatalogTest extends TestCase
     }
 
     #[Test]
+    public function every_class_carries_the_editorial_reading_the_picker_shows(): void
+    {
+        // Nossa redação, não a do CNJ: uma ressincronização que reescrevesse
+        // as 615 linhas a partir do web service apagaria isso em silêncio, e o
+        // card do seletor voltaria a ser nome e código.
+        $this->assertSame(0, ProceduralClass::query()->whereNull('description')->count());
+        $this->assertSame(0, ProceduralClass::query()->whereRaw('jsonb_array_length(typical_subjects) = 0')->count());
+
+        $class = ProceduralClass::query()->where('code', 94)->sole();
+
+        $this->assertStringContainsString('locação', mb_strtolower((string) $class->description));
+
+        // "Fiador" não aparece em nome nenhum do catálogo: é pela matéria que
+        // a busca do seletor chega nesta classe.
+        $this->assertContains('Responsabilidade do Fiador', $class->typical_subjects);
+    }
+
+    #[Test]
     public function the_hierarchy_of_a_class_is_kept_whole(): void
     {
         $class = ProceduralClass::query()->where('code', 7)->sole();

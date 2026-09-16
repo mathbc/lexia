@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { ProceduralClassDialog } from '@/components/procedural-class-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Field, Input, Select } from '@/components/ui/field'
 import { cn } from '@/lib/utils'
@@ -6,6 +7,9 @@ import type { JurisdictionTag, Option, ProceduralClassOption } from '@/types'
 
 /** Quantas competências cabem num card antes de virarem "+N". */
 const MAX_BADGES = 4
+
+/** Idem para as matérias típicas, que são de 4 a 7 por classe. */
+const MAX_SUBJECTS = 4
 
 interface Props {
     classes: ProceduralClassOption[]
@@ -24,6 +28,13 @@ interface Props {
 const matchesInstance = (tags: JurisdictionTag[], branch: string, degree: string): boolean =>
     tags.some((tag) => (!branch || tag.branch === branch) && (!degree || tag.degree === degree))
 
+/**
+ * Nome, código e matéria típica — não a descrição: são 200 caracteres de prosa
+ * por classe, e procurar dentro deles devolveria meia área a cada termo comum.
+ * A matéria é o que encontra a classe cujo nome não a soletra: "fiador" não
+ * aparece em nome nenhum do catálogo, mas é matéria típica do Despejo por
+ * Falta de Pagamento Cumulado Com Cobrança.
+ */
 const matchesSearch = (item: ProceduralClassOption, term: string): boolean => {
     const needle = term.trim().toLowerCase()
 
@@ -31,8 +42,16 @@ const matchesSearch = (item: ProceduralClassOption, term: string): boolean => {
         return true
     }
 
-    return item.name.toLowerCase().includes(needle) || String(item.code).includes(needle)
+    return (
+        item.name.toLowerCase().includes(needle) ||
+        String(item.code).includes(needle) ||
+        item.typical_subjects.some((subject) => subject.toLowerCase().includes(needle))
+    )
 }
+
+/** A lista inteira no title, já que o card mostra no máximo MAX_SUBJECTS. */
+const subjectsTitle = (item: ProceduralClassOption): string =>
+    `Matérias típicas: ${item.typical_subjects.join(', ')}`
 
 /**
  * O catálogo do CNJ reduzido à área escolhida, como um grid de cards.
@@ -41,6 +60,10 @@ const matchesSearch = (item: ProceduralClassOption, term: string): boolean => {
  * são enfeite: são o que torna a lista utilizável. As específicas da área vêm
  * antes das genéricas — a ordem já chega pronta do servidor, aqui só se desenha
  * a divisão.
+ *
+ * O card carrega a leitura editorial da classe — o que ela é e as matérias que
+ * se discutem nela —, porque escolher entre Despejo, Despejo por Falta de
+ * Pagamento e o cumulado com cobrança não se faz só pelo nome.
  */
 export function ProceduralClassPicker({ classes, branches, degrees, value, onSelect }: Props) {
     const [search, setSearch] = useState('')
@@ -71,7 +94,7 @@ export function ProceduralClassPicker({ classes, branches, degrees, value, onSel
     return (
         <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="Busca" hint="Nome ou código">
+                <Field label="Busca" hint="Nome, código ou matéria">
                     <Input
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
@@ -109,7 +132,7 @@ export function ProceduralClassPicker({ classes, branches, degrees, value, onSel
             <div
                 role="radiogroup"
                 aria-label="Classe processual"
-                className="max-h-[28rem] space-y-5 overflow-y-auto p-1"
+                className="max-h-[32rem] space-y-5 overflow-y-auto p-1"
             >
                 {groups.map((group) => (
                     <div key={group.scope} className="space-y-2">
@@ -152,40 +175,79 @@ function ClassCard({
     const shown = item.jurisdictions.slice(0, MAX_BADGES)
     const rest = item.jurisdictions.length - shown.length
 
+    const subjects = item.typical_subjects.slice(0, MAX_SUBJECTS)
+    const restSubjects = item.typical_subjects.length - subjects.length
+
     return (
-        <button
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            onClick={onSelect}
-            className={cn(
-                'flex h-full flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors',
-                'hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                selected && 'ring-2 ring-ring',
-            )}
-        >
-            <span className="text-sm leading-snug font-medium text-foreground">{item.name}</span>
+        // O olho fica fora do botão do card, sobreposto a ele: um botão dentro
+        // de outro é marcação inválida, e o clique na ficha acabaria
+        // escolhendo a classe sem querer.
+        <div className="relative h-full">
+            <button
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={onSelect}
+                className={cn(
+                    'flex h-full w-full flex-col gap-2 rounded-lg border bg-card p-4 text-left transition-colors',
+                    'hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                    selected && 'ring-2 ring-ring',
+                )}
+            >
+                {/* `pr-9` abre a canaleta do olho: sem ela um nome longo passa
+                    por baixo do botão. */}
+                <span className="pr-9 text-sm leading-snug font-medium text-foreground">{item.name}</span>
 
-            <span className="tabular text-xs text-muted-foreground">
-                Classe {item.code}
-                {item.abbreviation && ` · ${item.abbreviation}`}
-                {item.legal_basis && ` · ${item.legal_basis}`}
+                <span className="tabular text-xs text-muted-foreground">
+                    Classe {item.code}
+                    {item.abbreviation && ` · ${item.abbreviation}`}
+                    {item.legal_basis && ` · ${item.legal_basis}`}
+                </span>
+
+                {item.description && (
+                    // Duas linhas no card e o texto inteiro no title: a
+                    // descrição serve para decidir entre duas classes parecidas,
+                    // não para ser lida de ponta a ponta com 74 delas na tela.
+                    <span
+                        className="line-clamp-2 text-xs leading-relaxed text-muted-foreground"
+                        title={item.description}
+                    >
+                        {item.description}
+                    </span>
+                )}
+
+                {item.typical_subjects.length > 0 && (
+                    <span
+                        className="line-clamp-2 text-xs leading-relaxed text-muted-foreground"
+                        title={subjectsTitle(item)}
+                    >
+                        <span className="font-medium text-foreground">Matérias: </span>
+                        {subjects.join(' · ')}
+                        {restSubjects > 0 && ` · +${restSubjects}`}
+                    </span>
+                )}
+
+                <span className="mt-auto flex flex-wrap gap-1 pt-1">
+                    {item.is_filing_class && <Badge variant="secondary">Abre processo</Badge>}
+
+                    {shown.map((tag) => (
+                        // O rótulo cheio no title: "Estadual 1º" é o que cabe.
+                        <Badge key={tag.value} variant="muted" title={tag.label}>
+                            {tag.short_label}
+                        </Badge>
+                    ))}
+
+                    {rest > 0 && <Badge variant="outline">+{rest}</Badge>}
+
+                    {item.jurisdictions.length === 0 && (
+                        <Badge variant="outline">Instância não informada</Badge>
+                    )}
+                </span>
+            </button>
+
+            <span className="absolute top-2.5 right-2.5">
+                <ProceduralClassDialog item={item} />
             </span>
-
-            <span className="mt-auto flex flex-wrap gap-1 pt-1">
-                {item.is_filing_class && <Badge variant="secondary">Abre processo</Badge>}
-
-                {shown.map((tag) => (
-                    // O rótulo cheio no title: "Estadual 1º" é o que cabe.
-                    <Badge key={tag.value} variant="muted" title={tag.label}>
-                        {tag.short_label}
-                    </Badge>
-                ))}
-
-                {rest > 0 && <Badge variant="outline">+{rest}</Badge>}
-
-                {item.jurisdictions.length === 0 && <Badge variant="outline">Instância não informada</Badge>}
-            </span>
-        </button>
+        </div>
     )
 }

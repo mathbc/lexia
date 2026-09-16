@@ -23,6 +23,8 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
  * @property int $code
  * @property string $name
  * @property string $slug
+ * @property string|null $description
+ * @property list<string> $typical_subjects
  * @property int $root_code
  * @property list<string> $path
  * @property string|null $abbreviation
@@ -55,6 +57,7 @@ class ProceduralClass extends Model
         return [
             'code' => 'integer',
             'root_code' => 'integer',
+            'typical_subjects' => 'array',
             'path' => 'array',
             'jurisdictions' => 'array',
             'has_own_numbering' => 'boolean',

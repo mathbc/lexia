@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\LegalCases;
 
+use App\Domain\Customers\Actions\CreateCustomer;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\PracticeAreas\Models\PracticeArea;
@@ -92,6 +93,41 @@ final class ListLegalCasesTest extends TestCase
     }
 
     #[Test]
+    public function the_form_carries_what_the_client_dialog_needs(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+
+        $this->actingAs($owner)
+            ->get('/pecas/nova')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('customerTypes', 2)
+                ->has('states', 27)
+                ->where('can.create_customer', true)
+                // Nothing was just registered, so the select has nobody to
+                // pre-select.
+                ->where('createdCustomer', null));
+    }
+
+    #[Test]
+    public function a_client_registered_from_the_dialog_comes_back_chosen(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $customer = Customer::factory()->forAccount($account)->create(['name' => 'Joana Pereira']);
+
+        $this->actingAs($owner)
+            ->withSession([CreateCustomer::INLINE_FLASH_KEY => [
+                'value' => $customer->id,
+                'label' => $customer->displayName(),
+            ]])
+            ->get('/pecas/nova')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('createdCustomer.value', $customer->id)
+                ->where('createdCustomer.label', $customer->displayName()));
+    }
+
+    #[Test]
     public function choosing_an_area_loads_its_classes_with_the_specific_ones_first(): void
     {
         [, $owner] = $this->accountWithOwner();
@@ -105,6 +141,30 @@ final class ListLegalCasesTest extends TestCase
                 // own and none of the civil trunk.
                 ->has('proceduralClasses', 90)
                 ->where('proceduralClasses.0.scope', 'specific'));
+    }
+
+    #[Test]
+    public function each_class_reaches_the_picker_with_what_it_takes_to_choose_one(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+
+        $this->actingAs($owner)
+            ->get('/pecas/nova?area=imobiliario')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                // Nome e código não bastam para separar Despejo de Despejo por
+                // Falta de Pagamento: o card mostra a descrição e as matérias,
+                // e a busca do seletor alcança estas últimas.
+                //
+                // O resto da ficha viaja junto porque o diálogo do olho a
+                // mostra inteira sem uma segunda ida ao servidor.
+                ->has('proceduralClasses.0', fn ($class) => $class
+                    ->hasAll([
+                        'description', 'typical_subjects', 'nature', 'legal_basis',
+                        'active_party', 'passive_party', 'has_own_numbering',
+                        'is_cross_cutting', 'path',
+                    ])
+                    ->etc()));
     }
 
     #[Test]

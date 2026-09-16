@@ -31,6 +31,12 @@ Consequência: a relação área ↔ classe é **muitos-para-muitos**. O código
 
 ## Campos que merecem explicação
 
+- **`description`** e **`typical_subjects`** — redação **nossa**, não do CNJ. O glossário
+  do SGT é transcrição do texto legal e não diz ao advogado quando a classe é a certa;
+  aqui está o que ela é, quando cabe e para que serve, mais as matérias tipicamente
+  discutidas nela. Não são códigos da Tabela de Assuntos, e uma ressincronização com o
+  CNJ não os traz de volta: preserve-os ao regerar os JSON. Revise antes de expor como
+  conteúdo jurídico ao usuário final.
 - **`scope`** (no vínculo) — `specific`, classe própria daquela área, ou `generic`,
   classe do tronco cível que serve qualquer área cível. Ordene as específicas primeiro:
   é a diferença entre um select usável e um com 120 itens.
@@ -49,4 +55,5 @@ Consequência: a relação área ↔ classe é **muitos-para-muitos**. O código
 O CNJ altera a TPU com frequência. `getDataUltimaVersao()` no web service devolve a data
 da última versão — compare com a do topo deste arquivo e só reprocesse quando mudar.
 Regerar os dois JSON e acrescentar uma migration que chama a mesma rotina de carga, que é
-idempotente (upsert por `code` e por `slug`).
+idempotente (upsert por `code` e por `slug`). `description` e `typical_subjects` são
+editoriais: reaproveite-os por `code` em vez de esperá-los do web service.

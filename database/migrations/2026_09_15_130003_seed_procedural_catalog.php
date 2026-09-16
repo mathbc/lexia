@@ -23,7 +23,7 @@ return new class extends Migration
 {
     /**
      * Postgres caps a statement at 65535 bound parameters and the class rows
-     * carry 18 columns each, so this leaves a wide margin.
+     * carry 20 columns each, so this leaves a wide margin.
      */
     private const int CHUNK = 500;
 
@@ -53,6 +53,8 @@ return new class extends Migration
                 'code' => (int) $class['code'],
                 'name' => (string) $class['name'],
                 'slug' => (string) $class['slug'],
+                'description' => $this->nullableString($class['description']),
+                'typical_subjects' => $this->toJson($class['typical_subjects']),
                 'root_code' => (int) $class['root_code'],
                 'path' => $this->toJson($class['path']),
                 'abbreviation' => $this->nullableString($class['abbreviation']),
@@ -75,10 +77,11 @@ return new class extends Migration
         // the id it already has, so the pleadings pointing at it still resolve.
         foreach (array_chunk($rows, self::CHUNK) as $chunk) {
             DB::table('procedural_classes')->upsert($chunk, ['code'], [
-                'name', 'slug', 'root_code', 'path', 'abbreviation', 'nature',
-                'legal_norm', 'legal_article', 'active_party', 'passive_party',
-                'has_own_numbering', 'is_filing_class', 'is_cross_cutting',
-                'jurisdictions', 'updated_at',
+                'name', 'slug', 'description', 'typical_subjects', 'root_code',
+                'path', 'abbreviation', 'nature', 'legal_norm', 'legal_article',
+                'active_party', 'passive_party', 'has_own_numbering',
+                'is_filing_class', 'is_cross_cutting', 'jurisdictions',
+                'updated_at',
             ]);
         }
     }

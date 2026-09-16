@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace App\Domain\LegalCases\Actions;
 
+use App\Domain\Accounts\Enums\BrazilianState;
+use App\Domain\Customers\Actions\CreateCustomer;
+use App\Domain\Customers\Enums\CustomerType;
+use App\Domain\Customers\Models\Customer;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalCases\Support\LegalCaseOptions;
 use App\Domain\ProceduralClasses\Enums\JurisdictionDegree;
@@ -26,6 +30,12 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * `proceduralClasses` answers the `area` query parameter, so the initial
  * payload carries none of the 615 classes and a partial reload fetches the
  * chosen area's list.
+ *
+ * The client select also registers one: `customerTypes` and `states` feed the
+ * dialog it opens, and `createdCustomer` is how the client that was just saved
+ * finds its way back — CreateCustomer flashes it and redirects here, so the
+ * select can show it chosen without a second round trip. It is read here, and
+ * not shared with every page, because this is the only screen that asks.
  */
 final class ShowLegalCaseForm
 {
@@ -49,6 +59,12 @@ final class ShowLegalCaseForm
             'selectedArea' => $area,
             'branches' => JusticeBranch::options(),
             'degrees' => JurisdictionDegree::options(),
+            'customerTypes' => CustomerType::options(),
+            'states' => BrazilianState::options(),
+            'can' => [
+                'create_customer' => $request->user()->can('create', Customer::class),
+            ],
+            'createdCustomer' => $request->session()->get(CreateCustomer::INLINE_FLASH_KEY),
         ]);
     }
 }

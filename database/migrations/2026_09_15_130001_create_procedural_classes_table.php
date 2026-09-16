@@ -34,6 +34,15 @@ return new class extends Migration
             $table->string('name');
             $table->string('slug');
 
+            // Editorial, not the CNJ's: the SGT glossary is a transcription of
+            // the statute, and nothing in it tells a lawyer when the class is
+            // the right one. What is written here is our own plain reading of
+            // each class — what it is, when it lies and what it is for — and
+            // the matters typically litigated under it, so the picker can say
+            // more than a name and a code.
+            $table->text('description')->nullable();
+            $table->jsonb('typical_subjects');
+
             // One of the ten roots of the CNJ classes table, and the full path
             // down to this node — kept denormalised because the intermediate
             // grouping nodes are not imported: they are not selectable.

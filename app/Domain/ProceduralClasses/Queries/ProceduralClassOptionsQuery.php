@@ -18,6 +18,16 @@ use App\Domain\ProceduralClasses\Models\ProceduralClass;
  * The competences arrive resolved into `{value, label, short_label, branch,
  * degree}` so the branch × degree map stays in PHP and the picker only draws
  * and filters what it is handed.
+ *
+ * `description` and `typical_subjects` are our own editorial text, not the
+ * CNJ's: they are what tells a lawyer whether the class is the right one, so
+ * the card says more than a name and a code — and the search reaches the
+ * matters, which is how a class whose name never spells them out is found.
+ *
+ * The card shows a cut of all this; the whole row travels because the dialog
+ * behind the card's eye shows the rest — nature, poles, hierarchy — without a
+ * second round trip. It is at most 141 rows, the largest area, and the picker
+ * already holds them all in memory to filter.
  */
 final class ProceduralClassOptionsQuery
 {
@@ -55,8 +65,16 @@ final class ProceduralClassOptionsQuery
             'code' => $class->code,
             'name' => $class->name,
             'abbreviation' => $class->abbreviation,
+            'description' => $class->description,
+            'typical_subjects' => $class->typical_subjects,
             'legal_basis' => $class->legalBasis(),
+            'nature' => $class->nature,
+            'active_party' => $class->active_party,
+            'passive_party' => $class->passive_party,
+            'has_own_numbering' => $class->has_own_numbering,
             'is_filing_class' => $class->is_filing_class,
+            'is_cross_cutting' => $class->is_cross_cutting,
+            'path' => $class->path,
             'scope' => (string) $class->pivot?->getAttribute('scope'),
             'jurisdictions' => $this->tags($class),
         ];

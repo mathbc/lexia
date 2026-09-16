@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Customers;
 
+use App\Domain\Customers\Actions\CreateCustomer;
 use App\Domain\Customers\Enums\CustomerType;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\Shared\Tenancy\TenantContext;
@@ -63,6 +64,45 @@ final class ManageCustomersTest extends TestCase
         $this->assertNull($customer->cnpj);
         $this->assertSame('11988887777', $customer->phone);
         $this->assertSame('01310100', $customer->postal_code);
+    }
+
+    #[Test]
+    public function registering_a_client_from_inside_another_screen_returns_to_it(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        $this->actingAs($owner)
+            ->from('/pecas/nova?area=trabalhista')
+            ->post('/clientes', $this->payload(['inline' => true]))
+            ->assertSessionHasNoErrors()
+            // Back to the pleading form, not off to the new client: the draft
+            // on that screen has to survive the detour.
+            ->assertRedirect('/pecas/nova?area=trabalhista');
+
+        $customer = Customer::acrossAllAccounts()->where('email', 'joana@cliente.test')->sole();
+
+        // Same registration either way — only the way back differs.
+        $this->assertSame($account->id, $customer->account_id);
+
+        $this->assertSame(
+            ['value' => $customer->id, 'label' => 'Joana Pereira'],
+            session(CreateCustomer::INLINE_FLASH_KEY),
+        );
+    }
+
+    #[Test]
+    public function an_inline_registration_is_validated_like_any_other(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+
+        $this->actingAs($owner)
+            ->from('/pecas/nova')
+            ->post('/clientes', $this->payload(['inline' => true, 'cpf' => '111.111.111-11']))
+            ->assertSessionHasErrors('cpf');
+
+        // Nothing was written, so there is nothing to hand back to the select.
+        $this->assertSame(0, Customer::acrossAllAccounts()->count());
+        $this->assertNull(session(CreateCustomer::INLINE_FLASH_KEY));
     }
 
     #[Test]

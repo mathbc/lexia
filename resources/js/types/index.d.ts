@@ -177,8 +177,19 @@ export interface ProceduralClassOption {
     code: number
     name: string
     abbreviation: string | null
+    /** Leitura nossa da classe: o que é e quando cabe. Não vem do CNJ. */
+    description: string | null
+    /** As matérias tipicamente discutidas nela — também editoriais. */
+    typical_subjects: string[]
     legal_basis: string | null
+    nature: string | null
+    active_party: string | null
+    passive_party: string | null
+    has_own_numbering: boolean
     is_filing_class: boolean
+    is_cross_cutting: boolean
+    /** O caminho na árvore do CNJ, da raiz até a própria classe. */
+    path: string[]
     /** Own to the area, or borrowed from the civil trunk. */
     scope: 'specific' | 'generic'
     jurisdictions: JurisdictionTag[]

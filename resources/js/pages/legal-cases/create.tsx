@@ -1,6 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react'
 import { useState } from 'react'
 import { AppLayout } from '@/layouts/app-layout'
+import { CustomerCreateDialog } from '@/components/customer-create-dialog'
 import { LegalCaseSteps, type LegalCaseStep } from '@/components/legal-case-steps'
 import { PracticeAreaPicker } from '@/components/practice-area-picker'
 import { ProceduralClassPicker } from '@/components/procedural-class-picker'
@@ -23,6 +24,10 @@ interface Props {
     selectedArea: string
     branches: Option[]
     degrees: Option[]
+    /** Para o cadastro de cliente que acontece aqui mesmo, sem trocar de tela. */
+    customerTypes: Option[]
+    states: Option[]
+    can: { create_customer: boolean }
 }
 
 export default function LegalCaseCreate({
@@ -32,6 +37,9 @@ export default function LegalCaseCreate({
     selectedArea,
     branches,
     degrees,
+    customerTypes,
+    states,
+    can,
 }: Props) {
     const [step, setStep] = useState(0)
     const [customerId, setCustomerId] = useState('')
@@ -78,7 +86,25 @@ export default function LegalCaseCreate({
                             </CardHeader>
 
                             <CardContent className="space-y-8">
-                                <Field label="Cliente" required className="max-w-md">
+                                <Field
+                                    label="Cliente"
+                                    required
+                                    className="max-w-md"
+                                    hint={
+                                        customers.length === 0
+                                            ? 'Nenhum cliente cadastrado ainda.'
+                                            : undefined
+                                    }
+                                    action={
+                                        can.create_customer && (
+                                            <CustomerCreateDialog
+                                                customerTypes={customerTypes}
+                                                states={states}
+                                                onCreated={(customer) => setCustomerId(customer.value)}
+                                            />
+                                        )
+                                    }
+                                >
                                     <Select
                                         value={customerId}
                                         onValueChange={setCustomerId}
