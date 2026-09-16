@@ -11,7 +11,20 @@
         <testsuite name="Feature">
             <directory>tests/Feature</directory>
         </testsuite>
+        <!-- Real Ollama inference, and slow. The suite has to be declared
+             for PHPUnit to scan the directory at all, but the group exclusion
+             below keeps it out of every run that does not ask for it by group
+             (naming the suite alone still finds nothing). Use `composer
+             test:agents`. -->
+        <testsuite name="Agents">
+            <directory>tests/Agents</directory>
+        </testsuite>
     </testsuites>
+    <groups>
+        <exclude>
+            <group>agents</group>
+        </exclude>
+    </groups>
     <source>
         <include>
             <directory>app</directory>

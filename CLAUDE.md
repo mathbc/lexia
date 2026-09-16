@@ -157,11 +157,48 @@ sessão. O `/register` do Fortify está desligado: o cadastro público é
 - `laravel/ai` exige PHP ^8.3; daí o `^8.4` no composer.
 - Busca vetorial é **nativa do core do Laravel 12**
   (`$table->vector()`, `whereVectorSimilarTo()`). Não existe
-  `pgvector/pgvector-php`; não instale nada para isso.
+  `pgvector/pgvector-php`; não instale nada para isso. O cast `AsVector` que a
+  documentação do SDK mostra ainda **não existe** no framework 12.69.2.
+- A doc oficial do Laravel AI mostra o Ollama como `driver => openai-compatible`;
+  o pacote v0.11.2 tem `OllamaProvider` nativo (`driver => ollama`), que é o que
+  este projeto usa — ele fala `/api/chat` e `/api/embed` de verdade.
+- **Nunca mande `think: false` para o `gpt-oss:20b`**: ele responde com conteúdo
+  vazio. O padrão (thinking ligado) já entrega JSON limpo, porque o Ollama separa
+  o raciocínio em `message.thinking`.
 - `sebastian/complexity` está vendorizado mas **quebra em enums** — por isso a
   skill de complexidade usa `nikic/php-parser` direto.
 
+## Os agentes
+
+`laravel/ai` falando com um Ollama local: `gpt-oss:20b` para texto,
+`nomic-embed-text` (768 dimensões) para embeddings. `config/ai.php` declara um
+provider só, de propósito — a narrativa de um caso não sai da infraestrutura do
+escritório para ser processada.
+
+O conhecimento vive em `app/Rag/knowledge/` como markdown e é carregado inteiro
+pelo `KnowledgeBase`, não por recuperação top-k: para escolher entre 24 opções
+que cabem no prompt, um corte por similaridade só conseguiria remover a opção
+certa. A busca vetorial fica reservada para Jurisprudência, onde o corpus não
+cabe. Os dois READMEs em `app/Ai` e `app/Rag` detalham o resto.
+
+O primeiro agente é o `PracticeAreaClassificationAgent`: recebe os fatos, devolve
+a área de atuação e o porquê. As 24 áreas chegam **injetadas** nas instruções e
+também como `enum()` no `schema()` — o Ollama converte isso em gramática, então
+uma área inventada não é algo que o modelo consiga emitir. Quem chama é
+`ClassifyPracticeArea`, uma Action sem `asController()` enquanto nenhuma rota
+apontar para ela.
+
+Testes de agente ficam em `tests/Agents`, no grupo `agents`, **fora** do
+`php artisan test` padrão porque exigem o Ollama de pé e gastam segundos de
+inferência. O grupo é o que os habilita — `--testsuite=Agents` sozinho não
+encontra nada, porque a exclusão do grupo continua valendo:
+
+```bash
+composer test:agents
+```
+
 ## Ainda não implementado
 
-`app/Ai/` e `app/Rag/` estão vazios, reservados para o módulo de
-Jurisprudência (Ollama + `nomic-embed-text`, 768 dimensões).
+O módulo de Jurisprudência: ingestão, chunking e busca vetorial sobre o corpus.
+A integração de embeddings já está pronta e verificada; falta a coluna vetorial,
+o pipeline de ingestão e o `SimilaritySearch` no agente.

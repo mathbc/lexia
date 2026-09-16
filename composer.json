@@ -8,6 +8,7 @@
     "require": {
         "php": "^8.4",
         "inertiajs/inertia-laravel": "^3.3",
+        "laravel/ai": "^0.11.2",
         "laravel/fortify": "^1.39",
         "laravel/framework": "^12.0",
         "laravel/tinker": "^2.10.1",
@@ -51,6 +52,10 @@
         "test": [
             "@php artisan config:clear --ansi",
             "@php artisan test"
+        ],
+        "test:agents": [
+            "@php artisan config:clear --ansi",
+            "@php artisan test --group=agents"
         ],
         "analyse": [
             "@php vendor/bin/phpstan analyse --memory-limit=512M"

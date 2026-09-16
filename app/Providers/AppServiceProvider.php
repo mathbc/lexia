@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Domain\Shared\Tenancy\TenantContext;
+use App\Rag\KnowledgeBase;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Date;
@@ -16,6 +17,10 @@ class AppServiceProvider extends ServiceProvider
     {
         // One tenant per request/job. The scopes read it; middleware sets it.
         $this->app->singleton(TenantContext::class);
+
+        // The agents' knowledge documents are read from disk once per
+        // process, not once per prompt.
+        $this->app->singleton(KnowledgeBase::class);
     }
 
     public function boot(): void
