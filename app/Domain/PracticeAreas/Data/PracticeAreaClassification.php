@@ -31,6 +31,12 @@ final readonly class PracticeAreaClassification
     {
         return [
             'practice_area' => [
+                // The id is here to be written to `legal_cases.practice_area_id`
+                // and nothing else. It is generated when the catalogue migration
+                // loads, so it differs between databases: never match on it, and
+                // never write one into a fixture or a seed — the slug is the
+                // identifier that survives a resync.
+                'id' => $this->practiceArea->id,
                 'slug' => $this->practiceArea->slug,
                 'label' => $this->practiceArea->label,
             ],

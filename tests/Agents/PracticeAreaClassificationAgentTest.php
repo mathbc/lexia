@@ -34,10 +34,11 @@ final class PracticeAreaClassificationAgentTest extends TestCase
     public function it_classifies_a_narrative_of_facts_into_a_practice_area(): void
     {
         $facts = <<<'TXT'
-        Trabalhei quase três anos como motorista numa transportadora daqui da cidade e
-        nunca assinaram minha carteira, apesar de eu bater ponto todo dia e cumprir a
-        escala que o encarregado passava. Em março me mandaram embora de uma hora para
-        outra, sem aviso prévio, e até hoje não recebi as verbas rescisórias nem o FGTS.
+        No dia 12/09/2026, por volta das 21h, eu estava em casa assistindo TV, quando de repente ouvi
+        um barulho de batida de carro muito forte, que parecia ser dentro da minha àrea residencial. Ao sair para verificar,
+        notei que um homem havia batido no meu portão, causando a quebra do motor eletrico e o entortamento do portão de alumínio.
+        Ao tentar conversar com o homem, ele se recusou a se identificar, agiu de forma agressiva e fugiu. Notei que ele estava com sinais de embriaguez.
+        Por sorte, consegui capturar a placa do carro do homem, que correspondia na numeração YTD123, e era do modelo Chevrolet Onix.
         TXT;
 
         $classification = ClassifyPracticeArea::run($facts);
@@ -54,5 +55,12 @@ final class PracticeAreaClassificationAgentTest extends TestCase
         // resolves to a real row and comes with a reason.
         $this->assertTrue($classification->practiceArea->exists);
         $this->assertNotSame('', $classification->justification);
+
+        // The id is what a caller writes to `legal_cases.practice_area_id`, so
+        // it has to be the real row's — not an empty key in the payload.
+        $this->assertSame(
+            $classification->practiceArea->id,
+            $classification->toArray()['practice_area']['id'],
+        );
     }
 }
