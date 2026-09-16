@@ -90,6 +90,30 @@ final class ManageCustomersTest extends TestCase
         );
     }
 
+    /**
+     * The assisted screen opens the same dialog, and `back()` is generic — but
+     * the first test of this path was written against one literal URL, so the
+     * second caller earns its own.
+     */
+    #[Test]
+    public function the_assisted_screen_is_returned_to_just_the_same(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+
+        $this->actingAs($owner)
+            ->from('/pecas/nova/inteligente')
+            ->post('/clientes', $this->payload(['inline' => true]))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect('/pecas/nova/inteligente');
+
+        $customer = Customer::acrossAllAccounts()->where('email', 'joana@cliente.test')->sole();
+
+        $this->assertSame(
+            ['value' => $customer->id, 'label' => 'Joana Pereira'],
+            session(CreateCustomer::INLINE_FLASH_KEY),
+        );
+    }
+
     #[Test]
     public function an_inline_registration_is_validated_like_any_other(): void
     {

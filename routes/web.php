@@ -21,6 +21,7 @@ use App\Domain\LegalCases\Actions\AdvanceLegalCaseStep;
 use App\Domain\LegalCases\Actions\CreateLegalCase;
 use App\Domain\LegalCases\Actions\ListLegalCases;
 use App\Domain\LegalCases\Actions\SaveLegalCaseRequirements;
+use App\Domain\LegalCases\Actions\ShowAssistedLegalCaseForm;
 use App\Domain\LegalCases\Actions\ShowLegalCaseForm;
 use App\Domain\LegalCases\Actions\UpdateLegalCaseBasics;
 use App\Domain\LegalCases\Actions\UpdateLegalCaseDefendant;
@@ -87,6 +88,12 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     // porque não há tela de peça para a equipe LexIA.
     Route::get('/pecas', ListLegalCases::class)->name('legal-cases.index');
     Route::get('/pecas/nova', ShowLegalCaseForm::class)->name('legal-cases.create');
+
+    // O outro caminho da mesma escolha: só o cliente e os fatos, e são os
+    // agentes que deduzem o enquadramento antes de devolver o advogado ao
+    // assistente acima, já preenchido.
+    Route::get('/pecas/nova/inteligente', ShowAssistedLegalCaseForm::class)->name('legal-cases.create-assisted');
+
     Route::post('/pecas', CreateLegalCase::class)->name('legal-cases.store');
 
     // O assistente salva etapa a etapa, e cada etapa é um caso de uso com rota

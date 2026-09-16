@@ -1,7 +1,7 @@
 import { Head, Link, router } from "@inertiajs/react";
-import { Plus } from "lucide-react";
 import { useState } from "react";
 import { AppLayout } from "@/layouts/app-layout";
+import { LegalCaseModeDialog } from "@/components/legal-case-mode-dialog";
 import { Pagination } from "@/components/pagination";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -76,16 +76,7 @@ export default function LegalCasesIndex({
     return (
         <AppLayout
             title="Peças Jurídicas"
-            actions={
-                can.create && (
-                    <Button asChild>
-                        <Link href="/pecas/nova">
-                            <Plus />
-                            Nova peça
-                        </Link>
-                    </Button>
-                )
-            }
+            actions={can.create && <LegalCaseModeDialog />}
             activeFilters={activeFilters}
             filters={
                 <>

@@ -51,8 +51,13 @@ export function Field({
           })
         : child
 
+    /* `min-h-5` porque o `Label` é `leading-none`: sozinho ele mede 14px, e a
+       faixa com uma ação mede os 20px do botão. Sem o piso, dois campos lado a
+       lado na mesma grade nasceriam com o controle em alturas diferentes — o
+       que tem "Novo cliente" 6px abaixo do vizinho. Com ele, a faixa do rótulo
+       tem a mesma altura com ou sem ação. */
     const labelNode = (
-        <Label htmlFor={id}>
+        <Label htmlFor={id} className="min-h-5">
             <span>
                 {label}
                 {required && (
