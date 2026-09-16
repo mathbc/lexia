@@ -135,3 +135,24 @@ export const formatDate = (value: string | null): string => {
 
     return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('pt-BR')
 }
+
+/**
+ * O tamanho de um arquivo como um humano lê.
+ *
+ * Unidade binária, que é a que o navegador reporta em `File.size`, e uma casa
+ * decimal a partir de KB — "1,4 MB" informa, "1,437 MB" só ocupa a coluna.
+ */
+export const formatFileSize = (bytes: number): string => {
+    const units = ['B', 'KB', 'MB', 'GB']
+    let value = bytes
+    let unit = 0
+
+    while (value >= 1024 && unit < units.length - 1) {
+        value /= 1024
+        unit += 1
+    }
+
+    const decimals = unit === 0 ? 0 : 1
+
+    return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: decimals }).format(value)} ${units[unit]}`
+}

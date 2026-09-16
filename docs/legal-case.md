@@ -41,8 +41,8 @@ Ver [glossary.md](glossary.md) para cada um desses termos.
 
 ## Como o LexIA modela
 
-O que existe hoje é o esqueleto: a quem pertence, para quem é, e onde fica na
-taxonomia processual.
+O que existe hoje: a quem pertence, para quem é, onde fica na taxonomia
+processual, contra quem é e o que aconteceu. Os anexos ficam em `documents`.
 
 | Coluna | Tipo | Papel |
 |---|---|---|
@@ -51,6 +51,8 @@ taxonomia processual.
 | `customer_id` | uuid FK → `customers` | o cliente atendido; `cascadeOnDelete` |
 | `practice_area_id` | uuid FK → `practice_areas` | área escolhida; `restrictOnDelete` |
 | `procedural_class_id` | uuid FK → `procedural_classes` | classe escolhida; `restrictOnDelete` |
+| `defendant_*` | 12 colunas, todas nulas | a parte contrária, descrita inline |
+| `facts` | longtext, nulo | a narrativa do que aconteceu |
 | `created_at` / `updated_at` / `deleted_at` | timestamp | `SoftDeletes` |
 
 Índices: `(account_id, customer_id)` e `(account_id, practice_area_id)` — toda
@@ -77,7 +79,11 @@ $case->account;          // BelongsTo Account
 $case->customer;         // BelongsTo Customer
 $case->practiceArea;     // BelongsTo PracticeArea
 $case->proceduralClass;  // BelongsTo ProceduralClass
+$case->documents;        // HasMany Document
 ```
+
+Os documentos são linha própria, ao contrário do réu: são muitos, cada um com
+sua descrição, e entram e saem um a um. Ver [document.md](document.md).
 
 ## Invariantes
 
@@ -95,14 +101,12 @@ $case->proceduralClass;  // BelongsTo ProceduralClass
 
 ## O que ainda não existe
 
-Nenhuma Action, rota, Policy, tela ou coluna de conteúdo. O que o produto
-precisa acrescentar, na ordem em que a peça se escreve:
+Já existem a Policy, a listagem (`GET /pecas`) e o formulário
+(`GET /pecas/nova`), e o schema já guarda o réu, os fatos e os documentos.
+**Nenhuma Action escreve uma peça**: o formulário segura tudo em estado local no
+navegador. O que o produto precisa acrescentar, na ordem em que a peça se
+escreve:
 
-- **a parte contrária (réu)** — hoje só o cliente está modelado, e nem sequer
-  está registrado em que polo ele está. Um cliente pode ser autor numa peça e
-  réu em outra (defesa); a modelagem futura precisa dos dois lados, e o réu
-  nem sempre é um `Customer` (é o adversário, não um cliente do escritório);
-- **os fatos**, em texto;
 - **as tutelas e os pedidos**;
 - **o tipo de peça** (inicial, contestação, recurso…), que hoje está implícito
   na classe escolhida;

@@ -8,6 +8,7 @@ use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Accounts\Models\Account;
 use App\Domain\Customers\Enums\CustomerType;
 use App\Domain\Customers\Models\Customer;
+use App\Domain\Documents\Models\Document;
 use App\Domain\LegalCases\Policies\LegalCasePolicy;
 use App\Domain\PracticeAreas\Models\PracticeArea;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
@@ -16,10 +17,12 @@ use Carbon\CarbonImmutable;
 use Database\Factories\LegalCaseFactory;
 use Illuminate\Database\Eloquent\Attributes\UseFactory;
 use Illuminate\Database\Eloquent\Attributes\UsePolicy;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -41,6 +44,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * `facts` is the first column the lawyer writes rather than selects: the
  * narrative the pleading is built on, held as plain text and nullable like the
  * rest, because the form fills it one step at a time.
+ *
+ * The documents that instruct it are rows of their own, unlike the defendant:
+ * there are many of them, each described separately, and they are added and
+ * removed one at a time.
  *
  * @property string $id
  * @property string $account_id
@@ -67,6 +74,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property-read Customer $customer
  * @property-read PracticeArea $practiceArea
  * @property-read ProceduralClass $proceduralClass
+ * @property-read Collection<int, Document> $documents
  */
 #[UsePolicy(LegalCasePolicy::class)]
 #[UseFactory(LegalCaseFactory::class)]
@@ -114,6 +122,16 @@ class LegalCase extends Model
     public function proceduralClass(): BelongsTo
     {
         return $this->belongsTo(ProceduralClass::class);
+    }
+
+    /**
+     * The files that instruct the pleading.
+     *
+     * @return HasMany<Document, $this>
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class);
     }
 
     /**

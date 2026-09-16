@@ -28,8 +28,14 @@ interface Props {
  */
 export function LegalCaseSteps({ steps, current, reachable, onSelect }: Props) {
     return (
-        <nav aria-label="Etapas da peça">
-            <ol className="flex gap-1 lg:flex-col lg:gap-0">
+        // `min-w-0` porque a nav é item de grade, e item de grade não encolhe
+        // abaixo do próprio conteúdo sem isso: a trilha horizontal empurrava a
+        // coluna inteira para fora da tela no telefone.
+        <nav aria-label="Etapas da peça" className="min-w-0">
+            {/* Abaixo de `lg` a trilha rola sozinha em vez de espremer os
+                rótulos: com cinco etapas, repartir 400px deixaria cada uma com
+                um par de letras. */}
+            <ol className="flex gap-1 overflow-x-auto lg:flex-col lg:gap-0 lg:overflow-x-visible">
                 {steps.map((step, index) => {
                     const done = index < current
                     const active = index === current
@@ -37,7 +43,7 @@ export function LegalCaseSteps({ steps, current, reachable, onSelect }: Props) {
                     const last = index === steps.length - 1
 
                     return (
-                        <li key={step.label} className="flex min-w-0 flex-1 lg:flex-none">
+                        <li key={step.label} className="flex min-w-0 shrink-0 lg:flex-none">
                             <button
                                 type="button"
                                 disabled={!enabled}

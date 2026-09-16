@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { AppLayout } from '@/layouts/app-layout'
 import { CustomerCreateDialog } from '@/components/customer-create-dialog'
 import { DefendantFormFields, type DefendantFormValues } from '@/components/defendant-form-fields'
+import { DocumentUploadFields } from '@/components/document-upload-fields'
 import { FactsFormFields } from '@/components/facts-form-fields'
 import { LegalCaseSteps, type LegalCaseStep } from '@/components/legal-case-steps'
 import { PracticeAreaPicker } from '@/components/practice-area-picker'
@@ -10,12 +11,14 @@ import { ProceduralClassPicker } from '@/components/procedural-class-picker'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, Select } from '@/components/ui/field'
+import { toDocumentDrafts, type DocumentDraft } from '@/lib/documents'
 import type { Option, ProceduralClassOption } from '@/types'
 
 const STEPS: LegalCaseStep[] = [
     { label: 'Dados básicos', description: 'Cliente, área de atuação e classe processual' },
     { label: 'Dados do réu', description: 'Quem é a parte contrária e como localizá-la' },
     { label: 'Descrição dos fatos', description: 'O relato que sustenta os fundamentos e os pedidos' },
+    { label: 'Documentos', description: 'Os anexos que instruem a peça' },
     { label: 'Revisão forense', description: 'Conferência final antes do protocolo' },
 ]
 
@@ -72,6 +75,11 @@ export default function LegalCaseCreate({
     // Pelo mesmo motivo do réu: os fatos moram aqui até haver uma Action que
     // os receba.
     const [facts, setFacts] = useState('')
+
+    // E o mesmo vale para os documentos, com um agravante: o rascunho carrega o
+    // próprio `File`, que não sobrevive a um reload. Enquanto não houver para
+    // onde enviá-lo, sair da tela é recomeçar a seleção.
+    const [documents, setDocuments] = useState<DocumentDraft[]>([])
 
     /**
      * A área vive na URL, não em estado local: é ela que diz ao servidor quais
@@ -201,7 +209,26 @@ export default function LegalCaseCreate({
                         <FactsFormFields value={facts} onChange={setFacts} />
                     )}
 
-                    {step > 2 && (
+                    {step === 3 && (
+                        <DocumentUploadFields
+                            documents={documents}
+                            onAdd={(files) =>
+                                setDocuments((current) => [...current, ...toDocumentDrafts(files, current)])
+                            }
+                            onDescribe={(id, description) =>
+                                setDocuments((current) =>
+                                    current.map((document) =>
+                                        document.id === id ? { ...document, description } : document,
+                                    ),
+                                )
+                            }
+                            onRemove={(id) =>
+                                setDocuments((current) => current.filter((document) => document.id !== id))
+                            }
+                        />
+                    )}
+
+                    {step > 3 && (
                         <Card>
                             <CardHeader>
                                 <CardTitle>{STEPS[step]?.label}</CardTitle>

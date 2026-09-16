@@ -159,6 +159,25 @@ export interface LegalCase {
 }
 
 /**
+ * A file that instructs a pleading, as the Document model serialises.
+ *
+ * `name` is the original filename, extension included, and `extension` repeats
+ * that suffix so a listing never has to take the string apart. The draft the
+ * form works with is another thing entirely — it carries a browser `File` and
+ * lives in `@/lib/documents`.
+ */
+export interface Document {
+    id: string
+    legal_case_id: string
+    name: string
+    description: string | null
+    extension: string
+    size: number
+    created_at: string
+    updated_at: string
+}
+
+/**
  * One CNJ competence, resolved server-side by Jurisdiction::toTag(). `branch`
  * and `degree` are what the class picker filters on; the raw `value` is never
  * shown to anyone.

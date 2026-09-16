@@ -8,6 +8,7 @@ continua sendo a fonte da verdade sobre comportamento.
 | Documento | Entidade | Natureza do dado |
 |---|---|---|
 | [legal-case.md](legal-case.md) | `LegalCase` | transacional, por conta |
+| [document.md](document.md) | `Document` | transacional, por conta |
 | [practice-area.md](practice-area.md) | `PracticeArea` | referência, global |
 | [procedural-class.md](procedural-class.md) | `ProceduralClass` | referência, global |
 | [glossary.md](glossary.md) | — | vocabulário jurídico brasileiro |
@@ -19,7 +20,8 @@ Account (a conta/escritório — fronteira do multitenancy)
  └── Customer (o cliente do escritório)
       └── LegalCase (a peça jurídica sendo redigida)
            ├── practice_area_id ──> PracticeArea     (área do direito, taxonomia nossa)
-           └── procedural_class_id ─> ProceduralClass (classe do CNJ, taxonomia oficial)
+           ├── procedural_class_id ─> ProceduralClass (classe do CNJ, taxonomia oficial)
+           └──< Document (os arquivos que instruem a peça)
 
 PracticeArea ──< practice_area_procedural_class >── ProceduralClass
                  pivot com scope: 'specific' | 'generic'
@@ -42,11 +44,15 @@ PracticeArea ──< practice_area_procedural_class >── ProceduralClass
 
 ## Estado da implementação
 
-Em 15/09/2026 existem os três models, as migrations, o catálogo carregado e os
-testes. **Não existem ainda** Actions, rotas, Policy nem telas para `LegalCase`
-— os campos que o advogado preenche (réu, fatos, tutelas, pedidos) ainda não
-estão no schema. Cada documento marca explicitamente o que é hoje e o que é
-intenção.
+Em 16/09/2026 existem os models, as migrations, o catálogo carregado e os
+testes. A peça tem listagem (`GET /pecas`) e o formulário de cadastro
+(`GET /pecas/nova`), com quatro etapas desenhadas — dados básicos, réu, fatos e
+documentos — e a revisão forense ainda como placeholder.
+
+**Nada do formulário é gravado.** Não existe `CreateLegalCase`: o réu, os fatos
+e os arquivos moram em estado local no navegador até a Action que os receba, e o
+`Document` não tem coluna apontando para bytes armazenados. Cada documento marca
+explicitamente o que é hoje e o que é intenção.
 
 ## Manutenção
 
