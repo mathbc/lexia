@@ -9,6 +9,7 @@ use App\Domain\Accounts\Models\Account;
 use App\Domain\Customers\Enums\CustomerType;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\Documents\Models\Document;
+use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Policies\LegalCasePolicy;
 use App\Domain\PracticeAreas\Models\PracticeArea;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
@@ -55,6 +56,19 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * own, unlike the defendant: there are many of each, they are written and
  * described separately, and they are added and removed one at a time.
  *
+ * `court_addressing` is the line the document opens with — "Ao Juízo da 3ª Vara
+ * Cível da Comarca de Florianópolis/SC" — and is text rather than a key into a
+ * table of courts, because no such table exists here and the wording varies
+ * with the branch and the local habit.
+ *
+ * `current_step` and `is_draft` are what make an unfinished pleading a first
+ * class thing rather than an accident. The form saves one step at a time, so
+ * the row exists long before it is complete: the step is a high-water mark —
+ * the furthest point reached, which is what the listing reports and what the
+ * form reopens on — and the flag says whether anyone has called it finished.
+ * The two are deliberately independent: reaching the last step is not the same
+ * as declaring the pleading done.
+ *
  * @property string $id
  * @property string $account_id
  * @property string $customer_id
@@ -72,9 +86,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $defendant_city
  * @property BrazilianState|null $defendant_state
  * @property string|null $defendant_notes
+ * @property string|null $court_addressing
  * @property string|null $facts
  * @property bool $injunctive_relief
  * @property string|null $injunctive_relief_description
+ * @property LegalCaseStep $current_step
+ * @property bool $is_draft
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property CarbonImmutable|null $deleted_at
@@ -107,6 +124,8 @@ class LegalCase extends Model
         return [
             'defendant_state' => BrazilianState::class,
             'injunctive_relief' => 'boolean',
+            'current_step' => LegalCaseStep::class,
+            'is_draft' => 'boolean',
         ];
     }
 

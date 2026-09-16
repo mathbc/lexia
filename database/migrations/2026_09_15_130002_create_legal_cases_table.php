@@ -36,12 +36,17 @@ return new class extends Migration
 
             $this->defendant($table);
             $this->pleading($table);
+            $this->assembly($table);
 
             $table->timestamps();
             $table->softDeletes();
 
             $table->index(['account_id', 'customer_id']);
             $table->index(['account_id', 'practice_area_id']);
+
+            // A listagem separa rascunho de peça fechada, e parte da conta
+            // como todas as outras.
+            $table->index(['account_id', 'is_draft']);
         });
     }
 
@@ -71,10 +76,43 @@ return new class extends Migration
      */
     private function pleading(Blueprint $table): void
     {
+        // A quem a peça é dirigida, escrito por extenso: "Ao Juízo da 3ª Vara
+        // Cível da Comarca de Florianópolis/SC". É a primeira linha do
+        // documento, e é texto e não chave estrangeira porque o LexIA não
+        // mantém tabela de tribunais nem de varas — quem sabe o endereçamento
+        // é o advogado, e a forma varia com a justiça e com o costume local.
+        $table->string('court_addressing')->nullable();
+
         $table->longText('facts')->nullable();
 
         $table->boolean('injunctive_relief')->default(false);
         $table->longText('injunctive_relief_description')->nullable();
+    }
+
+    /**
+     * How far the drafting got, and whether it is finished.
+     *
+     * A pleading is written in steps over days, not in one sitting, so the row
+     * exists long before it is complete. `current_step` is what the listing
+     * reads to say where the work stopped and what the form reopens on — a
+     * high-water mark, the furthest step reached, which is why going back to
+     * fix the client does not rewind it.
+     *
+     * The values are `App\Domain\LegalCases\Enums\LegalCaseStep`, written here
+     * as a plain string: a migration is a historical record and does not couple
+     * itself to an enum that will still change. It is the same choice as
+     * `defendant_state`, a bare `char(2)` that never names BrazilianState.
+     *
+     * `is_draft` is the other half of the answer and deliberately not derived
+     * from the step: reaching the last step is not the same as declaring the
+     * pleading done. Nothing flips it to false yet — that arrives with the
+     * Action that finalises — so every pleading is a draft for now, and the
+     * column is what makes that state sayable at all.
+     */
+    private function assembly(Blueprint $table): void
+    {
+        $table->string('current_step', 20)->default('basics');
+        $table->boolean('is_draft')->default(true);
     }
 
     /**

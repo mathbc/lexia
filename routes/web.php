@@ -17,8 +17,14 @@ use App\Domain\Customers\Actions\ListCustomers;
 use App\Domain\Customers\Actions\ShowCustomer;
 use App\Domain\Customers\Actions\ShowCustomerForm;
 use App\Domain\Customers\Actions\UpdateCustomer;
+use App\Domain\LegalCases\Actions\AdvanceLegalCaseStep;
+use App\Domain\LegalCases\Actions\CreateLegalCase;
 use App\Domain\LegalCases\Actions\ListLegalCases;
+use App\Domain\LegalCases\Actions\SaveLegalCaseRequirements;
 use App\Domain\LegalCases\Actions\ShowLegalCaseForm;
+use App\Domain\LegalCases\Actions\UpdateLegalCaseBasics;
+use App\Domain\LegalCases\Actions\UpdateLegalCaseDefendant;
+use App\Domain\LegalCases\Actions\UpdateLegalCaseFacts;
 use App\Domain\Users\Actions\CreateUser;
 use App\Domain\Users\Actions\ListUsers;
 use App\Domain\Users\Actions\ShowUserForm;
@@ -81,4 +87,19 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     // porque não há tela de peça para a equipe LexIA.
     Route::get('/pecas', ListLegalCases::class)->name('legal-cases.index');
     Route::get('/pecas/nova', ShowLegalCaseForm::class)->name('legal-cases.create');
+    Route::post('/pecas', CreateLegalCase::class)->name('legal-cases.store');
+
+    // O assistente salva etapa a etapa, e cada etapa é um caso de uso com rota
+    // própria: é a URL que diz o que está sendo salvo, não um campo do corpo.
+    Route::prefix('/pecas/{legalCase}')->whereUuid('legalCase')->group(function (): void {
+        Route::get('/editar', ShowLegalCaseForm::class)->name('legal-cases.edit');
+        Route::put('/dados-basicos', UpdateLegalCaseBasics::class)->name('legal-cases.basics');
+        Route::put('/reu', UpdateLegalCaseDefendant::class)->name('legal-cases.defendant');
+        Route::put('/fatos', UpdateLegalCaseFacts::class)->name('legal-cases.facts');
+        Route::put('/pedidos', SaveLegalCaseRequirements::class)->name('legal-cases.requirements');
+
+        // Os documentos ainda não persistem, mas o Continuar deles diz uma
+        // verdade sobre a peça: ela chegou até ali.
+        Route::patch('/etapa', AdvanceLegalCaseStep::class)->name('legal-cases.step');
+    });
 });

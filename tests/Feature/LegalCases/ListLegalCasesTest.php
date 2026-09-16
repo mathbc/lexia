@@ -6,6 +6,7 @@ namespace Tests\Feature\LegalCases;
 
 use App\Domain\Customers\Actions\CreateCustomer;
 use App\Domain\Customers\Models\Customer;
+use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\PracticeAreas\Models\PracticeArea;
 use App\Domain\Users\Models\User;
@@ -86,7 +87,7 @@ final class ListLegalCasesTest extends TestCase
             ->get('/pecas/nova')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->component('legal-cases/create')
+                ->component('legal-cases/form')
                 ->has('practiceAreas', 24)
                 ->has('proceduralClasses', 0)
                 ->where('selectedArea', ''));
@@ -178,5 +179,135 @@ final class ListLegalCasesTest extends TestCase
             ->get('/pecas/nova?area=nao-existe')
             ->assertOk()
             ->assertInertia(fn ($page) => $page->has('proceduralClasses', 0));
+    }
+
+    #[Test]
+    public function a_card_carries_the_step_it_stopped_on_and_whether_it_is_a_draft(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        LegalCase::factory()->forAccount($account)->draft(LegalCaseStep::Facts)->create();
+
+        $this->actingAs($owner)
+            ->get('/pecas')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('legalCases.data.0.current_step', 'facts')
+                // O rótulo vem resolvido do enum: o React não repete o
+                // português.
+                ->where('legalCases.data.0.current_step_label', 'Fatos e tutela')
+                ->where('legalCases.data.0.is_draft', true));
+    }
+
+    #[Test]
+    public function the_listing_filters_by_status(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        LegalCase::factory()->forAccount($account)->draft()->count(2)->create();
+        LegalCase::factory()->forAccount($account)->finalised()->create();
+
+        $this->actingAs($owner)
+            ->get('/pecas?status=draft')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('legalCases.total', 2));
+
+        $this->actingAs($owner)
+            ->get('/pecas?status=final')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('legalCases.total', 1));
+    }
+
+    #[Test]
+    public function an_unknown_status_filters_nothing_rather_than_the_opposite(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        LegalCase::factory()->forAccount($account)->draft()->create();
+        LegalCase::factory()->forAccount($account)->finalised()->create();
+
+        $this->actingAs($owner)
+            ->get('/pecas?status=talvez')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('legalCases.total', 2));
+    }
+
+    #[Test]
+    public function the_edit_url_hydrates_the_form_with_what_was_saved(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        $legalCase = LegalCase::factory()->forAccount($account)->create([
+            'court_addressing' => 'Ao Juízo da 1ª Vara Cível',
+            'defendant_name' => 'Construtora Atlântico Ltda.',
+            'facts' => 'O imóvel foi ocupado em março.',
+        ]);
+
+        $this->actingAs($owner)
+            ->get("/pecas/{$legalCase->id}/editar")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('legal-cases/form')
+                ->where('legalCase.court_addressing', 'Ao Juízo da 1ª Vara Cível')
+                ->where('legalCase.defendant.defendant_name', 'Construtora Atlântico Ltda.')
+                ->where('legalCase.facts.facts', 'O imóvel foi ocupado em março.')
+                // O slug, e não o uuid: é a moeda do seletor de área.
+                ->where('legalCase.practice_area', $legalCase->practiceArea->slug));
+    }
+
+    #[Test]
+    public function the_edit_url_opens_on_the_step_the_query_string_names(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $legalCase = LegalCase::factory()->forAccount($account)->draft(LegalCaseStep::Review)->create();
+
+        $this->actingAs($owner)
+            ->get("/pecas/{$legalCase->id}/editar?etapa=defendant")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('initialStep', 'defendant')
+                // A marca d'água não se mexe por causa de onde a tela abriu.
+                ->where('legalCase.current_step', 'review'));
+    }
+
+    #[Test]
+    public function the_edit_url_falls_back_to_the_furthest_step_reached(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $legalCase = LegalCase::factory()->forAccount($account)->draft(LegalCaseStep::Requirements)->create();
+
+        $this->actingAs($owner)
+            ->get("/pecas/{$legalCase->id}/editar")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('initialStep', 'requirements'));
+    }
+
+    #[Test]
+    public function the_edit_url_loads_the_classes_of_the_area_already_chosen(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $labour = PracticeArea::query()->where('slug', 'trabalhista')->sole();
+        $legalCase = LegalCase::factory()->forAccount($account)->inArea($labour)->create();
+
+        $this->actingAs($owner)
+            ->get("/pecas/{$legalCase->id}/editar")
+            ->assertOk()
+            // Sem este fallback o rascunho reabriria com a lista de classes
+            // vazia sob uma classe visivelmente escolhida.
+            ->assertInertia(fn ($page) => $page
+                ->where('selectedArea', 'trabalhista')
+                ->has('proceduralClasses', 86));
+    }
+
+    #[Test]
+    public function a_stranger_cannot_open_another_accounts_pleading(): void
+    {
+        [$account] = $this->accountWithOwner();
+        $legalCase = LegalCase::factory()->forAccount($account)->create();
+
+        [, $stranger] = $this->accountWithOwner();
+
+        $this->actingAs($stranger)
+            ->get("/pecas/{$legalCase->id}/editar")
+            ->assertForbidden();
     }
 }

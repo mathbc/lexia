@@ -6,6 +6,7 @@ namespace Database\Factories;
 
 use App\Domain\Accounts\Models\Account;
 use App\Domain\Customers\Models\Customer;
+use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\PracticeAreas\Models\PracticeArea;
 use Illuminate\Database\Eloquent\Builder;
@@ -72,6 +73,32 @@ class LegalCaseFactory extends Factory
         return $this->state(fn (): array => [
             'practice_area_id' => $area->id,
             'procedural_class_id' => $this->filingClassOf($area),
+        ]);
+    }
+
+    /**
+     * A draft stopped at a given step — the state every pleading is in today.
+     */
+    public function draft(LegalCaseStep $step = LegalCaseStep::Defendant): static
+    {
+        return $this->state(fn (): array => [
+            'current_step' => $step,
+            'is_draft' => true,
+        ]);
+    }
+
+    /**
+     * A pleading someone called finished.
+     *
+     * No Action produces one yet — the flag exists before the flow that flips
+     * it — so this state is what lets a test exercise the other half of the
+     * listing.
+     */
+    public function finalised(): static
+    {
+        return $this->state(fn (): array => [
+            'current_step' => LegalCaseStep::Review,
+            'is_draft' => false,
         ]);
     }
 

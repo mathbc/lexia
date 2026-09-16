@@ -56,4 +56,20 @@ final class LegalCaseOptions
             ])
             ->all();
     }
+
+    /**
+     * Draft or finished, for the listing's situation filter.
+     *
+     * Published from here rather than written into the React file so the
+     * Portuguese stays on this side, as it does for every other label.
+     *
+     * @return list<array{value: string, label: string}>
+     */
+    public static function statuses(): array
+    {
+        return [
+            ['value' => 'draft', 'label' => 'Rascunho'],
+            ['value' => 'final', 'label' => 'Finalizada'],
+        ];
+    }
 }

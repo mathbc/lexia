@@ -52,11 +52,19 @@ processual, contra quem é e o que aconteceu. Os anexos ficam em `documents`.
 | `practice_area_id` | uuid FK → `practice_areas` | área escolhida; `restrictOnDelete` |
 | `procedural_class_id` | uuid FK → `procedural_classes` | classe escolhida; `restrictOnDelete` |
 | `defendant_*` | 12 colunas, todas nulas | a parte contrária, descrita inline |
+| `court_addressing` | string, nula | o endereçamento — "Ao Juízo da 3ª Vara Cível da Comarca de Florianópolis/SC" |
 | `facts` | longtext, nulo | a narrativa do que aconteceu |
+| `injunctive_relief` / `injunctive_relief_description` | bool / longtext | a tutela de urgência, se houver |
+| `current_step` | string, `'basics'` | até onde o preenchimento chegou (`LegalCaseStep`) |
+| `is_draft` | bool, `true` | rascunho ou peça fechada |
 | `created_at` / `updated_at` / `deleted_at` | timestamp | `SoftDeletes` |
 
-Índices: `(account_id, customer_id)` e `(account_id, practice_area_id)` — toda
-listagem parte da conta.
+Índices: `(account_id, customer_id)`, `(account_id, practice_area_id)` e
+`(account_id, is_draft)` — toda listagem parte da conta.
+
+O endereçamento é texto e não chave estrangeira porque o LexIA não mantém
+tabela de tribunais nem de varas: quem sabe o endereçamento é o advogado, e a
+forma varia com a justiça e com o costume local.
 
 As duas políticas de deleção dizem coisas diferentes de propósito: a peça não
 existe fora da conta nem fora do cliente (cascata), mas o catálogo é referência
@@ -71,6 +79,27 @@ apontando para ele.
 prática, exercitada em `ManageLegalCasesTest`: a Action **nunca** deve aceitar
 `account_id` vindo do request. Sem usuário autenticado (fila, comando) o escopo
 não se aplica — use `TenantContext::actingAs()` ou `acrossAllAccounts()`.
+
+### Montagem em etapas
+
+A peça é escrita em dias, não numa sentada, e por isso a linha existe muito
+antes de estar completa. Cada "Continuar" do assistente salva a sua etapa e
+avança `current_step`.
+
+`current_step` é **marca d'água**: a etapa mais avançada já alcançada, e não a
+última editada. Voltar à etapa 1 para corrigir o cliente é correção, não
+retrocesso — sob a outra semântica a trilha trancaria as etapas já preenchidas
+e a listagem diria "Dados básicos" para uma peça três quartos escrita. A regra
+mora em `LegalCaseStep::furthest()` e é aplicada pelo trait
+`AdvancesLegalCaseStep`, usado pelas seis Actions de escrita.
+
+A etapa em que o navegador abre é coisa separada: vem do `?etapa` da URL, e cai
+na marca d'água quando não há query. É o que permite regravar a etapa 1 sem que
+a peça pareça ter recuado.
+
+`is_draft` é a outra metade da resposta, e de propósito não é derivada da
+etapa: chegar à última etapa não é o mesmo que declarar a peça pronta. Nada
+ainda vira o valor para `false` — isso chega com a Action que finaliza.
 
 ### Relações
 
@@ -101,13 +130,18 @@ sua descrição, e entram e saem um a um. Ver [document.md](document.md).
 
 ## O que ainda não existe
 
-Já existem a Policy, a listagem (`GET /pecas`) e o formulário
-(`GET /pecas/nova`), e o schema já guarda o réu, os fatos e os documentos.
-**Nenhuma Action escreve uma peça**: o formulário segura tudo em estado local no
-navegador. O que o produto precisa acrescentar, na ordem em que a peça se
-escreve:
+A peça já é escrita e salva: `POST /pecas` a abre, e
+`/pecas/{legalCase}/dados-basicos`, `/reu`, `/fatos` e `/pedidos` gravam uma
+etapa cada. `GET /pecas/{legalCase}/editar` a reabre onde parou.
 
-- **as tutelas e os pedidos**;
+**Os documentos são a exceção**: o rascunho carrega o próprio `File`, e onde
+guardá-lo é decisão que ainda não foi tomada — a etapa 5 segue em estado local
+no navegador, e o "Continuar" dela só avança `current_step`, via
+`PATCH /pecas/{legalCase}/etapa`. O que o produto precisa acrescentar:
+
+- **o upload dos documentos**, e o storage que ele exige;
+- **a finalização**, que é o que vira `is_draft` para `false` — e com ela a
+  regra de que peça fechada não se edita, hoje ausente da Policy de propósito;
 - **o tipo de peça** (inicial, contestação, recurso…), que hoje está implícito
   na classe escolhida;
 - **o assunto CNJ**, que é a outra tabela da TPU e ainda não foi importada —
@@ -126,4 +160,10 @@ Requerido etc.
 - Migration: `database/migrations/2026_09_15_130002_create_legal_cases_table.php`
 - Factory: `database/factories/LegalCaseFactory.php` (sorteia área e classe já
   existentes no banco e respeita o par área↔classe)
-- Testes: `tests/Feature/LegalCases/ManageLegalCasesTest.php`
+- Enum das etapas: `app/Domain/LegalCases/Enums/LegalCaseStep.php`
+- Actions de escrita: `app/Domain/LegalCases/Actions/` (`CreateLegalCase`,
+  `UpdateLegalCaseBasics`, `UpdateLegalCaseDefendant`, `UpdateLegalCaseFacts`,
+  `SaveLegalCaseRequirements`, `AdvanceLegalCaseStep`)
+- Testes: `tests/Feature/LegalCases/ManageLegalCasesTest.php` (model e schema),
+  `SaveLegalCaseStepsTest.php` (o fluxo de montagem),
+  `tests/Feature/Requirements/SaveLegalCaseRequirementsTest.php`

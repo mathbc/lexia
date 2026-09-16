@@ -13,9 +13,11 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * What a pleading asks the court for, at the stage it exists today: rows
- * nobody writes through a screen yet. There are no routes and no save Action,
- * so these exercise the model and the schema directly.
+ * What a pleading asks the court for, as a row.
+ *
+ * These go at the model and the schema directly. The saving Action and its
+ * route are covered by SaveLegalCaseRequirementsTest; what is pinned down here
+ * is what holds regardless of which Action does the writing.
  */
 final class ManageRequirementsTest extends TestCase
 {

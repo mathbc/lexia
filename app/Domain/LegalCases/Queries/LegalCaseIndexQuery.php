@@ -38,6 +38,12 @@ final class LegalCaseIndexQuery
             ->when($filters['search'] ?? null, $this->search(...))
             ->when($filters['customer'] ?? null, $this->byCustomer(...))
             ->when($filters['practice_area'] ?? null, $this->byPracticeArea(...))
+            // Passing the value explicitly: when() would hand the callback the
+            // boolean condition, turning "finalizada" into "rascunho".
+            ->when(
+                filled($filters['status'] ?? null),
+                fn (Builder $query) => $this->byStatus($query, (string) $filters['status']),
+            )
             ->orderBy(
                 $this->sortColumn($filters['sort'] ?? null),
                 $this->sortDirection($filters['direction'] ?? null),
@@ -72,6 +78,11 @@ final class LegalCaseIndexQuery
                 'name' => $legalCase->proceduralClass->name,
                 'abbreviation' => $legalCase->proceduralClass->abbreviation,
             ],
+            'current_step' => $legalCase->current_step->value,
+            // O rótulo resolvido aqui, e não no React: o português do enum
+            // mora de um lado só.
+            'current_step_label' => $legalCase->current_step->label(),
+            'is_draft' => $legalCase->is_draft,
             'created_at' => $legalCase->created_at?->toIso8601String(),
         ];
     }
@@ -106,6 +117,24 @@ final class LegalCaseIndexQuery
         $digits = (string) preg_replace('/\D/', '', $term);
 
         return $digits === '' ? $query : $query->orWhere('code', (int) $digits);
+    }
+
+    /**
+     * Draft or finished.
+     *
+     * A value the screen does not offer filters nothing, rather than filtering
+     * the opposite of what was asked — which is what a bare boolean cast of an
+     * unexpected string would do.
+     *
+     * @param  Builder<LegalCase>  $query
+     */
+    private function byStatus(Builder $query, string $status): void
+    {
+        if (! in_array($status, ['draft', 'final'], true)) {
+            return;
+        }
+
+        $query->where('is_draft', $status === 'draft');
     }
 
     /**

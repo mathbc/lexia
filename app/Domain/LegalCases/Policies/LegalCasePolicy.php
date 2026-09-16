@@ -18,8 +18,15 @@ use App\Domain\Users\Models\User;
  * middleware runs, and for platform staff the query scope is deliberately open
  * — this policy is the only thing standing in the way.
  *
- * No `update` or `delete` yet: nothing writes a pleading until the assembly
- * flow lands.
+ * `update` is the gate of the whole assembly flow: the six Actions that save
+ * one step each all ask it, and so does the saving of the requests, which are
+ * written through the pleading rather than addressed on their own. It asks
+ * nothing about the role — drafting is the work, not an administrative
+ * privilege — and nothing about `is_draft`: no Action closes a pleading yet, so
+ * a rule refusing to edit a finished one would be guarding a state that cannot
+ * occur. That check arrives with the Action that finalises.
+ *
+ * No `delete` yet: nothing removes a pleading.
  */
 final class LegalCasePolicy
 {
@@ -30,11 +37,25 @@ final class LegalCasePolicy
 
     public function view(User $user, LegalCase $legalCase): bool
     {
-        return $user->account_id === $legalCase->account_id;
+        return $this->sameAccount($user, $legalCase);
     }
 
     public function create(User $user): bool
     {
         return true;
+    }
+
+    public function update(User $user, LegalCase $legalCase): bool
+    {
+        return $this->sameAccount($user, $legalCase);
+    }
+
+    /**
+     * The boundary, written once: a pleading is reachable only from inside the
+     * account that drafted it, whoever is asking.
+     */
+    private function sameAccount(User $user, LegalCase $legalCase): bool
+    {
+        return $user->account_id === $legalCase->account_id;
     }
 }

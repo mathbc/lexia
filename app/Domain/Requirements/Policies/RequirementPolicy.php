@@ -21,9 +21,12 @@ use App\Domain\Users\Models\User;
  * platform staff the query scope is deliberately open — this policy is the only
  * thing standing in the way once a route exists.
  *
- * No `update` or `delete` yet: nothing writes a request until the Action that
- * saves the pleading lands, and the form keeps its list in the browser until
- * then.
+ * No `update` and no `delete`, and that is the design rather than a gap. No
+ * route ever binds a Requirement: the list is written whole, through the
+ * pleading, by SaveLegalCaseRequirements — which asks `update` on the
+ * LegalCase. The authority over a request is the authority over the pleading
+ * that makes it, and writing a second gate here would be dead code implying a
+ * route that does not exist.
  */
 final class RequirementPolicy
 {

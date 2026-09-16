@@ -16,9 +16,11 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * The pleading itself, at the stage it exists today: an account, a client and
- * the two CNJ keys. There are no routes yet, so these exercise the model and
- * the schema directly.
+ * The pleading as a row: an account, a client and the two CNJ keys.
+ *
+ * These go at the model and the schema directly, deliberately below the
+ * routes — the assembly flow is covered by SaveLegalCaseStepsTest, and what is
+ * pinned down here is what holds regardless of which Action does the writing.
  */
 final class ManageLegalCasesTest extends TestCase
 {

@@ -28,6 +28,8 @@ final class LegalCasePageProps
         return [
             'view' => $actor->can('view', $subject),
             'create' => $actor->can('create', LegalCase::class),
+            // O que transforma o card num link de retomada.
+            'update' => $actor->can('update', $subject),
         ];
     }
 }
