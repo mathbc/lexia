@@ -45,7 +45,18 @@ export function Field({
         : child
 
     return (
-        <div data-slot="form-field" className={cn('grid gap-2', className)}>
+        /* `content-start` e `grid-cols-1` seguram as duas deformações que um
+           campo sofre por ser item de grade. Esticado para a altura da linha
+           — porque um vizinho tem dica ou erro —, o `align-content` padrão
+           distribuiria a sobra entre as faixas e o rótulo, que é `flex
+           items-center`, desceria para o meio: dois campos lado a lado
+           deixariam de começar na mesma altura. Com `start`, a sobra cai toda
+           embaixo e vira espaço até a linha seguinte. `grid-cols-1` é
+           `minmax(0,1fr)`: sem ele a faixa cresce até o min-content do
+           controle — um Select com rótulo longo é `whitespace-nowrap` — e
+           vaza para fora do cartão. `min-w-0` faz o mesmo um nível acima,
+           pelo campo dentro da grade do formulário. */
+        <div data-slot="form-field" className={cn('grid min-w-0 grid-cols-1 content-start gap-2', className)}>
             {/* Rótulo e asterisco num só nó: o `gap-2` do Label existe para
                 separar ícones, e descolaria o obrigatório da palavra. */}
             <Label htmlFor={id}>

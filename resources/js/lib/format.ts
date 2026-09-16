@@ -110,3 +110,17 @@ export const customerIdentifier = (customer: {
 
     return customer.cpf ? formatCpf(customer.cpf) : null
 }
+
+/**
+ * A date as a Brazilian reader writes it. The server sends ISO 8601, and an
+ * absent date is drawn as a dash rather than as "Invalid Date".
+ */
+export const formatDate = (value: string | null): string => {
+    if (!value) {
+        return '—'
+    }
+
+    const date = new Date(value)
+
+    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('pt-BR')
+}

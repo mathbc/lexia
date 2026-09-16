@@ -17,6 +17,8 @@ use App\Domain\Customers\Actions\ListCustomers;
 use App\Domain\Customers\Actions\ShowCustomer;
 use App\Domain\Customers\Actions\ShowCustomerForm;
 use App\Domain\Customers\Actions\UpdateCustomer;
+use App\Domain\LegalCases\Actions\ListLegalCases;
+use App\Domain\LegalCases\Actions\ShowLegalCaseForm;
 use App\Domain\Users\Actions\CreateUser;
 use App\Domain\Users\Actions\ListUsers;
 use App\Domain\Users\Actions\ShowUserForm;
@@ -74,4 +76,9 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::put('/', UpdateCustomer::class)->name('customers.update');
         Route::delete('/', DeleteCustomer::class)->name('customers.destroy');
     });
+
+    // As peças da conta do próprio ator, como os clientes: sem conta na URL,
+    // porque não há tela de peça para a equipe LexIA.
+    Route::get('/pecas', ListLegalCases::class)->name('legal-cases.index');
+    Route::get('/pecas/nova', ShowLegalCaseForm::class)->name('legal-cases.create');
 });

@@ -4,6 +4,7 @@ import {
     Building2,
     ChevronRight,
     ChevronsUpDown,
+    FileText,
     FolderCog,
     LayoutDashboard,
     LogOut,
@@ -139,6 +140,22 @@ export function AppSidebar({ user, currentPath }: { user: AuthUser; currentPath:
                                     <Link href="/painel">
                                         <LayoutDashboard />
                                         <span>Painel</span>
+                                    </Link>
+                                </SidebarMenuButton>
+                            </SidebarMenuItem>
+
+                            {/* Peça é o trabalho do produto, não um cadastro
+                                de apoio: fica no primeiro nível, ao lado do
+                                Painel. */}
+                            <SidebarMenuItem>
+                                <SidebarMenuButton
+                                    asChild
+                                    isActive={currentPath.startsWith('/pecas')}
+                                    tooltip="Peças Jurídicas"
+                                >
+                                    <Link href="/pecas">
+                                        <FileText />
+                                        <span>Peças Jurídicas</span>
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>

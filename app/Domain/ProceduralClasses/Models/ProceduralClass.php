@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 
 /**
  * A CNJ procedural class: how a case is docketed when it is filed.
@@ -37,6 +38,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property-read Collection<int, PracticeArea> $practiceAreas
+ * @property-read Pivot|null $pivot the `scope` of the link, set only when the
+ *     row was loaded through PracticeArea::proceduralClasses()
  */
 class ProceduralClass extends Model
 {

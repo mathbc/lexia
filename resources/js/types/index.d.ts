@@ -157,3 +157,44 @@ export interface LegalCase {
     created_at: string
     updated_at: string
 }
+
+/**
+ * One CNJ competence, resolved server-side by Jurisdiction::toTag(). `branch`
+ * and `degree` are what the class picker filters on; the raw `value` is never
+ * shown to anyone.
+ */
+export interface JurisdictionTag {
+    value: string
+    label: string
+    short_label: string
+    branch: string
+    degree: string
+}
+
+/** A procedural class as ProceduralClassOptionsQuery projects it. */
+export interface ProceduralClassOption {
+    id: string
+    code: number
+    name: string
+    abbreviation: string | null
+    legal_basis: string | null
+    is_filing_class: boolean
+    /** Own to the area, or borrowed from the civil trunk. */
+    scope: 'specific' | 'generic'
+    jurisdictions: JurisdictionTag[]
+}
+
+/** A pleading as LegalCaseIndexQuery projects it for a card. */
+export interface LegalCaseCard {
+    id: string
+    customer: { id: string; display_name: string }
+    practice_area: { slug: string; label: string }
+    procedural_class: { code: number; name: string; abbreviation: string | null }
+    created_at: string | null
+}
+
+/** Mirrors LegalCasePageProps::abilities(). */
+export interface LegalCaseAbilities {
+    view: boolean
+    create: boolean
+}

@@ -6,12 +6,14 @@ namespace App\Domain\LegalCases\Models;
 
 use App\Domain\Accounts\Models\Account;
 use App\Domain\Customers\Models\Customer;
+use App\Domain\LegalCases\Policies\LegalCasePolicy;
 use App\Domain\PracticeAreas\Models\PracticeArea;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
 use App\Domain\Shared\Concerns\BelongsToAccount;
 use Carbon\CarbonImmutable;
 use Database\Factories\LegalCaseFactory;
 use Illuminate\Database\Eloquent\Attributes\UseFactory;
+use Illuminate\Database\Eloquent\Attributes\UsePolicy;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -42,6 +44,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property-read PracticeArea $practiceArea
  * @property-read ProceduralClass $proceduralClass
  */
+#[UsePolicy(LegalCasePolicy::class)]
 #[UseFactory(LegalCaseFactory::class)]
 class LegalCase extends Model
 {
