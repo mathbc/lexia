@@ -42,6 +42,36 @@ export const formatPhone = (value: string): string => {
 }
 
 /**
+ * Um valor em reais como se digita: os dígitos entram pela direita e vão
+ * empurrando a vírgula — 5 vira "0,05", 50000 vira "500,00", 5000000 vira
+ * "50.000,00".
+ *
+ * É o contrário de deixar o advogado posicionar a vírgula à mão, e é o
+ * comportamento que todo campo de dinheiro tem: quem digita "50000" quer
+ * cinquenta mil e não cinquenta mil centavos, mas quem digita devagar vê o
+ * número crescer e corrige antes de sair do campo.
+ */
+export const formatCurrency = (value: string): string => {
+    // Quinze dígitos é o que a coluna `amount` guarda — decimal(15, 2).
+    const raw = digits(value).slice(0, 15).replace(/^0+/, '')
+
+    if (raw === '') {
+        return ''
+    }
+
+    const padded = raw.padStart(3, '0')
+    const reais = Number(padded.slice(0, -2))
+
+    return `${new Intl.NumberFormat('pt-BR').format(reais)},${padded.slice(-2)}`
+}
+
+/**
+ * O mesmo valor em centavos, que é como se soma dinheiro sem herdar o
+ * arredondamento binário do ponto flutuante. Campo vazio é zero.
+ */
+export const currencyCents = (value: string): number => Number(digits(value) || '0')
+
+/**
  * Check digits for CPF/CNPJ, mirroring the server-side Rules.
  *
  * Client-side only to give immediate feedback; the server remains the source

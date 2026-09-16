@@ -12,6 +12,7 @@ use App\Domain\Documents\Models\Document;
 use App\Domain\LegalCases\Policies\LegalCasePolicy;
 use App\Domain\PracticeAreas\Models\PracticeArea;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
+use App\Domain\Requirements\Models\Requirement;
 use App\Domain\Shared\Concerns\BelongsToAccount;
 use Carbon\CarbonImmutable;
 use Database\Factories\LegalCaseFactory;
@@ -45,9 +46,14 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * narrative the pleading is built on, held as plain text and nullable like the
  * rest, because the form fills it one step at a time.
  *
- * The documents that instruct it are rows of their own, unlike the defendant:
- * there are many of them, each described separately, and they are added and
- * removed one at a time.
+ * `injunctive_relief` rides along with it, and is a flag rather than a guess
+ * made from the description beside it: asking for an injunction is a decision,
+ * and the text that justifies it is written, erased and rewritten while the
+ * decision holds. False is the answer until the lawyer says otherwise.
+ *
+ * The requests it makes and the documents that instruct it are rows of their
+ * own, unlike the defendant: there are many of each, they are written and
+ * described separately, and they are added and removed one at a time.
  *
  * @property string $id
  * @property string $account_id
@@ -67,6 +73,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property BrazilianState|null $defendant_state
  * @property string|null $defendant_notes
  * @property string|null $facts
+ * @property bool $injunctive_relief
+ * @property string|null $injunctive_relief_description
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property CarbonImmutable|null $deleted_at
@@ -75,6 +83,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property-read PracticeArea $practiceArea
  * @property-read ProceduralClass $proceduralClass
  * @property-read Collection<int, Document> $documents
+ * @property-read Collection<int, Requirement> $requirements
  */
 #[UsePolicy(LegalCasePolicy::class)]
 #[UseFactory(LegalCaseFactory::class)]
@@ -97,6 +106,7 @@ class LegalCase extends Model
     {
         return [
             'defendant_state' => BrazilianState::class,
+            'injunctive_relief' => 'boolean',
         ];
     }
 
@@ -132,6 +142,22 @@ class LegalCase extends Model
     public function documents(): HasMany
     {
         return $this->hasMany(Document::class);
+    }
+
+    /**
+     * What the pleading asks the court for.
+     *
+     * Oldest first, because that is the order they were written in and the
+     * order they will be numbered in — "requer: 1. …; 2. …". Nothing stronger
+     * is promised: two requests written in the same second have no order
+     * between them, and the column that would fix that arrives when the screen
+     * offers reordering.
+     *
+     * @return HasMany<Requirement, $this>
+     */
+    public function requirements(): HasMany
+    {
+        return $this->hasMany(Requirement::class)->oldest();
     }
 
     /**

@@ -4,20 +4,29 @@ import { AppLayout } from '@/layouts/app-layout'
 import { CustomerCreateDialog } from '@/components/customer-create-dialog'
 import { DefendantFormFields, type DefendantFormValues } from '@/components/defendant-form-fields'
 import { DocumentUploadFields } from '@/components/document-upload-fields'
-import { FactsFormFields } from '@/components/facts-form-fields'
+import { FactsFormFields, type FactsFormValues } from '@/components/facts-form-fields'
 import { LegalCaseSteps, type LegalCaseStep } from '@/components/legal-case-steps'
 import { PracticeAreaPicker } from '@/components/practice-area-picker'
 import { ProceduralClassPicker } from '@/components/procedural-class-picker'
+import { RequirementFormFields } from '@/components/requirement-form-fields'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, Select } from '@/components/ui/field'
 import { toDocumentDrafts, type DocumentDraft } from '@/lib/documents'
+import { newRequirement, type RequirementDraft } from '@/lib/requirements'
 import type { Option, ProceduralClassOption } from '@/types'
 
 const STEPS: LegalCaseStep[] = [
     { label: 'Dados básicos', description: 'Cliente, área de atuação e classe processual' },
     { label: 'Dados do réu', description: 'Quem é a parte contrária e como localizá-la' },
-    { label: 'Descrição dos fatos', description: 'O relato que sustenta os fundamentos e os pedidos' },
+    {
+        label: 'Fatos e tutela',
+        description: 'O relato que sustenta os fundamentos e os pedidos, e a urgência, se houver',
+    },
+    {
+        label: 'Pedidos e requerimentos',
+        description: 'O que se pede ao juízo, e quanto vale cada pedido que tem cifra',
+    },
     { label: 'Documentos', description: 'Os anexos que instruem a peça' },
     { label: 'Revisão forense', description: 'Conferência final antes do protocolo' },
 ]
@@ -36,6 +45,13 @@ const EMPTY_DEFENDANT: DefendantFormValues = {
     defendant_city: '',
     defendant_state: '',
     defendant_notes: '',
+}
+
+/** A peça não pede tutela até o advogado dizer que pede — ver `FactsFormFields`. */
+const EMPTY_FACTS: FactsFormValues = {
+    facts: '',
+    injunctive_relief: false,
+    injunctive_relief_description: '',
 }
 
 interface Props {
@@ -72,9 +88,14 @@ export default function LegalCaseCreate({
     // onde enviar, e um formulário sem destino só esconderia isso.
     const [defendant, setDefendant] = useState<DefendantFormValues>(EMPTY_DEFENDANT)
 
-    // Pelo mesmo motivo do réu: os fatos moram aqui até haver uma Action que
-    // os receba.
-    const [facts, setFacts] = useState('')
+    // Pelo mesmo motivo do réu: os fatos e a tutela moram aqui até haver uma
+    // Action que os receba.
+    const [facts, setFacts] = useState<FactsFormValues>(EMPTY_FACTS)
+
+    // Os pedidos começam vazios: a lista é do caso, e uma peça pré-preenchida
+    // com pedidos que ninguém escolheu é pior do que uma em branco. Os botões
+    // de pedido frequente são a resposta a isso, dentro do componente.
+    const [requirements, setRequirements] = useState<RequirementDraft[]>([])
 
     // E o mesmo vale para os documentos, com um agravante: o rascunho carrega o
     // próprio `File`, que não sobrevive a um reload. Enquanto não houver para
@@ -206,10 +227,37 @@ export default function LegalCaseCreate({
                     )}
 
                     {step === 2 && (
-                        <FactsFormFields value={facts} onChange={setFacts} />
+                        <FactsFormFields
+                            values={facts}
+                            // Mesma razão do réu: a validação dos fatos e da
+                            // tutela nasce junto com a Action que os recebe.
+                            errors={{}}
+                            set={(patch) => setFacts((current) => ({ ...current, ...patch }))}
+                        />
                     )}
 
                     {step === 3 && (
+                        <RequirementFormFields
+                            requirements={requirements}
+                            onAdd={(description) =>
+                                setRequirements((current) => [...current, newRequirement(description)])
+                            }
+                            onChange={(id, patch) =>
+                                setRequirements((current) =>
+                                    current.map((requirement) =>
+                                        requirement.id === id ? { ...requirement, ...patch } : requirement,
+                                    ),
+                                )
+                            }
+                            onRemove={(id) =>
+                                setRequirements((current) =>
+                                    current.filter((requirement) => requirement.id !== id),
+                                )
+                            }
+                        />
+                    )}
+
+                    {step === 4 && (
                         <DocumentUploadFields
                             documents={documents}
                             onAdd={(files) =>
@@ -228,7 +276,7 @@ export default function LegalCaseCreate({
                         />
                     )}
 
-                    {step > 3 && (
+                    {step > 4 && (
                         <Card>
                             <CardHeader>
                                 <CardTitle>{STEPS[step]?.label}</CardTitle>

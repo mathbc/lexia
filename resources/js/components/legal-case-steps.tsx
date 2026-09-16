@@ -33,8 +33,8 @@ export function LegalCaseSteps({ steps, current, reachable, onSelect }: Props) {
         // coluna inteira para fora da tela no telefone.
         <nav aria-label="Etapas da peça" className="min-w-0">
             {/* Abaixo de `lg` a trilha rola sozinha em vez de espremer os
-                rótulos: com cinco etapas, repartir 400px deixaria cada uma com
-                um par de letras. */}
+                rótulos: com meia dúzia de etapas, repartir 400px deixaria cada
+                uma com um par de letras. */}
             <ol className="flex gap-1 overflow-x-auto lg:flex-col lg:gap-0 lg:overflow-x-visible">
                 {steps.map((step, index) => {
                     const done = index < current

@@ -60,10 +60,21 @@ return new class extends Migration
      *
      * It is also the column a dictation flow will fill: the form offers a
      * microphone next to it, and transcribed speech lands here as plain text.
+     *
+     * Urgency is answered separately from the narrative, and by a flag rather
+     * than by the presence of text: whether the pleading asks for an
+     * injunction is a decision the lawyer takes, not something to be inferred
+     * from a description being filled in — one is written and erased while the
+     * other stays true. Hence a boolean that defaults to false, which is what
+     * a pleading asks for until someone says otherwise, and a nullable
+     * description beside it, long text for the same reason `facts` is.
      */
     private function pleading(Blueprint $table): void
     {
         $table->longText('facts')->nullable();
+
+        $table->boolean('injunctive_relief')->default(false);
+        $table->longText('injunctive_relief_description')->nullable();
     }
 
     /**
