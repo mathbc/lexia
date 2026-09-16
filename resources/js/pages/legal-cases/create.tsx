@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { AppLayout } from '@/layouts/app-layout'
 import { CustomerCreateDialog } from '@/components/customer-create-dialog'
 import { DefendantFormFields, type DefendantFormValues } from '@/components/defendant-form-fields'
+import { FactsFormFields } from '@/components/facts-form-fields'
 import { LegalCaseSteps, type LegalCaseStep } from '@/components/legal-case-steps'
 import { PracticeAreaPicker } from '@/components/practice-area-picker'
 import { ProceduralClassPicker } from '@/components/procedural-class-picker'
@@ -14,7 +15,7 @@ import type { Option, ProceduralClassOption } from '@/types'
 const STEPS: LegalCaseStep[] = [
     { label: 'Dados básicos', description: 'Cliente, área de atuação e classe processual' },
     { label: 'Dados do réu', description: 'Quem é a parte contrária e como localizá-la' },
-    { label: 'Preenchimento da peça', description: 'Fatos, fundamentos e pedidos' },
+    { label: 'Descrição dos fatos', description: 'O relato que sustenta os fundamentos e os pedidos' },
     { label: 'Revisão forense', description: 'Conferência final antes do protocolo' },
 ]
 
@@ -67,6 +68,10 @@ export default function LegalCaseCreate({
     // Action que o receba. Fica fora do `useForm` de propósito — não há para
     // onde enviar, e um formulário sem destino só esconderia isso.
     const [defendant, setDefendant] = useState<DefendantFormValues>(EMPTY_DEFENDANT)
+
+    // Pelo mesmo motivo do réu: os fatos moram aqui até haver uma Action que
+    // os receba.
+    const [facts, setFacts] = useState('')
 
     /**
      * A área vive na URL, não em estado local: é ela que diz ao servidor quais
@@ -192,7 +197,11 @@ export default function LegalCaseCreate({
                         />
                     )}
 
-                    {step > 1 && (
+                    {step === 2 && (
+                        <FactsFormFields value={facts} onChange={setFacts} />
+                    )}
+
+                    {step > 2 && (
                         <Card>
                             <CardHeader>
                                 <CardTitle>{STEPS[step]?.label}</CardTitle>

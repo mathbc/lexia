@@ -38,6 +38,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * lawyer knows at drafting time is often a name and little else, and
  * `defendant_notes` is where the rest of that partial knowledge goes.
  *
+ * `facts` is the first column the lawyer writes rather than selects: the
+ * narrative the pleading is built on, held as plain text and nullable like the
+ * rest, because the form fills it one step at a time.
+ *
  * @property string $id
  * @property string $account_id
  * @property string $customer_id
@@ -55,6 +59,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $defendant_city
  * @property BrazilianState|null $defendant_state
  * @property string|null $defendant_notes
+ * @property string|null $facts
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property CarbonImmutable|null $deleted_at

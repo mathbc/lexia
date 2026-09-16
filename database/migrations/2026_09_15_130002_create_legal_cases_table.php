@@ -9,9 +9,9 @@ use Illuminate\Support\Facades\Schema;
 /**
  * The pleadings an account drafts for its clients.
  *
- * Who it belongs to, for whom, where in the CNJ taxonomy it sits, and who it
- * is against. The drafted text, the subject and the pleading type come once
- * the assembly flow is settled.
+ * Who it belongs to, for whom, where in the CNJ taxonomy it sits, who it is
+ * against and the account of what happened. The grounds, the claims and the
+ * pleading type come once the rest of the assembly flow is settled.
  *
  * Nothing here stops a class from being paired with an area it does not belong
  * to — that pairing lives in the pivot, and enforcing it in the database would
@@ -35,6 +35,7 @@ return new class extends Migration
             $table->foreignUuid('procedural_class_id')->constrained()->restrictOnDelete();
 
             $this->defendant($table);
+            $this->pleading($table);
 
             $table->timestamps();
             $table->softDeletes();
@@ -47,6 +48,22 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('legal_cases');
+    }
+
+    /**
+     * What the lawyer writes, as opposed to what they select.
+     *
+     * `facts` is the narrative the whole pleading is built on — the story in
+     * the client's own order, before it is framed in law. Long text and not a
+     * `string`, because it is measured in pages; nullable, because a pleading
+     * is drafted in steps and the row exists before this one is reached.
+     *
+     * It is also the column a dictation flow will fill: the form offers a
+     * microphone next to it, and transcribed speech lands here as plain text.
+     */
+    private function pleading(Blueprint $table): void
+    {
+        $table->longText('facts')->nullable();
     }
 
     /**
