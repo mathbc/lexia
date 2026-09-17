@@ -45,17 +45,19 @@ final class LegalCaseClassificationTest extends TestCase
         // Por sorte, consegui capturar a placa do carro do homem, que correspondia na numeração YTD123, e era do modelo Chevrolet Onix.
         // TXT;
 
-        // $facts = <<<'TXT'
-        // Em frente ao condomínio onde eu moro, existe uma obra da construtora Marinho, eles iniciam as obras todos os dias às 6 da manhã e terminam às 18h.
-        // Porém a obra continua aos finais de semana e não para nem no domingo, causando barulho e poluição sonora.
-        // O condomínio não faz nada para resolver o problema, e nem mesmo reconhece que é um problema. Além de dificultarem o trânsito por conta do tráfego de caminhões, ergueram
-        // alguns carros de moradores e visitantes, sem autorização.
-        // TXT;
-
         $facts = <<<'TXT'
-        Uma moça entrou dentro do meu estabelecimento, fez com que eu buscasse algumas peças de roupa para ela provar, e enquanto eu estava buscando,
-        Ela aproveitou para colocar outras peças de roupa dentro da bolsa, não escolheu nenhuma das peças que eu busquei e saiu sem pagar
+        Em frente ao condomínio onde eu moro, existe uma obra da construtora Marinho, eles iniciam as obras todos os dias às 6 da manhã e terminam às 18h.
+        Porém a obra continua aos finais de semana e não para nem no domingo, causando barulho e poluição sonora.
+        O condomínio não faz nada para resolver o problema, e nem mesmo reconhece que é um problema. Além de dificultarem o trânsito por conta do tráfego de caminhões, ergueram
+        alguns carros de moradores e visitantes, sem autorização.
         TXT;
+
+        // $facts = <<<'TXT'
+        // Doutor, no dia 15 do mês passado, eu peguei um voo direto de São Paulo para Recife pela companhia aérea [Nome da Empresa], com chegada prevista para as 18h. Despachei uma mala grande no balcão de check-in, tudo certinho, e recebi aquele comprovante colado no bilhete.
+        // Quando cheguei no aeroporto de Recife, fui direto para a esteira e fiquei esperando. As malas das outras pessoas foram saindo, a esteira parou e a minha mala simplesmente não apareceu. Procurei o balcão da empresa na hora e me mandaram preencher um documento chamado RIB (Relatório de Irregularidade de Bagagem). O funcionário me disse que era uma confusão comum e que a mala entregaria no meu hotel até o dia seguinte.
+        // Acontece que eu passei as férias inteiras — que duraram 7 dias — sem a minha mala. Dentro dela estavam todas as minhas roupas, sapatos, remédios de uso diário e itens de higiene. Tive que gastar dinheiro do meu próprio bolso comprando peças básicas para conseguir me vestir durante a viagem. Liguei para o SAC da empresa todos os dias, mas eles só diziam que estavam "rastreando o volume".
+        // Hoje, um mês depois do voo, a minha mala não foi localizada e a empresa não deu nenhuma previsão de reembolso ou solução. Queria saber o que podemos fazer para entrar com um processo para cobrar o valor das coisas que perdi e os comprovantes de gastos, além do transtorno que passei na viagem.
+        // TXT;
 
         $classification = ClassifyLegalCase::run($facts);
 
