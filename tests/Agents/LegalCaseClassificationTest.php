@@ -37,12 +37,24 @@ final class LegalCaseClassificationTest extends TestCase
     #[Test]
     public function it_classifies_a_narrative_of_facts_into_an_area_and_a_procedural_class(): void
     {
+        // $facts = <<<'TXT'
+        // No dia 12/09/2026, por volta das 21h, eu estava em casa assistindo TV, quando de repente ouvi
+        // um barulho de batida de carro muito forte, que parecia ser dentro da minha àrea residencial. Ao sair para verificar,
+        // notei que um homem havia batido no meu portão, causando a quebra do motor eletrico e o entortamento do portão de alumínio.
+        // Ao tentar conversar com o homem, ele se recusou a se identificar, agiu de forma agressiva e fugiu. Notei que ele estava com sinais de embriaguez.
+        // Por sorte, consegui capturar a placa do carro do homem, que correspondia na numeração YTD123, e era do modelo Chevrolet Onix.
+        // TXT;
+
+        // $facts = <<<'TXT'
+        // Em frente ao condomínio onde eu moro, existe uma obra da construtora Marinho, eles iniciam as obras todos os dias às 6 da manhã e terminam às 18h.
+        // Porém a obra continua aos finais de semana e não para nem no domingo, causando barulho e poluição sonora.
+        // O condomínio não faz nada para resolver o problema, e nem mesmo reconhece que é um problema. Além de dificultarem o trânsito por conta do tráfego de caminhões, ergueram
+        // alguns carros de moradores e visitantes, sem autorização.
+        // TXT;
+
         $facts = <<<'TXT'
-        No dia 12/09/2026, por volta das 21h, eu estava em casa assistindo TV, quando de repente ouvi
-        um barulho de batida de carro muito forte, que parecia ser dentro da minha àrea residencial. Ao sair para verificar,
-        notei que um homem havia batido no meu portão, causando a quebra do motor eletrico e o entortamento do portão de alumínio.
-        Ao tentar conversar com o homem, ele se recusou a se identificar, agiu de forma agressiva e fugiu. Notei que ele estava com sinais de embriaguez.
-        Por sorte, consegui capturar a placa do carro do homem, que correspondia na numeração YTD123, e era do modelo Chevrolet Onix.
+        Uma moça entrou dentro do meu estabelecimento, fez com que eu buscasse algumas peças de roupa para ela provar, e enquanto eu estava buscando,
+        Ela aproveitou para colocar outras peças de roupa dentro da bolsa, não escolheu nenhuma das peças que eu busquei e saiu sem pagar
         TXT;
 
         $classification = ClassifyLegalCase::run($facts);
