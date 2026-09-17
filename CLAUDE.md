@@ -181,12 +181,29 @@ que cabem no prompt, um corte por similaridade só conseguiria remover a opção
 certa. A busca vetorial fica reservada para Jurisprudência, onde o corpus não
 cabe. Os dois READMEs em `app/Ai` e `app/Rag` detalham o resto.
 
-O primeiro agente é o `PracticeAreaClassificationAgent`: recebe os fatos, devolve
-a área de atuação e o porquê. As 24 áreas chegam **injetadas** nas instruções e
-também como `enum()` no `schema()` — o Ollama converte isso em gramática, então
-uma área inventada não é algo que o modelo consiga emitir. Quem chama é
-`ClassifyPracticeArea`, uma Action sem `asController()` enquanto nenhuma rota
-apontar para ela.
+O enquadramento de um caso são **dois** agentes em série, e a ordem é imposta, não
+escolhida. `PracticeAreaClassificationAgent` recebe os fatos e devolve a área de
+atuação; `ProceduralClassSelectionAgent` recebe a área já decidida e escolhe entre
+as classes processuais vinculadas a ela. As opções chegam **injetadas** nas
+instruções e também como `enum()` no `schema()` — o Ollama converte isso em
+gramática, então nem uma área nem uma classe inventada é algo que o modelo consiga
+emitir. E as classes candidatas só existem depois que a área é conhecida: daí não
+caber numa chamada só.
+
+A classe é escolhida pelo **código do CNJ**, um inteiro, e não pelo slug: slug de
+classe processual **não é único** (559 distintos em 615 linhas). O uuid nunca entra
+no prompt — é gerado na migration de carga e difere entre bancos —, só sai no
+`toArray()`, para ser gravado.
+
+Só entram na lista as classes de ajuizamento (`is_filing_class`): um relato sem
+processo em curso é uma inicial, então recurso, incidente e cumprimento de sentença
+não podem ser a resposta. `processual-geral` é a única área sem nenhuma, e cai de
+volta para todas as suas — lista de candidatas vazia seria `enum` vazio, que é
+gramática inválida.
+
+Quem encadeia é `ClassifyLegalCase`, que devolve `LegalCaseClassification` com as
+duas entidades e **uma justificativa para cada**. Nenhuma das três Actions tem
+`asController()` enquanto nenhuma rota apontar para elas.
 
 Testes de agente ficam em `tests/Agents`, no grupo `agents`, **fora** do
 `php artisan test` padrão porque exigem o Ollama de pé e gastam segundos de

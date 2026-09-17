@@ -15,6 +15,9 @@ use RuntimeException;
 /**
  * Suggest the practice area a narrative of facts belongs to.
  *
+ * The first step of ClassifyLegalCase, and still callable on its own — the area
+ * is useful before the class is, and the manual form may want only this.
+ *
  * Deliberately without an `asController()`: nothing routes here yet. The shell
  * arrives when the pleading form asks for a suggestion, and until then this
  * stays a plain use case that a form, a job or a test can call the same way.

@@ -6,6 +6,7 @@ O conhecimento que os agentes de `app/Ai` leem. Markdown em `knowledge/`, carreg
 | Documento | Usado por |
 |---|---|
 | `knowledge/practice-areas.md` | `PracticeAreaClassificationAgent` |
+| `knowledge/procedural-classes.md` | `ProceduralClassSelectionAgent` |
 
 ## Por que o documento inteiro, e não os top-k trechos
 
@@ -30,6 +31,18 @@ módulo de Jurisprudência vai ser.
 
 Atenção: o cast `AsVector` que a documentação oficial mostra **não existe** no
 `laravel/framework` 12.69.2. Até existir, a hidratação da coluna precisa de cast próprio.
+
+## O acoplamento do guia de classes com o prompt
+
+`procedural-classes.md` descreve o **tronco cível** — as 24 classes genéricas que
+aparecem em quase toda área. Isso não é redundância com o catálogo: o prompt manda essas
+classes **só pelo nome**, justamente porque elas estão descritas aqui. Descrever as 24 em
+todo prompt custaria ~7 KB na maior área e diria menos do que o guia diz, que é quando
+cada uma cabe e quando não cabe.
+
+Consequência: se a lista de genéricas mudar numa ressincronização do CNJ, o documento
+muda junto. `ProceduralClassCandidatesTest` verifica que todo código citado aqui ainda
+existe no catálogo.
 
 ## Escrevendo um documento novo
 

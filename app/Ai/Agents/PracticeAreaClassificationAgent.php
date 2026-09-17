@@ -10,7 +10,9 @@ use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasStructuredOutput;
+use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 
 /**
@@ -33,12 +35,17 @@ use Laravel\Ai\Promptable;
  *
  * The schema is not repeated in the instructions: the SDK's Ollama gateway
  * already appends it to the system prompt (ComposesSchemaInstructions).
+ *
+ * This is the first of two steps — ProceduralClassSelectionAgent decides the
+ * procedural class afterwards, out of the classes linked to the area named
+ * here. It cannot be one call: the classes it chooses between are the ones this
+ * answer selects.
  */
 #[Provider('ollama')]
 #[Model('gpt-oss:20b')]
 #[Timeout(180)]
 #[Temperature(0.2)]
-final class PracticeAreaClassificationAgent implements Agent, HasStructuredOutput
+final class PracticeAreaClassificationAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use Promptable;
 
@@ -100,6 +107,20 @@ final class PracticeAreaClassificationAgent implements Agent, HasStructuredOutpu
                 )
                 ->required(),
         ];
+    }
+
+    /**
+     * Ollama truncates a prompt that overruns the context window in silence:
+     * the answer still looks plausible, built on a guide that lost its tail.
+     * Nothing in config/ai.php sets `num_ctx`, so the daemon default would
+     * decide it — and the guide alone is 19 KB. Stated here instead of
+     * inherited, and well under the model's 131k, which costs memory to claim.
+     *
+     * @return array<string, mixed>
+     */
+    public function providerOptions(Lab|string $provider): array
+    {
+        return ['num_ctx' => 16384];
     }
 
     private function areaList(): string
