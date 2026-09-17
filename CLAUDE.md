@@ -24,6 +24,7 @@ docker compose up -d                 # Postgres + pgvector na porta 5442
 php artisan migrate:fresh --seed     # senha de todos os usuários: password
 composer dev                         # serve + queue + pail + vite
 php artisan test                     # PHPUnit contra o banco lexia_testing
+php artisan lexia:embed-procedural-classes  # vetores do catálogo (após mexer nas descrições)
 ./vendor/bin/pint                    # formatação
 composer analyse                     # phpstan nível 6, sem supressões
 npm run types:check                  # tsc --noEmit
@@ -158,20 +159,22 @@ sessão. O `/register` do Fortify está desligado: o cadastro público é
 - Busca vetorial é **nativa do core do Laravel 12**
   (`$table->vector()`, `whereVectorSimilarTo()`). Não existe
   `pgvector/pgvector-php`; não instale nada para isso. O cast `AsVector` que a
-  documentação do SDK mostra ainda **não existe** no framework 12.69.2.
+  documentação do SDK mostra **não existe** no framework 12.69.2 — o nosso está
+  em `App\Domain\Shared\Casts\AsVector`.
 - A doc oficial do Laravel AI mostra o Ollama como `driver => openai-compatible`;
   o pacote v0.11.2 tem `OllamaProvider` nativo (`driver => ollama`), que é o que
   este projeto usa — ele fala `/api/chat` e `/api/embed` de verdade.
 - **Nunca mande `think: false`** a um modelo que raciocina: o `gpt-oss:20b`
   respondia com conteúdo vazio e a linha qwen3 pensa por padrão. O padrão
   (thinking ligado) já entrega JSON limpo, porque o Ollama separa o raciocínio
-  em `message.thinking`.
+  em `message.thinking`. O `qwen2.5:7b` de hoje não raciocina — a armadilha está
+  dormente, não removida.
 - `sebastian/complexity` está vendorizado mas **quebra em enums** — por isso a
   skill de complexidade usa `nikic/php-parser` direto.
 
 ## Os agentes
 
-`laravel/ai` falando com um Ollama local: `qwen3.8:27b` para texto,
+`laravel/ai` falando com um Ollama local: `qwen2.5:7b` para texto,
 `nomic-embed-text` (768 dimensões) para embeddings. `config/ai.php` declara um
 provider só, de propósito — a narrativa de um caso não sai da infraestrutura do
 escritório para ser processada.
@@ -179,16 +182,28 @@ escritório para ser processada.
 Nem o modelo nem o tamanho do contexto pertencem a um agente. Nenhum deles carrega
 `#[Model]` — o nome do modelo vive em `OLLAMA_TEXT_MODEL` e o SDK resolve cada
 agente por `defaultTextModel()` —, e o `num_ctx` sai de `ai.context_window`
-(`AI_CONTEXT_WINDOW`, 16384) através do trait `UsesConfiguredContextWindow`. É
+(`AI_CONTEXT_WINDOW`, 24576) através do trait `UsesConfiguredContextWindow`. É
 o que torna a troca de modelo uma linha de `.env`: o número descreve o tamanho
 dos prompts que escrevemos, não a janela do modelo da vez. Sem ele o Ollama
-truncaria em silêncio um prompt grande — o guia de áreas sozinho tem 19 KB.
+truncaria em silêncio um prompt grande — o maior prompt de classe tem 10.946
+tokens medidos pelo `prompt_eval_count` do próprio Ollama.
 
-O conhecimento vive em `app/Rag/knowledge/` como markdown e é carregado inteiro
-pelo `KnowledgeBase`, não por recuperação top-k: para escolher entre 24 opções
-que cabem no prompt, um corte por similaridade só conseguiria remover a opção
-certa. A busca vetorial fica reservada para Jurisprudência, onde o corpus não
-cabe. Os dois READMEs em `app/Ai` e `app/Rag` detalham o resto.
+O conhecimento tem **dois regimes de recuperação**, cada um onde ganha. O markdown
+de `app/Rag/knowledge/` vai inteiro pelo `KnowledgeBase`: para escolher entre 24
+opções que cabem no prompt, um corte por similaridade só conseguiria remover a
+opção certa, e um desempate do tipo "não confunda X com Y" é irrecuperável por
+similaridade, porque o trecho relevante fala da opção *errada*.
+
+O **catálogo de classes**, esse é vetorizado — `procedural_classes.embedding`,
+`vector(768)` do pgvector. Ali o corpus não cabe: só as candidatas da maior área
+passam de 30 KB depois do enriquecimento. `ProceduralClassRankingQuery` ordena as
+candidatas pela proximidade com o relato e `DescribedCandidateBudget` decide
+quantas cabem descritas; as demais chegam ao prompt só com nome e código.
+
+A distinção que sustenta o desenho: **o vetor nunca tira uma candidata do `enum`**.
+Ele escolhe onde gastar a janela, não quais respostas são possíveis — é a objeção
+ao top-k, evitada por construção. Os dois READMEs em `app/Ai` e `app/Rag`
+detalham o resto.
 
 O enquadramento de um caso são **dois** agentes em série, e a ordem é imposta, não
 escolhida. `PracticeAreaClassificationAgent` recebe os fatos e devolve a área de
@@ -203,6 +218,14 @@ A classe é escolhida pelo **código do CNJ**, um inteiro, e não pelo slug: slu
 classe processual **não é único** (559 distintos em 615 linhas). O uuid nunca entra
 no prompt — é gerado na migration de carga e difere entre bancos —, só sai no
 `toArray()`, para ser gravado.
+
+A descrição de cada classe de ajuizamento é **operacional**, não doutrinária: o que
+se pede ao juiz, o pressuposto, o prazo próprio quando é ele que distingue a classe,
+e os instrumentos. Junto vai `legal_bases`, os artigos que a peça cita. É o que
+separa um par como `[172] Embargos à Execução` (15 dias da citação, art. 915 do CPC,
+sem garantia) de `[1118] Embargos à Execução Fiscal` (30 dias, art. 16 da LEF,
+depois de garantido o juízo). Tudo isso é redação nossa: uma ressincronização com a
+TPU do CNJ não a devolve — ver `database/data/README.md`.
 
 Só entram na lista as classes de ajuizamento (`is_filing_class`): um relato sem
 processo em curso é uma inicial, então recurso, incidente e cumprimento de sentença
@@ -226,5 +249,7 @@ composer test:agents
 ## Ainda não implementado
 
 O módulo de Jurisprudência: ingestão, chunking e busca vetorial sobre o corpus.
-A integração de embeddings já está pronta e verificada; falta a coluna vetorial,
-o pipeline de ingestão e o `SimilaritySearch` no agente.
+O pgvector já está de pé e em uso no catálogo de classes, então o que falta é a
+tabela do corpus, o pipeline de ingestão e o `SimilaritySearch` no agente. Lá o
+índice ANN passa a valer — no catálogo, com 615 linhas, o scan exato é mais
+rápido do que a perda de recall compensaria.

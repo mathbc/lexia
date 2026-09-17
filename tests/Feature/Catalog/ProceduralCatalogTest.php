@@ -110,6 +110,68 @@ final class ProceduralCatalogTest extends TestCase
     }
 
     #[Test]
+    public function every_filing_class_carries_the_articles_a_pleading_cites(): void
+    {
+        // `legal_bases` é editorial como `description`, e é o que o agente lê
+        // para desempatar duas classes parecidas. Uma classe de ajuizamento sem
+        // fundamentação chegaria ao prompt sem o dado que mais separa.
+        $this->assertSame(
+            0,
+            ProceduralClass::query()
+                ->where('is_filing_class', true)
+                ->whereRaw('jsonb_array_length(coalesce(legal_bases, \'[]\'::jsonb)) = 0')
+                ->count(),
+        );
+
+        $class = ProceduralClass::query()->where('code', 7)->sole();
+
+        $this->assertSame([
+            'CPC, art. 318 (cabimento do procedimento comum)',
+            'CPC, art. 319 (requisitos da petição inicial)',
+            'CPC, art. 300 (tutela de urgência)',
+            'CC, art. 186 e 927 (ato ilícito e dever de indenizar)',
+        ], $class->citedLegalBases());
+    }
+
+    #[Test]
+    public function the_two_kinds_of_embargos_are_told_apart_by_their_deadline(): void
+    {
+        // O par que motivou o enriquecimento. As duas classes se chamam quase
+        // igual e se separam pelo dispositivo: sem garantia e 15 dias da
+        // citação no CPC, contra 30 dias depois de garantido o juízo na LEF.
+        $cpc = ProceduralClass::query()->where('code', 172)->sole();
+        $lef = ProceduralClass::query()->where('code', 1118)->sole();
+
+        $this->assertStringContainsString('15 dias', (string) $cpc->description);
+        $this->assertStringContainsString('independentemente de penhora', (string) $cpc->description);
+
+        $this->assertStringContainsString('30 dias', (string) $lef->description);
+        $this->assertStringContainsString('garantido o juízo', (string) $lef->description);
+
+        $this->assertStringContainsString('CPC, art. 915', implode(' ', $cpc->citedLegalBases()));
+        $this->assertStringContainsString('Lei 6.830/1980, art. 16', implode(' ', $lef->citedLegalBases()));
+    }
+
+    #[Test]
+    public function a_class_without_curated_bases_falls_back_to_the_cnj_reference(): void
+    {
+        // A carga dá a toda linha com `legal_norm` ao menos a citação do CNJ,
+        // então este caminho não aparece no catálogo de hoje — mas aparece numa
+        // linha recém-inserida por uma ressincronização que ainda não passou
+        // pelo enriquecimento, e aí o seletor não pode ficar sem fundamentação.
+        $class = new ProceduralClass([
+            'legal_norm' => 'CPC 2015',
+            'legal_article' => '318',
+            'legal_bases' => [],
+        ]);
+
+        $this->assertSame(['CPC 2015, art. 318'], $class->citedLegalBases());
+
+        // Sem norma nenhuma, lista vazia — e não uma string solta com vírgula.
+        $this->assertSame([], (new ProceduralClass)->citedLegalBases());
+    }
+
+    #[Test]
     public function the_civil_trunk_reaches_every_civil_area(): void
     {
         // The bug this locks down: the trunk of PROCESSO CÍVEL E DO TRABALHO —

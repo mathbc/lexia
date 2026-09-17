@@ -9,6 +9,17 @@ lista de candidatas. Devolva **apenas o número**.
 
 A área sai dos fatos. A classe sai do **pedido**: do que se quer do juiz.
 
+A lista de candidatas chega ordenada por proximidade com o relato, e a maioria delas
+vem descrita — o que se pede, o pressuposto, o prazo próprio e a base legal. Quando uma
+classe chega só com o nome, é porque a lista não coube inteira no prompt, **não** porque
+ela esteja descartada: ela continua sendo uma resposta válida, e as do tronco cível
+estão descritas aqui embaixo.
+
+Leia a base legal quando duas classes parecerem próximas: é com frequência o
+dispositivo que as separa. Os 30 dias do art. 16 da LEF, contados da garantia do juízo,
+são `[1118] Embargos à Execução Fiscal`; os 15 dias do art. 915 do CPC, contados da
+citação e sem garantia nenhuma, são `[172] Embargos à Execução`.
+
 ## Como escolher a classe
 
 1. **Identifique o pedido, não o acontecimento.** "Bateram no meu portão e fugiram" é
@@ -60,7 +71,9 @@ legítima; fora dela, escolha outra.
 ## O tronco cível
 
 As classes abaixo não pertencem a nenhuma área: são o tronco comum do processo civil e
-chegam na lista de quase toda área cível, sem descrição. É aqui que elas estão descritas.
+chegam na lista de quase toda área cível. O que está aqui são os **desempates** entre
+elas — quando cada uma cabe e quando não cabe —, que valem mesmo quando a classe já
+chegou descrita na lista de candidatas.
 
 - `[7] Procedimento Comum Cível` — o rito padrão; ver acima.
 - `[32] Consignação em Pagamento` — o cliente quer **pagar** e não consegue: o credor

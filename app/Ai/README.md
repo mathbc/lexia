@@ -32,11 +32,21 @@ que pedir isso vai despachar, não esperar.
 
 Sem `num_ctx` o tamanho de contexto é o default do daemon, e o Ollama **trunca em
 silêncio** quando o prompt estoura — a resposta volta plausível, construída sobre um
-prompt que perdeu o fim. O guia de áreas sozinho tem 19 KB; a lista de classes chega
-a 18 KB.
+prompt que perdeu o fim. O guia de áreas sozinho tem 19 KB.
+
+O valor é medido, não estimado. O maior prompt de sistema que o agente de classe monta
+— Penal, 45 candidatas, 31 delas descritas — tem **10.946 tokens** pelo
+`prompt_eval_count` do próprio Ollama. Somando o schema que o gateway anexa, um relato
+longo de cliente e a resposta, 24576 deixa folga real onde 16384 deixava quase nenhuma.
+Para remedir depois de mexer nos prompts:
+
+```bash
+curl -s http://localhost:11434/api/generate -d '{"model":"qwen2.5:7b","prompt":"…","stream":false,"options":{"num_predict":1}}' \
+  | php -r 'echo json_decode(stream_get_contents(STDIN),true)["prompt_eval_count"].PHP_EOL;'
+```
 
 O número é **um só, e não é do modelo**: `ai.context_window` (env `AI_CONTEXT_WINDOW`,
-16384 por padrão) descreve o tamanho dos prompts que este projeto escreve, e quem o
+24576 por padrão) descreve o tamanho dos prompts que este projeto escreve, e quem o
 entrega ao provider é o trait `App\Ai\Concerns\UsesConfiguredContextWindow`. Um agente
 novo usa o trait e implementa `HasProviderOptions`; nada nele precisa saber qual modelo
 está respondendo. O trait só emite `num_ctx` para o driver `ollama`, que é quem conhece
@@ -47,7 +57,7 @@ Cuidado ao mexer: `providerOptions` cai na chave `options` do corpo, mas `think`
 
 ## Provider e modelo
 
-Ollama local, configurado em `config/ai.php`: `qwen3.8:27b` para texto e
+Ollama local, configurado em `config/ai.php`: `qwen2.5:7b` para texto e
 `nomic-embed-text` (768 dimensões) para embeddings. É o único provider declarado —
 a história do cliente não sai da infraestrutura do escritório para ser classificada.
 
@@ -61,12 +71,29 @@ rodar `php artisan config:clear`.
 1. **Nunca mande `think: false`.** O `gpt-oss:20b` respondia com `content` vazio, e a
    linha qwen3 também raciocina por padrão. Deixado em paz, o Ollama separa o raciocínio
    em `message.thinking` e o JSON chega limpo em `message.content`, que é o que a saída
-   estruturada consome.
+   estruturada consome. O `qwen2.5:7b` de hoje não raciocina, então a armadilha está
+   dormente — o que não é motivo para acrescentar a chave: ela volta a morder no dia em
+   que o `OLLAMA_TEXT_MODEL` apontar para um modelo que pensa.
 2. **A chave `models` no `config/ai.php` é obrigatória.** Sem ela o `OllamaProvider` cai
    no default do pacote, `qwen3.5:4b`, que este projeto não baixa.
 3. **O modelo precisa suportar `tools`/saída estruturada.** O `format` do Ollama vira
    gramática; um modelo sem essa capacidade devolve JSON só por boa vontade. Confira com
    `ollama show <modelo>` antes de trocar.
+
+## Busca vetorial no catálogo
+
+O agente de classe processual não recebe mais todas as candidatas descritas. As 615
+classes têm uma coluna `vector(768)` (pgvector), e `SelectProceduralClass` ordena as
+candidatas da área pela proximidade com o relato antes de montar o prompt: as mais
+próximas chegam com descrição, matérias típicas e base legal, as demais só com nome e
+código.
+
+**Todas continuam no `enum`.** O que o vetor decide é orçamento de janela, nunca o
+conjunto de respostas possíveis — a garantia de gramática segue intacta.
+
+É isso que paga o catálogo enriquecido: as descrições passaram a carregar prazo, gatilho
+e instrumentos, e a lista inteira da maior área não caberia ao lado do guia. Detalhes,
+inclusive por que o documento markdown continua indo inteiro, em `app/Rag/README.md`.
 
 ## Saída estruturada
 

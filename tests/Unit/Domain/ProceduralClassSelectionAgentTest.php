@@ -24,9 +24,9 @@ final class ProceduralClassSelectionAgentTest extends TestCase
         $agent = new ProceduralClassSelectionAgent(
             areaLabel: 'Direito Civil',
             candidates: [
-                ['code' => 7, 'name' => 'Procedimento Comum Cível', 'scope' => 'generic', 'description' => null, 'subjects' => []],
-                ['code' => 40, 'name' => 'Monitória', 'scope' => 'specific', 'description' => 'Prova escrita sem força executiva.', 'subjects' => ['Cobrança']],
-                ['code' => 12154, 'name' => 'Execução de Título Extrajudicial', 'scope' => 'specific', 'description' => null, 'subjects' => []],
+                ['code' => 7, 'name' => 'Procedimento Comum Cível', 'scope' => 'generic', 'description' => null, 'subjects' => [], 'legal_bases' => []],
+                ['code' => 40, 'name' => 'Monitória', 'scope' => 'specific', 'description' => 'Prova escrita sem força executiva.', 'subjects' => ['Cobrança'], 'legal_bases' => ['CPC, art. 700 (ação monitória)']],
+                ['code' => 12154, 'name' => 'Execução de Título Extrajudicial', 'scope' => 'specific', 'description' => null, 'subjects' => [], 'legal_bases' => []],
             ],
             knowledge: '# Guia',
         );

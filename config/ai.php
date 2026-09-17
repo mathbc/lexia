@@ -54,12 +54,47 @@ return [
     |
     | It is a property of the prompts this project writes, not of whichever
     | model is answering them, so it is stated once here instead of per agent.
-    | Raise it if a prompt grows; every model this project would run clears 16k
-    | comfortably, and claiming more than needed only costs memory.
+    | Raise it if a prompt grows; claiming more than needed only costs memory.
+    |
+    | Measured, not guessed: the largest system prompt the class agent builds —
+    | Penal, 45 candidates, 31 of them described — is 10,946 tokens by Ollama's
+    | own `prompt_eval_count`. Add the schema the gateway appends, a long client
+    | narrative and the answer, and 24k leaves real headroom where 16k left
+    | almost none. qwen2.5:7b carries 32k natively, so this still fits.
     |
     */
 
-    'context_window' => (int) env('AI_CONTEXT_WINDOW', 16384),
+    'context_window' => (int) env('AI_CONTEXT_WINDOW', 24576),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Retrieval
+    |--------------------------------------------------------------------------
+    |
+    | Quanto da janela a lista de classes candidatas pode gastar descrevendo —
+    | descrição, matérias típicas e artigos de base. As que não couberem chegam
+    | só com nome e código; todas continuam no `enum`, então isto é orçamento de
+    | prompt, nunca restrição das respostas possíveis.
+    |
+    | Em caracteres, e não em número de classes, porque é o tamanho que é o
+    | limite de verdade: 17 das 24 áreas cabem inteiras em 16 KB e não perdem
+    | nada, enquanto Família (54 candidatas, 33 KB) precisaria ser cortada de
+    | qualquer forma. Um teto por contagem cortaria as duas do mesmo jeito.
+    |
+    | A ordem do corte é a da proximidade vetorial com o relato
+    | (ProceduralClassRankingQuery). O piso garante um mínimo de classes
+    | descritas mesmo que as primeiras sejam anormalmente longas.
+    |
+    | Medido: com 16 KB de lista, o maior prompt de sistema — Penal — fica em
+    | 10.946 tokens dos 24576 de `context_window`. Suba se o modelo errar por não
+    | ter visto a classe certa descrita; desça se o Ollama começar a truncar.
+    |
+    */
+
+    'retrieval' => [
+        'description_budget' => (int) env('AI_DESCRIPTION_BUDGET', 16000),
+        'minimum_described' => (int) env('AI_MINIMUM_DESCRIBED', 10),
+    ],
 
     /*
     |--------------------------------------------------------------------------
@@ -90,9 +125,9 @@ return [
 
             'models' => [
                 'text' => [
-                    'default' => env('OLLAMA_TEXT_MODEL', 'qwen3.8:27b'),
-                    'cheapest' => env('OLLAMA_TEXT_MODEL', 'qwen3.8:27b'),
-                    'smartest' => env('OLLAMA_TEXT_MODEL', 'qwen3.8:27b'),
+                    'default' => env('OLLAMA_TEXT_MODEL', 'qwen2.5:7b'),
+                    'cheapest' => env('OLLAMA_TEXT_MODEL', 'qwen2.5:7b'),
+                    'smartest' => env('OLLAMA_TEXT_MODEL', 'qwen2.5:7b'),
                 ],
 
                 'embeddings' => [

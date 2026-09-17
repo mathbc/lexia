@@ -31,12 +31,29 @@ Consequência: a relação área ↔ classe é **muitos-para-muitos**. O código
 
 ## Campos que merecem explicação
 
-- **`description`** e **`typical_subjects`** — redação **nossa**, não do CNJ. O glossário
-  do SGT é transcrição do texto legal e não diz ao advogado quando a classe é a certa;
-  aqui está o que ela é, quando cabe e para que serve, mais as matérias tipicamente
-  discutidas nela. Não são códigos da Tabela de Assuntos, e uma ressincronização com o
-  CNJ não os traz de volta: preserve-os ao regerar os JSON. Revise antes de expor como
-  conteúdo jurídico ao usuário final.
+- **`description`**, **`typical_subjects`** e **`legal_bases`** — redação **nossa**, não
+  do CNJ. O glossário do SGT é transcrição do texto legal e não diz ao advogado quando a
+  classe é a certa. **Uma ressincronização com o CNJ não os traz de volta: preserve-os
+  por `code` ao regerar os JSON.** Revise antes de expor como conteúdo jurídico ao
+  usuário final.
+
+  A `description` das 326 classes de ajuizamento segue uma fórmula, porque quem a lê é
+  um relato leigo e não um índice: **o que se pede ao juiz + o pressuposto que abre a
+  classe + o prazo ou requisito próprio, quando é ele que a distingue + os instrumentos
+  práticos**. Comparar as duas gerações mostra o que mudou:
+
+  > *antes* — "Ação incidental de conhecimento, distribuída por dependência e autuada em
+  > apartado, pela qual o executado se opõe à execução…"
+  >
+  > *agora* — "Defesa do executado em execução de título extrajudicial já em curso,
+  > independentemente de penhora, depósito ou caução, **no prazo de 15 dias da citação**…"
+
+- **`legal_bases`** — os artigos que a peça daquela classe cita, como lista de
+  `{norm, article, note}`, e não como texto corrido. É o que mais desempata classes de
+  nome parecido: `[172] Embargos à Execução` são 15 dias do art. 915 do CPC sem garantia
+  nenhuma; `[1118] Embargos à Execução Fiscal` são 30 dias do art. 16 da LEF **depois**
+  de garantido o juízo. Não confundir com `legal_norm`/`legal_article`, que vêm do CNJ e
+  dizem onde a *classe* está definida, não o que a peça invoca.
 - **`scope`** (no vínculo) — `specific`, classe própria daquela área, ou `generic`,
   classe do tronco cível que serve qualquer área cível. Ordene as específicas primeiro:
   é a diferença entre um select usável e um com 120 itens.
@@ -101,5 +118,15 @@ Trabalho, que era o estado anterior.
 O CNJ altera a TPU com frequência. `getDataUltimaVersao()` no web service devolve a data
 da última versão — compare com a do topo deste arquivo e só reprocesse quando mudar.
 Regerar os dois JSON e acrescentar uma migration que chama a mesma rotina de carga, que é
-idempotente (upsert por `code` e por `slug`). `description` e `typical_subjects` são
-editoriais: reaproveite-os por `code` em vez de esperá-los do web service.
+idempotente (upsert por `code` e por `slug`). `description`, `typical_subjects` e
+`legal_bases` são editoriais: reaproveite-os por `code` em vez de esperá-los do web
+service.
+
+O glossário oficial de cada classe sai de `getArrayDetalhesItemPublicoWS(<code>, 'C')`,
+que devolve `dispositivo_legal`, `artigo` e o texto de lei transcrito — é a fonte contra
+a qual as descrições foram escritas e revisadas.
+
+**Depois de qualquer migration que mexa em `description`, `typical_subjects` ou
+`legal_bases`, rode `php artisan lexia:embed-procedural-classes`**: os vetores descrevem
+o texto anterior, e a migration de recarga zera os hashes justamente para que a próxima
+passada os refaça.
