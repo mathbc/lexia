@@ -4,15 +4,14 @@ declare(strict_types=1);
 
 namespace App\Ai\Agents;
 
+use App\Ai\Concerns\UsesConfiguredContextWindow;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Laravel\Ai\Attributes\Model;
 use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasStructuredOutput;
-use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 
 /**
@@ -25,13 +24,17 @@ use Laravel\Ai\Promptable;
  * emit. That guarantee is worth more than the round trip it costs, and it is
  * why the caller resolves the slug against the same collection it passed in.
  *
- * Two things learned from the model itself, both easy to undo by accident:
+ * Two things learned the hard way, both easy to undo by accident:
  *
- * 1. Never send `think: false` to gpt-oss:20b. It answers with empty content.
- *    Left alone, Ollama puts the reasoning in `message.thinking` and the JSON
- *    arrives clean in `message.content`, which is exactly what we want.
+ * 1. Never send `think: false` to a thinking model. gpt-oss:20b answered with
+ *    empty content when told to skip it, and the qwen3 line reasons by default
+ *    too. Left alone, Ollama puts the reasoning in `message.thinking` and the
+ *    JSON arrives clean in `message.content`, which is exactly what we want.
  * 2. The justification needs its `description()`. Without one the model
  *    answers with a slug-shaped fragment instead of a sentence.
+ *
+ * No `#[Model]` here on purpose: the model is `config/ai.php`'s to name, so a
+ * swap is an env change rather than an edit to every agent.
  *
  * The schema is not repeated in the instructions: the SDK's Ollama gateway
  * already appends it to the system prompt (ComposesSchemaInstructions).
@@ -42,12 +45,12 @@ use Laravel\Ai\Promptable;
  * answer selects.
  */
 #[Provider('ollama')]
-#[Model('gpt-oss:20b')]
 #[Timeout(180)]
 #[Temperature(0.2)]
 final class PracticeAreaClassificationAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use Promptable;
+    use UsesConfiguredContextWindow;
 
     /**
      * @param  list<array{slug: string, label: string}>  $areas  every area the answer may name
@@ -107,20 +110,6 @@ final class PracticeAreaClassificationAgent implements Agent, HasProviderOptions
                 )
                 ->required(),
         ];
-    }
-
-    /**
-     * Ollama truncates a prompt that overruns the context window in silence:
-     * the answer still looks plausible, built on a guide that lost its tail.
-     * Nothing in config/ai.php sets `num_ctx`, so the daemon default would
-     * decide it — and the guide alone is 19 KB. Stated here instead of
-     * inherited, and well under the model's 131k, which costs memory to claim.
-     *
-     * @return array<string, mixed>
-     */
-    public function providerOptions(Lab|string $provider): array
-    {
-        return ['num_ctx' => 16384];
     }
 
     private function areaList(): string

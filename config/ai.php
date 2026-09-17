@@ -43,14 +43,37 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Context Window
+    |--------------------------------------------------------------------------
+    |
+    | How much context an agent's prompt is allowed to fill. Ollama truncates a
+    | prompt that overruns the window in silence — the answer still comes back
+    | plausible, built on a system prompt that lost its tail — and left unset
+    | the daemon decides it. Our prompts are large: the areas guide alone is
+    | 19 KB and the candidate list reaches 18 KB.
+    |
+    | It is a property of the prompts this project writes, not of whichever
+    | model is answering them, so it is stated once here instead of per agent.
+    | Raise it if a prompt grows; every model this project would run clears 16k
+    | comfortably, and claiming more than needed only costs memory.
+    |
+    */
+
+    'context_window' => (int) env('AI_CONTEXT_WINDOW', 16384),
+
+    /*
+    |--------------------------------------------------------------------------
     | AI Providers
     |--------------------------------------------------------------------------
     |
     | One provider, and every other one removed: failover walks this list, so
     | a provider left here without credentials is just a slower way to fail.
     |
-    | The `models` key is not decoration. Without it OllamaProvider falls back
-    | to `qwen3.5:4b`, which is not a model this project pulls — the three text
+    | The `models` key is not decoration, and it is the *only* place a text
+    | model is named: no agent carries a `#[Model]` attribute, so every one of
+    | them resolves to `text.default` and a single env var swaps the model for
+    | the whole application. Without this key OllamaProvider falls back to
+    | `qwen3.5:4b`, which is not a model this project pulls — the three text
     | entries all point at the same model because there is only one, and the
     | SDK asks for a cheapest and a smartest by name.
     |
@@ -67,9 +90,9 @@ return [
 
             'models' => [
                 'text' => [
-                    'default' => env('OLLAMA_TEXT_MODEL', 'gpt-oss:20b'),
-                    'cheapest' => env('OLLAMA_TEXT_MODEL', 'gpt-oss:20b'),
-                    'smartest' => env('OLLAMA_TEXT_MODEL', 'gpt-oss:20b'),
+                    'default' => env('OLLAMA_TEXT_MODEL', 'qwen3.8:27b'),
+                    'cheapest' => env('OLLAMA_TEXT_MODEL', 'qwen3.8:27b'),
+                    'smartest' => env('OLLAMA_TEXT_MODEL', 'qwen3.8:27b'),
                 ],
 
                 'embeddings' => [

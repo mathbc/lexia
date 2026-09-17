@@ -4,15 +4,14 @@ declare(strict_types=1);
 
 namespace App\Ai\Agents;
 
+use App\Ai\Concerns\UsesConfiguredContextWindow;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Laravel\Ai\Attributes\Model;
 use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\HasProviderOptions;
 use Laravel\Ai\Contracts\HasStructuredOutput;
-use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Promptable;
 
 /**
@@ -37,16 +36,17 @@ use Laravel\Ai\Promptable;
  * `app/Rag/knowledge/procedural-classes.md`. Spelling all of them out in every
  * prompt costs ~7 KB on the worst area and says less than the guide does.
  *
- * The gpt-oss traps of the sibling agent apply here unchanged: never send
- * `think: false`, and never drop the `description()` on the justification.
+ * The traps the sibling agent documents apply here unchanged: never send
+ * `think: false`, never drop the `description()` on the justification, and
+ * leave the model to `config/ai.php` rather than naming one in a `#[Model]`.
  */
 #[Provider('ollama')]
-#[Model('gpt-oss:20b')]
 #[Timeout(180)]
 #[Temperature(0.2)]
 final class ProceduralClassSelectionAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use Promptable;
+    use UsesConfiguredContextWindow;
 
     /**
      * @param  string  $areaLabel  the area already decided, in the lawyer's words
@@ -113,21 +113,6 @@ final class ProceduralClassSelectionAgent implements Agent, HasProviderOptions, 
                 )
                 ->required(),
         ];
-    }
-
-    /**
-     * Ollama truncates a prompt that overruns the context window without saying
-     * so: the answer comes back plausible, built on a system prompt that lost
-     * its tail. Nothing in config/ai.php sets `num_ctx`, so the daemon default
-     * would decide it. The candidate list alone reaches ~18 KB on the largest
-     * area, and the guide rides along with it — 16k tokens covers both with
-     * room for the reasoning, without paying for the model's full 131k.
-     *
-     * @return array<string, mixed>
-     */
-    public function providerOptions(Lab|string $provider): array
-    {
-        return ['num_ctx' => 16384];
     }
 
     private function candidateList(): string

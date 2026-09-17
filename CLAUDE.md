@@ -162,18 +162,27 @@ sessão. O `/register` do Fortify está desligado: o cadastro público é
 - A doc oficial do Laravel AI mostra o Ollama como `driver => openai-compatible`;
   o pacote v0.11.2 tem `OllamaProvider` nativo (`driver => ollama`), que é o que
   este projeto usa — ele fala `/api/chat` e `/api/embed` de verdade.
-- **Nunca mande `think: false` para o `gpt-oss:20b`**: ele responde com conteúdo
-  vazio. O padrão (thinking ligado) já entrega JSON limpo, porque o Ollama separa
-  o raciocínio em `message.thinking`.
+- **Nunca mande `think: false`** a um modelo que raciocina: o `gpt-oss:20b`
+  respondia com conteúdo vazio e a linha qwen3 pensa por padrão. O padrão
+  (thinking ligado) já entrega JSON limpo, porque o Ollama separa o raciocínio
+  em `message.thinking`.
 - `sebastian/complexity` está vendorizado mas **quebra em enums** — por isso a
   skill de complexidade usa `nikic/php-parser` direto.
 
 ## Os agentes
 
-`laravel/ai` falando com um Ollama local: `gpt-oss:20b` para texto,
+`laravel/ai` falando com um Ollama local: `qwen3.8:27b` para texto,
 `nomic-embed-text` (768 dimensões) para embeddings. `config/ai.php` declara um
 provider só, de propósito — a narrativa de um caso não sai da infraestrutura do
 escritório para ser processada.
+
+Nem o modelo nem o tamanho do contexto pertencem a um agente. Nenhum deles carrega
+`#[Model]` — o nome do modelo vive em `OLLAMA_TEXT_MODEL` e o SDK resolve cada
+agente por `defaultTextModel()` —, e o `num_ctx` sai de `ai.context_window`
+(`AI_CONTEXT_WINDOW`, 16384) através do trait `UsesConfiguredContextWindow`. É
+o que torna a troca de modelo uma linha de `.env`: o número descreve o tamanho
+dos prompts que escrevemos, não a janela do modelo da vez. Sem ele o Ollama
+truncaria em silêncio um prompt grande — o guia de áreas sozinho tem 19 KB.
 
 O conhecimento vive em `app/Rag/knowledge/` como markdown e é carregado inteiro
 pelo `KnowledgeBase`, não por recuperação top-k: para escolher entre 24 opções

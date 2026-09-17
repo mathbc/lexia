@@ -28,28 +28,45 @@ uma com seu `enum`, custam uma inferência a mais e compram a garantia.
 O preço é latência: dois `Timeout(180)` em série não cabem num request síncrono. A tela
 que pedir isso vai despachar, não esperar.
 
-## `num_ctx`, e por que ele é explícito
+## Contexto: `AI_CONTEXT_WINDOW`, e por que ele é explícito
 
-Os dois agentes implementam `HasProviderOptions` devolvendo `['num_ctx' => 16384]`.
-Sem isso o tamanho de contexto é o default do daemon, e o Ollama **trunca em silêncio**
-quando o prompt estoura — a resposta volta plausível, construída sobre um prompt que
-perdeu o fim. O guia de áreas sozinho tem 19 KB; a lista de classes chega a 18 KB.
+Sem `num_ctx` o tamanho de contexto é o default do daemon, e o Ollama **trunca em
+silêncio** quando o prompt estoura — a resposta volta plausível, construída sobre um
+prompt que perdeu o fim. O guia de áreas sozinho tem 19 KB; a lista de classes chega
+a 18 KB.
+
+O número é **um só, e não é do modelo**: `ai.context_window` (env `AI_CONTEXT_WINDOW`,
+16384 por padrão) descreve o tamanho dos prompts que este projeto escreve, e quem o
+entrega ao provider é o trait `App\Ai\Concerns\UsesConfiguredContextWindow`. Um agente
+novo usa o trait e implementa `HasProviderOptions`; nada nele precisa saber qual modelo
+está respondendo. O trait só emite `num_ctx` para o driver `ollama`, que é quem conhece
+essa chave.
+
 Cuidado ao mexer: `providerOptions` cai na chave `options` do corpo, mas `think`,
 `format` e `keep_alive` são içados para o topo — não coloque `think` ali.
 
-## Provider
+## Provider e modelo
 
-Ollama local, configurado em `config/ai.php`: `gpt-oss:20b` para texto e
+Ollama local, configurado em `config/ai.php`: `qwen3.8:27b` para texto e
 `nomic-embed-text` (768 dimensões) para embeddings. É o único provider declarado —
 a história do cliente não sai da infraestrutura do escritório para ser classificada.
 
-## Duas armadilhas do gpt-oss:20b
+**Nenhum agente carrega `#[Model]`.** O modelo é nomeado em um lugar só,
+`ai.providers.ollama.models.text` (env `OLLAMA_TEXT_MODEL`), e sem o atributo o SDK
+resolve cada agente por `defaultTextModel()`. Trocar de modelo é editar o `.env` e
+rodar `php artisan config:clear`.
 
-1. **Nunca mande `think: false`.** O modelo responde com `content` vazio. Deixado em paz,
-   o Ollama separa o raciocínio em `message.thinking` e o JSON chega limpo em
-   `message.content`, que é o que a saída estruturada consome.
+## Três armadilhas, nenhuma exclusiva de um modelo
+
+1. **Nunca mande `think: false`.** O `gpt-oss:20b` respondia com `content` vazio, e a
+   linha qwen3 também raciocina por padrão. Deixado em paz, o Ollama separa o raciocínio
+   em `message.thinking` e o JSON chega limpo em `message.content`, que é o que a saída
+   estruturada consome.
 2. **A chave `models` no `config/ai.php` é obrigatória.** Sem ela o `OllamaProvider` cai
    no default do pacote, `qwen3.5:4b`, que este projeto não baixa.
+3. **O modelo precisa suportar `tools`/saída estruturada.** O `format` do Ollama vira
+   gramática; um modelo sem essa capacidade devolve JSON só por boa vontade. Confira com
+   `ollama show <modelo>` antes de trocar.
 
 ## Saída estruturada
 
