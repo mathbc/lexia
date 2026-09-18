@@ -26,8 +26,13 @@ import {
 import { Field, Input, Select } from "@/components/ui/field";
 import { toDocumentDrafts, type DocumentDraft } from "@/lib/documents";
 import { readHandoff } from "@/lib/legal-case-handoff";
-import { newRequirement, type RequirementDraft } from "@/lib/requirements";
+import {
+    newRequirement,
+    toRequirementDrafts,
+    type RequirementDraft,
+} from "@/lib/requirements";
 import type {
+    DefendantSuggestion,
     LegalCaseDraft,
     LegalCaseStepValue,
     Option,
@@ -76,6 +81,30 @@ const EMPTY_DEFENDANT: DefendantFormValues = {
     defendant_city: "",
     defendant_state: "",
     defendant_notes: "",
+};
+
+/**
+ * A sugestão do agente do réu, nos termos dos campos.
+ *
+ * O servidor diz "o relato não diz" com `null`, e aqui isso vira a string
+ * vazia: um controle sem valor deixa de ser controlado no React, e a etapa do
+ * réu é feita de doze inputs. É a única tradução do caminho, e ela acontece na
+ * ponta que conhece os campos — ver `@/lib/legal-case-handoff`.
+ */
+const suggestedDefendant = (
+    suggestion: DefendantSuggestion | null | undefined,
+): Partial<DefendantFormValues> => {
+    if (!suggestion) {
+        return {};
+    }
+
+    const keys = Object.keys(EMPTY_DEFENDANT) as (keyof DefendantFormValues)[];
+
+    // Percorrer as chaves conhecidas, e não as que vieram: uma entrega de outra
+    // versão do formato não enfia campo nenhum no formulário.
+    return Object.fromEntries(
+        keys.map((key) => [key, suggestion[key] ?? ""]),
+    ) as Partial<DefendantFormValues>;
 };
 
 /** A peça não pede tutela até o advogado dizer que pede — ver `FactsFormFields`. */
@@ -127,11 +156,14 @@ interface Props {
  * informação verdadeira sobre a peça.
  *
  * Uma peça nova pode chegar aqui preenchida: quem vem do preenchimento
- * inteligente traz o cliente, a classe e o relato numa entrega guardada pelo
- * browser, e a área na própria URL — ver `@/lib/legal-case-handoff`. Nada disso
- * está salvo, e é o "Continuar" da primeira etapa que grava tudo de uma vez,
- * relato incluído. O advogado vê o enquadramento antes de aceitá-lo, que é o
- * ponto de devolvê-lo ao assistente em vez de abrir a minuta direto.
+ * inteligente traz o cliente, a classe, o relato, os dados do réu e os pedidos
+ * numa entrega guardada pelo browser, e a área na própria URL — ver
+ * `@/lib/legal-case-handoff`. Nada disso está salvo, e cada etapa grava o que é
+ * dela quando o advogado clica em "Continuar": a primeira grava o enquadramento
+ * junto com o relato, a segunda grava o réu se ele for aceito, a quarta grava
+ * os pedidos que sobreviverem à revisão. O advogado vê as sugestões antes de
+ * aceitá-las, que é o ponto de devolvê-las ao assistente em vez de abrir a
+ * minuta direto.
  */
 export default function LegalCaseForm({
     legalCase,
@@ -170,8 +202,11 @@ export default function LegalCaseForm({
         court_addressing: legalCase?.court_addressing ?? "",
     });
 
+    // A sugestão vem antes da peça salva de propósito: a entrega só existe numa
+    // peça nova, mas a ordem deixa dito quem manda se um dia existirem as duas.
     const defendant = useForm<DefendantFormValues>({
         ...EMPTY_DEFENDANT,
+        ...suggestedDefendant(handoff?.defendant),
         ...(legalCase?.defendant as Partial<DefendantFormValues> | undefined),
     });
 
@@ -179,11 +214,15 @@ export default function LegalCaseForm({
         legalCase?.facts ?? { ...EMPTY_FACTS, facts: handoff?.facts ?? "" },
     );
 
-    // Os pedidos começam vazios numa peça nova: a lista é do caso, e uma peça
-    // pré-preenchida com pedidos que ninguém escolheu é pior do que uma em
-    // branco. Os botões de pedido frequente são a resposta a isso.
+    // A peça montada à mão continua começando com a lista vazia, e é de
+    // propósito: pedido que ninguém escolheu é pior do que nenhum, e os botões
+    // de pedido frequente são a resposta para quem quer começar depressa. O que
+    // muda com o preenchimento inteligente é a origem — estes saíram do relato
+    // do próprio cliente, e por isso são do caso, o que texto de praxe não
+    // seria. Cada linha chega com a chave cunhada aqui e o valor já mascarado.
     const requirements = useForm<{ requirements: RequirementDraft[] }>({
-        requirements: legalCase?.requirements ?? [],
+        requirements:
+            legalCase?.requirements ?? toRequirementDrafts(handoff?.requirements),
     });
 
     const [documents, setDocuments] = useState<DocumentDraft[]>([]);

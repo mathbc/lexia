@@ -19,9 +19,10 @@ import { stashHandoff } from "@/lib/legal-case-handoff";
 import type { LegalCaseClassification, Option } from "@/types";
 
 /**
- * O que os dois agentes fazem, na ordem em que `ClassifyLegalCase` os encadeia
- * — ler os fatos, decidir a área, e só então escolher entre as classes de
- * ajuizamento vinculadas a ela, ordenadas pela proximidade com o relato.
+ * O que os quatro agentes fazem, na ordem em que `ClassifyLegalCase` os chama —
+ * ler os fatos, decidir a área, escolher entre as classes de ajuizamento
+ * vinculadas a ela, procurar no mesmo relato quem é o réu e, por fim, o que o
+ * cliente está pedindo.
  *
  * São frases sobre o trabalho, não sobre o andamento: a chamada é uma só e o
  * servidor não relata por onde anda, então nenhuma delas afirma que uma etapa
@@ -34,6 +35,10 @@ const ANALYSIS_STEPS = [
     "Ordenando as classes candidatas pela proximidade com o caso.",
     "Pesando prazo, pressuposto e instrumento de cada candidata.",
     "Escrevendo a justificativa de cada uma das duas escolhas.",
+    "Separando quem narra o caso de quem está do outro lado dele.",
+    "Recolhendo o que o relato diz sobre o réu e onde encontrá-lo.",
+    "Procurando no relato o que o cliente quer do juízo.",
+    "Escrevendo cada pedido e conferindo os valores contra os fatos.",
 ] as const;
 
 interface Props {
@@ -48,18 +53,20 @@ interface Props {
  *
  * É a outra metade da escolha que o diálogo da listagem oferece. Onde o
  * assistente de seis etapas pede o enquadramento ao advogado — área, classe,
- * endereçamento —, aqui ele é deduzido dos fatos; o destino das duas é o mesmo
- * formulário, e a diferença é só quem preenche o quê.
+ * endereçamento —, a qualificação do réu e os pedidos, aqui os três são
+ * deduzidos dos fatos; o destino das duas é o mesmo formulário, e a diferença é
+ * só quem preenche o quê.
  *
  * Por isso não há trilha de etapas nem `useForm`: nada é salvo desta tela. Ela
  * faz uma chamada só, `POST /pecas/classificar`, que não devolve tela nenhuma
- * — devolve o enquadramento —, guarda o resultado junto com o cliente e o
- * relato e navega para `/pecas/nova`, onde o assistente abre com a área e a
- * classe escolhidas e os fatos já escritos. O `?area=` é o que faz o servidor
- * mandar as classes daquela área; o resto viaja pelo `sessionStorage`, e
- * `@/lib/legal-case-handoff` explica por quê.
+ * — devolve o que os agentes leram do relato —, guarda o resultado junto com o
+ * cliente e o relato e navega para `/pecas/nova`, onde o assistente abre com a
+ * área e a classe escolhidas, os fatos já escritos e as etapas do réu e dos
+ * pedidos sugeridas. O
+ * `?area=` é o que faz o servidor mandar as classes daquela área; o resto viaja
+ * pelo `sessionStorage`, e `@/lib/legal-case-handoff` explica por quê.
  *
- * A espera é pelos dois agentes, que são duas inferências em série, e leva
+ * A espera é pelos quatro agentes, que são quatro inferências em série, e leva
  * minutos — não o instante de um `submit`. Por isso ela é um diálogo modal e
  * não um punhado de campos desabilitados: congelar os controles deste
  * formulário deixaria de fora tudo o que está em volta dele — a barra lateral,
@@ -100,6 +107,13 @@ export default function LegalCaseAssistedForm({
                 // abre a lista da área para o advogado escolher.
                 procedural_class_id: classification.procedural_class?.id ?? "",
                 facts,
+                // Nulo aqui é a extração que falhou, e o enquadramento continua
+                // valendo: a etapa do réu abre em branco, como sempre abriu.
+                defendant: classification.defendant,
+                // O mesmo vale para os pedidos, com uma distinção a mais: nulo
+                // é a inferência que caiu, e a lista vazia é o relato que não
+                // pede nada. A etapa abre igual nos dois casos.
+                requirements: classification.requirements,
             });
 
             // Sem desligar o estado de espera: a navegação já está em curso, e
@@ -133,8 +147,8 @@ export default function LegalCaseAssistedForm({
                         <CardTitle>Cliente e fatos</CardTitle>
                         <CardDescription>
                             Diga para quem é a peça e conte o caso com o máximo
-                            de detalhe. A área de atuação, a classe processual e
-                            o endereçamento são deduzidos daqui.
+                            de detalhe. A área de atuação, a classe processual,
+                            os dados do réu e os pedidos são deduzidos daqui.
                         </CardDescription>
                     </CardHeader>
 
@@ -187,8 +201,9 @@ export default function LegalCaseAssistedForm({
 
                 <div className="flex flex-wrap items-center justify-end gap-3">
                     <p className="mr-auto text-sm text-muted-foreground">
-                        A área de atuação e a classe processual serão sugeridas,
-                        e você poderá revisá-las no assistente.
+                        A área de atuação, a classe processual, os dados do réu
+                        e os pedidos serão sugeridos, e você poderá revisá-los
+                        no assistente.
                     </p>
 
                     <Button variant="outline" asChild>
@@ -217,7 +232,7 @@ export default function LegalCaseAssistedForm({
             <AnalysisDialog
                 open={classifying}
                 title="Analisando o caso"
-                hint="A análise pode levar alguns minutos. Mantenha esta aba aberta: ao terminar, o assistente abre com o enquadramento preenchido."
+                hint="A análise pode levar alguns minutos. Mantenha esta aba aberta: ao terminar, o assistente abre com o enquadramento, os dados do réu e os pedidos preenchidos."
                 messages={ANALYSIS_STEPS}
             />
         </AppLayout>

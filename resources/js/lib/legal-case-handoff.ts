@@ -1,15 +1,22 @@
+import type { DefendantSuggestion, ExtractedRequirement } from '@/types'
+
 /**
  * O que o preenchimento inteligente entrega ao assistente.
  *
  * A área vai no slug porque é a moeda do formulário e da query string; a classe
  * vai no uuid porque é ele que será gravado. São as mesmas duas formas do
- * `LegalCaseClassification::toArray()`, e por isso nada é traduzido no caminho.
+ * `LegalCaseClassification::toArray()`, e por isso nada é traduzido no caminho
+ * — o réu e os pedidos também viajam como o servidor os escreveu, com os nulos
+ * e o valor em decimal que ele tem, e é o assistente que os traduz para os
+ * campos.
  */
 export interface LegalCaseHandoff {
     practice_area: string
     customer_id: string
     procedural_class_id: string
     facts: string
+    defendant: DefendantSuggestion | null
+    requirements: ExtractedRequirement[] | null
 }
 
 const KEY = 'lexia:legal-case-handoff'
@@ -89,9 +96,41 @@ const parse = (value: string | null): LegalCaseHandoff | null => {
             typeof data.customer_id === 'string' &&
             typeof data.procedural_class_id === 'string' &&
             typeof data.facts === 'string'
-            ? (data as LegalCaseHandoff)
+            ? {
+                  ...(data as LegalCaseHandoff),
+                  defendant: defendantOf(data.defendant),
+                  requirements: requirementsOf(data.requirements),
+              }
             : null
     } catch {
         return null
     }
 }
+
+/**
+ * O réu é a exceção à regra acima: ele não invalida a entrega.
+ *
+ * É sugestão, e o que o advogado esperou minutos para obter é o enquadramento.
+ * Uma entrega gravada antes deste campo existir — a aba que atravessou um
+ * deploy — ou um objeto fora de forma vira nulo, e a etapa do réu abre em
+ * branco, que é como ela abria antes de haver agente nenhum.
+ */
+const defendantOf = (value: unknown): DefendantSuggestion | null =>
+    typeof value === 'object' && value !== null && !Array.isArray(value)
+        ? (value as DefendantSuggestion)
+        : null
+
+/**
+ * Os pedidos seguem a mesma regra do réu, e a peneira é por linha em vez de
+ * pelo todo: uma lista com um item fora de forma perde o item, não a lista.
+ *
+ * O que sobra é o que tem frase, porque é a frase que vira campo. O valor não
+ * filtra nada — ele pode ser nulo de direito, e é nulo na maioria dos pedidos.
+ */
+const requirementsOf = (value: unknown): ExtractedRequirement[] | null =>
+    Array.isArray(value)
+        ? value.filter(
+              (row): row is ExtractedRequirement =>
+                  typeof row === 'object' && row !== null && typeof row.description === 'string',
+          )
+        : null

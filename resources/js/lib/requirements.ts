@@ -7,7 +7,8 @@
  * amanhã precisam enxergar igual.
  */
 
-import { currencyCents } from '@/lib/format'
+import { currencyCents, formatCurrency } from '@/lib/format'
+import type { ExtractedRequirement } from '@/types'
 
 export interface RequirementDraft {
     /**
@@ -24,6 +25,14 @@ export interface RequirementDraft {
     amount: string
 }
 
+/**
+ * Um pedido frequente: texto de praxe, e não leitura de relato.
+ *
+ * Não confundir com `ExtractedRequirement` em `@/types`, que é o que o agente
+ * lê dos fatos. Estes seis são os mesmos em toda petição inicial, e é
+ * justamente por isso que o agente não os escreve — ver
+ * `RequirementExtractionAgent`.
+ */
 export interface RequirementSuggestion {
     /** O rótulo do botão: o nome pelo qual o advogado chama o pedido. */
     label: string
@@ -74,11 +83,37 @@ export const SUGGESTED_REQUIREMENTS: RequirementSuggestion[] = [
     },
 ]
 
-export const newRequirement = (description = ''): RequirementDraft => ({
+export const newRequirement = (description = '', amount = ''): RequirementDraft => ({
     id: crypto.randomUUID(),
     description,
-    amount: '',
+    amount,
 })
+
+/**
+ * Os pedidos que o agente leu, como linhas do formulário.
+ *
+ * Duas traduções, e as duas acontecem aqui porque é aqui que se sabe o que uma
+ * linha é. A chave é cunhada agora — o servidor não tem id para dar, já que
+ * nenhum pedido foi gravado —, e o valor vira máscara: a etapa desenha o
+ * dinheiro num campo de texto, e "25200.00" apareceria na caixa escrito assim.
+ * `formatCurrency` lê só os dígitos, e o decimal do servidor sempre tem duas
+ * casas, então a conversão é exata.
+ *
+ * O pedido sem frase é descartado por precaução, não por expectativa: o
+ * servidor já os filtra, e a lista pode ter vindo de um rascunho de outra
+ * versão do formato.
+ */
+export const toRequirementDrafts = (
+    extracted: ExtractedRequirement[] | null | undefined,
+): RequirementDraft[] =>
+    (extracted ?? [])
+        .filter((requirement) => requirement.description.trim() !== '')
+        .map((requirement) =>
+            newRequirement(
+                requirement.description.trim(),
+                formatCurrency(requirement.amount ?? ''),
+            ),
+        )
 
 /**
  * Quanto a peça pede somada, em centavos.

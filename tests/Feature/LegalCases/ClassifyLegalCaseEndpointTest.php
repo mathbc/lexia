@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\Feature\LegalCases;
 
+use App\Domain\Accounts\Enums\BrazilianState;
+use App\Domain\LegalCases\Actions\ExtractLegalCaseDefendant;
+use App\Domain\LegalCases\Actions\ExtractLegalCaseRequirements;
+use App\Domain\LegalCases\Data\DefendantData;
 use App\Domain\PracticeAreas\Actions\ClassifyPracticeArea;
 use App\Domain\PracticeAreas\Data\PracticeAreaClassification;
 use App\Domain\PracticeAreas\Models\PracticeArea;
 use App\Domain\ProceduralClasses\Actions\SelectProceduralClass;
 use App\Domain\ProceduralClasses\Data\ProceduralClassSelection;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
+use App\Domain\Requirements\Data\RequirementData;
+use App\Domain\Requirements\Data\RequirementListData;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Mockery\MockInterface;
@@ -20,10 +26,14 @@ use Tests\TestCase;
 /**
  * A casca HTTP do enquadramento: `POST /pecas/classificar`.
  *
- * Os dois agentes são substituídos por dublês, e é o ponto. O que se verifica
+ * Os quatro agentes são substituídos por dublês, e é o ponto. O que se verifica
  * aqui é a rota — autorização, validação, a forma da resposta e o que acontece
  * quando a inferência falha —, não a qualidade da classificação; essa vive em
  * `tests/Agents`, exige o Ollama de pé e custa segundos por caso.
+ *
+ * Todo teste que chega à inferência dubla os quatro: um que ficasse de fora
+ * sairia daqui direto para o Ollama, e um teste da suíte padrão passaria a
+ * depender dele estar de pé.
  */
 final class ClassifyLegalCaseEndpointTest extends TestCase
 {
@@ -51,6 +61,38 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
                 justification: 'O pedido é indenizatório e não há rito próprio.',
             ));
 
+        $this->fakeAction(ExtractLegalCaseDefendant::class)
+            ->shouldReceive('handle')
+            ->andReturn(new DefendantData(
+                name: 'Joaquim Vizinho',
+                document: null,
+                email: null,
+                phone: null,
+                postalCode: null,
+                street: 'Rua das Acácias',
+                number: '118',
+                complement: null,
+                district: null,
+                city: 'Joinville',
+                state: BrazilianState::SC,
+                notes: null,
+            ));
+
+        $this->fakeAction(ExtractLegalCaseRequirements::class)
+            ->shouldReceive('handle')
+            ->andReturn(new RequirementListData([
+                new RequirementData(
+                    id: null,
+                    description: 'A condenação do Réu à reconstrução do muro derrubado;',
+                    amount: null,
+                ),
+                new RequirementData(
+                    id: null,
+                    description: 'A condenação do Réu ao pagamento de R$ 4.300,00 a título de danos materiais;',
+                    amount: '4300.00',
+                ),
+            ]));
+
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro e se recusa a reconstruí-lo.'])
             ->assertOk()
@@ -63,7 +105,76 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->assertJsonPath('procedural_class.id', $class->id)
             ->assertJsonPath('procedural_class.code', 7)
             ->assertJsonPath('practice_area_justification', 'O réu é um particular e não há relação de consumo.')
-            ->assertJsonPath('procedural_class_justification', 'O pedido é indenizatório e não há rito próprio.');
+            ->assertJsonPath('procedural_class_justification', 'O pedido é indenizatório e não há rito próprio.')
+            // As doze chaves `defendant_*` viajam com o nome da coluna, que é
+            // o nome do campo do formulário: é isso que faz a sugestão cair na
+            // etapa do réu sem tradução nenhuma no meio.
+            ->assertJsonPath('defendant.defendant_name', 'Joaquim Vizinho')
+            ->assertJsonPath('defendant.defendant_street', 'Rua das Acácias')
+            // A UF sai como a sigla, e não como o objeto do enum.
+            ->assertJsonPath('defendant.defendant_state', 'SC')
+            // O que o relato não diz chega nulo e presente: uma chave ausente
+            // deixaria o campo sem valor em vez de vazio.
+            ->assertJsonPath('defendant.defendant_document', null)
+            ->assertJsonPath('defendant.defendant_notes', null)
+            // Os pedidos chegam na ordem em que serão numerados, e o valor sai
+            // em decimal: a máscara é do campo que o desenha, não da rota.
+            ->assertJsonCount(2, 'requirements')
+            ->assertJsonPath(
+                'requirements.0.description',
+                'A condenação do Réu à reconstrução do muro derrubado;',
+            )
+            ->assertJsonPath('requirements.0.amount', null)
+            ->assertJsonPath('requirements.1.amount', '4300.00');
+    }
+
+    /**
+     * O réu e os pedidos são as duas respostas que podem faltar sozinhas.
+     *
+     * O advogado esperou minutos pelo enquadramento; devolver 503 porque uma
+     * das extrações caiu cobraria as inferências que deram certo para entregar
+     * a mesma tela de erro de quem não teve nenhuma. E a falha de uma não
+     * arrasta a outra: são perguntas diferentes sobre o mesmo relato.
+     */
+    #[Test]
+    public function an_extraction_that_could_not_be_read_does_not_cost_the_framing(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+
+        $this->fakeAction(ClassifyPracticeArea::class)
+            ->shouldReceive('handle')
+            ->andReturn(new PracticeAreaClassification(
+                practiceArea: PracticeArea::query()->where('slug', 'civil')->sole(),
+                justification: 'O réu é um particular.',
+            ));
+
+        $this->fakeAction(SelectProceduralClass::class)
+            ->shouldReceive('handle')
+            ->andReturn(new ProceduralClassSelection(
+                proceduralClass: ProceduralClass::query()->where('code', 7)->sole(),
+                justification: 'O pedido é indenizatório.',
+            ));
+
+        $this->fakeAction(ExtractLegalCaseDefendant::class)
+            ->shouldReceive('handle')
+            ->andThrow(new RuntimeException('Connection refused'));
+
+        $this->fakeAction(ExtractLegalCaseRequirements::class)
+            ->shouldReceive('handle')
+            ->andReturn(new RequirementListData([
+                new RequirementData(
+                    id: null,
+                    description: 'A condenação do Réu à reconstrução do muro derrubado;',
+                    amount: null,
+                ),
+            ]));
+
+        $this->actingAs($owner)
+            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
+            ->assertOk()
+            ->assertJsonPath('practice_area.slug', 'civil')
+            ->assertJsonPath('defendant', null)
+            ->assertJsonCount(1, 'requirements');
     }
 
     /**
@@ -87,11 +198,35 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->shouldReceive('handle')
             ->andReturnNull();
 
+        $this->fakeAction(ExtractLegalCaseDefendant::class)
+            ->shouldReceive('handle')
+            ->andReturn(new DefendantData(
+                name: null,
+                document: null,
+                email: null,
+                phone: null,
+                postalCode: null,
+                street: null,
+                number: null,
+                complement: null,
+                district: null,
+                city: null,
+                state: null,
+                notes: 'O relato não identifica o vizinho.',
+            ));
+
+        // A lista vazia é o relato que não pede nada, e não a inferência que
+        // falhou: aquela é o nulo do teste acima.
+        $this->fakeAction(ExtractLegalCaseRequirements::class)
+            ->shouldReceive('handle')
+            ->andReturn(new RequirementListData([]));
+
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
             ->assertOk()
             ->assertJsonPath('procedural_class', null)
-            ->assertJsonPath('procedural_class_justification', null);
+            ->assertJsonPath('procedural_class_justification', null)
+            ->assertJsonPath('requirements', []);
     }
 
     /**
@@ -105,6 +240,8 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
 
         $this->fakeAction(ClassifyPracticeArea::class)->shouldNotReceive('handle');
         $this->fakeAction(SelectProceduralClass::class)->shouldNotReceive('handle');
+        $this->fakeAction(ExtractLegalCaseDefendant::class)->shouldNotReceive('handle');
+        $this->fakeAction(ExtractLegalCaseRequirements::class)->shouldNotReceive('handle');
 
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => ''])
@@ -124,6 +261,11 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         $this->fakeAction(ClassifyPracticeArea::class)
             ->shouldReceive('handle')
             ->andThrow(new RuntimeException('Connection refused'));
+
+        // As duas extrações vêm depois do enquadramento, e por isso não chegam
+        // a ser acordadas quando o primeiro agente cai.
+        $this->fakeAction(ExtractLegalCaseDefendant::class)->shouldNotReceive('handle');
+        $this->fakeAction(ExtractLegalCaseRequirements::class)->shouldNotReceive('handle');
 
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])

@@ -12,15 +12,18 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * The two agents against the real database and a real Ollama, no fakes.
+ * The four agents against the real database and a real Ollama, no fakes.
  *
- * This is the integration the rest of the system will do: hand the facts of a
- * matter and take back the area, the procedural class and the reasoning for
- * each. The catalogue arrives through RefreshDatabase for free, because the 24
- * areas and the 615 classes are loaded by migration rather than by a seeder.
+ * This is the integration the rest of the system does: hand the facts of a
+ * matter and take back the area, the procedural class, the reasoning for each,
+ * the other party and what is being asked for. The catalogue arrives through
+ * RefreshDatabase for free, because the 24 areas and the 615 classes are loaded
+ * by migration rather than by a seeder.
  *
- * One test, two inferences. A separate area-only test would be a third call
- * that tells us nothing the first half of this one does not.
+ * One test, four inferences. A separate area-only test would be a fifth call
+ * that tells us nothing the first quarter of this one does not — and both
+ * extractions have their own tests next door, which are about the quality of
+ * what they read; what this one adds is that the chain still reaches them.
  *
  * Grouped out of the default run: it needs Ollama up and spends seconds on
  * inference, which is not what `php artisan test` should cost. The group is
@@ -93,5 +96,20 @@ final class LegalCaseClassificationTest extends TestCase
         $this->assertSame($classification->practiceArea->id, $payload['practice_area']['id']);
         $this->assertSame($classification->proceduralClass->id, $payload['procedural_class']['id']);
         $this->assertSame($classification->proceduralClass->code, $payload['procedural_class']['code']);
+
+        // Loose on purpose, and it has to be: the narratives above may or may
+        // not identify a defendant, and twelve nulls is a legitimate answer.
+        // What is asserted is that the third agent answered at all — a null
+        // here is the extraction having failed, which the Action swallows so
+        // the framing survives, and which nothing else would report.
+        $this->assertNotNull($classification->defendant);
+        $this->assertArrayHasKey('defendant_name', $payload['defendant']);
+
+        // Pelo mesmo motivo, e com a mesma folga: os relatos acima podem pedir
+        // muito ou não pedir nada, e a lista vazia é resposta legítima. O nulo
+        // não é — ele é a quarta inferência tendo caído, que a Action engole
+        // para que o enquadramento sobreviva, e que nada mais reportaria.
+        $this->assertNotNull($classification->requirements);
+        $this->assertIsArray($payload['requirements']);
     }
 }

@@ -234,8 +234,49 @@ volta para todas as suas — lista de candidatas vazia seria `enum` vazio, que �
 gramática inválida.
 
 Quem encadeia é `ClassifyLegalCase`, que devolve `LegalCaseClassification` com as
-duas entidades e **uma justificativa para cada**. Nenhuma das três Actions tem
-`asController()` enquanto nenhuma rota apontar para elas.
+duas entidades e **uma justificativa para cada**.
+
+Mais dois agentes são **acrescentados à cadeia, não encadeados nela**, e não
+dependem nem dela nem um do outro — leem os mesmos fatos e respondem outras
+perguntas. `DefendantExtractionAgent`, exposto por `ExtractLegalCaseDefendant`,
+devolve os dados do réu nas doze chaves `defendant_*` de `legal_cases`, já no
+formato de `DefendantData` — o objeto que `UpdateLegalCaseDefendant` recebe.
+`RequirementExtractionAgent`, exposto por `ExtractLegalCaseRequirements`, devolve
+o que o cliente pede ao juízo como `RequirementListData` — o objeto que
+`SaveLegalCaseRequirements` recebe. O que os pôs ali foi o chamador, porque o
+preenchimento inteligente é um gesto só e o advogado não deve esperar três vezes
+pelo mesmo relato. As Actions seguem chamáveis sozinhas, e é assim que a etapa 2
+ou a etapa 4 de uma peça já salva deve pedir a sugestão: uma inferência, e não
+quatro.
+
+A diferença de natureza. Os dois primeiros **escolhem** uma linha de catálogo; o
+do réu **copia**, então os doze campos são `required()` e `nullable()` ao mesmo
+tempo — a gramática obriga as chaves a existirem e faz do `null` a resposta
+legítima para o que o relato não diz. Um réu é descrito, não cadastrado. O dos
+pedidos faz as duas coisas: **quais** pedidos existem é leitura, a **frase** de
+cada um é composição. Ele não escreve os pedidos de praxe — citação, provas,
+honorários —, que a tela já oferece num clique em `SUGGESTED_REQUIREMENTS`;
+escrevê-los aqui entregaria duas cópias de cada um.
+
+**A cifra de um pedido tem guarda estrutural, e é o único lugar do projeto onde
+um prompt não bastou.** O `qwen2.5:7b` não soma — a instrução segura isso —, mas
+*compõe*: para um caso sem cifra de dano moral no relato ele devolveu R$ 5.000,00
+numa rodada e R$ 12.000,00 noutra. Por isso `RequirementListData::fromAgent()`
+recebe o relato junto da resposta e recusa toda cifra que os fatos não escrevam.
+A guarda é generosa (qualquer número do texto autoriza) e protege a coluna, não a
+prosa. Detalhes e o custo conhecido em `app/Ai/README.md`.
+
+Como não há dependência, a falha de um deles não derruba o resto:
+`ClassifyLegalCase` reporta e devolve `null` naquela chave, e o enquadramento —
+que custou minutos — sobrevive. No payload, `null` é a extração que falhou; doze
+campos nulos dentro do objeto são o relato que não identifica ninguém, e a lista
+vazia é o relato que não pede nada.
+
+`POST /pecas/classificar` é a única rota das quatro Actions de agente: ela aponta
+para `ClassifyLegalCase`, e as outras três não têm `asController()` enquanto
+nada apontar para elas. O preço da rota é a latência de **quatro** `Timeout(180)`
+em série, com o navegador esperando — dívida conhecida, documentada no
+`asController()`, e o lugar de trocá-la por uma fila.
 
 Testes de agente ficam em `tests/Agents`, no grupo `agents`, **fora** do
 `php artisan test` padrão porque exigem o Ollama de pé e gastam segundos de

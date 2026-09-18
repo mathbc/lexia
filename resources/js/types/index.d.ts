@@ -262,19 +262,65 @@ export interface LegalCaseDraft {
 }
 
 /**
- * O enquadramento que os agentes deduziram de um relato — espelha
+ * Os doze campos `defendant_*` como `DefendantData::toArray()` os publica.
+ *
+ * O nulo aqui é "o relato não diz", e é o caso comum: um réu é descrito, não
+ * cadastrado. Por isso os campos do formulário não têm esta forma — lá o vazio
+ * é a string vazia, porque um controle sem valor deixa de ser controlado.
+ */
+export interface DefendantSuggestion {
+    defendant_name: string | null;
+    defendant_document: string | null;
+    defendant_email: string | null;
+    defendant_phone: string | null;
+    defendant_postal_code: string | null;
+    defendant_street: string | null;
+    defendant_number: string | null;
+    defendant_complement: string | null;
+    defendant_district: string | null;
+    defendant_city: string | null;
+    defendant_state: string | null;
+    defendant_notes: string | null;
+}
+
+/**
+ * Um pedido que o agente leu do relato, como `RequirementListData::toArray()`
+ * o publica.
+ *
+ * Não se chama `RequirementSuggestion` porque esse nome já é de outra coisa em
+ * `@/lib/requirements`: lá são os pedidos frequentes, texto de praxe que a tela
+ * oferece num clique e que não sai de relato nenhum. Estes saem, e é essa a
+ * diferença que os dois nomes precisam guardar.
+ *
+ * O valor vem em decimal ("25200.00") e não mascarado — quem mascara é o campo
+ * que o desenha. Nulo é o pedido sem cifra, que é a maioria, e também a cifra
+ * que o servidor recusou por não estar escrita nos fatos.
+ */
+export interface ExtractedRequirement {
+    description: string;
+    amount: string | null;
+}
+
+/**
+ * O que os agentes leram de um relato — espelha
  * `LegalCaseClassification::toArray()`, a resposta de `POST /pecas/classificar`.
  *
  * A área viaja com o slug e a classe com o uuid, que são exatamente as formas
  * que o assistente preenche: `?area=` na URL e `procedural_class_id` no
  * formulário. A classe é nula quando a área não oferece nenhuma de ajuizamento
  * — hoje nenhuma das 24 está nessa situação.
+ *
+ * O réu é nulo quando a extração falhou, que não é o mesmo que um relato sem
+ * réu identificado: esse chega como doze campos nulos dentro do objeto. Os
+ * pedidos carregam a mesma distinção, com a lista vazia no lugar dos nulos.
  */
 export interface LegalCaseClassification {
     practice_area: { id: string; slug: string; label: string };
     practice_area_justification: string;
     procedural_class: { id: string; code: number; name: string } | null;
     procedural_class_justification: string | null;
+    defendant: DefendantSuggestion | null;
+    requirements: ExtractedRequirement[] | null;
 }
 
 /** Mirrors LegalCasePageProps::abilities(). */
