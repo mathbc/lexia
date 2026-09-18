@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { ProceduralClassDialog } from '@/components/procedural-class-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Field, Input, Select } from '@/components/ui/field'
@@ -86,6 +86,48 @@ export function ProceduralClassPicker({ classes, branches, degrees, value, onSel
         [classes, search, branch, degree, filtering],
     )
 
+    const listRef = useRef<HTMLDivElement>(null)
+    const selectedRef = useRef<HTMLDivElement>(null)
+
+    /**
+     * O id escolhido com um clique aqui dentro. Serve para não puxar a lista
+     * por baixo do cursor de quem acabou de mirar num card.
+     */
+    const clicked = useRef<string | null>(null)
+
+    /**
+     * Uma classe escolhida em outro lugar — o preenchimento inteligente, ou uma
+     * peça salva sendo reaberta — chega como valor inicial de uma lista de até
+     * 141 cards, e quase sempre cai fora da janela de 32rem: sem rolar até ela,
+     * a tela parece não ter escolhido nada.
+     *
+     * Rola só o contêiner da lista, com `scrollBy` e não `scrollIntoView`, para
+     * que a coluna do painel fique onde está. A conta centraliza o card na
+     * janela e sai de `getBoundingClientRect` porque o card não é filho
+     * posicionado do contêiner — `offsetTop` mediria a partir de outro
+     * elemento.
+     */
+    useEffect(() => {
+        if (value === '' || value === clicked.current) {
+            return
+        }
+
+        const list = listRef.current
+        const card = selectedRef.current
+
+        if (!list || !card) {
+            return
+        }
+
+        const listBox = list.getBoundingClientRect()
+        const cardBox = card.getBoundingClientRect()
+
+        list.scrollBy({
+            top: cardBox.top - listBox.top - (listBox.height - cardBox.height) / 2,
+            behavior: 'smooth',
+        })
+    }, [value])
+
     const groups = [
         { scope: 'specific', label: 'Específicas da área', items: visible.filter((i) => i.scope === 'specific') },
         { scope: 'generic', label: 'Gerais (tronco cível)', items: visible.filter((i) => i.scope === 'generic') },
@@ -130,6 +172,7 @@ export function ProceduralClassPicker({ classes, branches, degrees, value, onSel
 
             {/* p-1 para o anel do card selecionado não ser cortado na rolagem. */}
             <div
+                ref={listRef}
                 role="radiogroup"
                 aria-label="Classe processual"
                 className="max-h-[32rem] space-y-5 overflow-y-auto p-1"
@@ -144,9 +187,13 @@ export function ProceduralClassPicker({ classes, branches, degrees, value, onSel
                             {group.items.map((item) => (
                                 <ClassCard
                                     key={item.id}
+                                    ref={value === item.id ? selectedRef : undefined}
                                     item={item}
                                     selected={value === item.id}
-                                    onSelect={() => onSelect(item.id)}
+                                    onSelect={() => {
+                                        clicked.current = item.id
+                                        onSelect(item.id)
+                                    }}
                                 />
                             ))}
                         </div>
@@ -167,10 +214,13 @@ function ClassCard({
     item,
     selected,
     onSelect,
+    ref,
 }: {
     item: ProceduralClassOption
     selected: boolean
     onSelect: () => void
+    /** Só o card escolhido recebe um — é o alvo da rolagem da lista. */
+    ref?: Ref<HTMLDivElement>
 }) {
     const shown = item.jurisdictions.slice(0, MAX_BADGES)
     const rest = item.jurisdictions.length - shown.length
@@ -182,7 +232,7 @@ function ClassCard({
         // O olho fica fora do botão do card, sobreposto a ele: um botão dentro
         // de outro é marcação inválida, e o clique na ficha acabaria
         // escolhendo a classe sem querer.
-        <div className="relative h-full">
+        <div ref={ref} className="relative h-full">
             <button
                 type="button"
                 role="radio"
