@@ -2,6 +2,7 @@ import { Head, Link, router } from "@inertiajs/react";
 import { LoaderCircle, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { AppLayout } from "@/layouts/app-layout";
+import { AnalysisDialog } from "@/components/analysis-dialog";
 import { CustomerCreateDialog } from "@/components/customer-create-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,24 @@ import { Field, Select, Textarea } from "@/components/ui/field";
 import { postJson } from "@/lib/api";
 import { stashHandoff } from "@/lib/legal-case-handoff";
 import type { LegalCaseClassification, Option } from "@/types";
+
+/**
+ * O que os dois agentes fazem, na ordem em que `ClassifyLegalCase` os encadeia
+ * — ler os fatos, decidir a área, e só então escolher entre as classes de
+ * ajuizamento vinculadas a ela, ordenadas pela proximidade com o relato.
+ *
+ * São frases sobre o trabalho, não sobre o andamento: a chamada é uma só e o
+ * servidor não relata por onde anda, então nenhuma delas afirma que uma etapa
+ * terminou.
+ */
+const ANALYSIS_STEPS = [
+    "Lendo o relato e separando o que tem peso jurídico.",
+    "Comparando os fatos com as áreas de atuação do catálogo.",
+    "Reunindo as classes processuais de ajuizamento da área.",
+    "Ordenando as classes candidatas pela proximidade com o caso.",
+    "Pesando prazo, pressuposto e instrumento de cada candidata.",
+    "Escrevendo a justificativa de cada uma das duas escolhas.",
+] as const;
 
 interface Props {
     customers: Option[];
@@ -40,10 +59,13 @@ interface Props {
  * mandar as classes daquela área; o resto viaja pelo `sessionStorage`, e
  * `@/lib/legal-case-handoff` explica por quê.
  *
- * O botão espera pelos dois agentes, que são duas inferências em série. Daí o
- * estado de espera ser explícito e os campos congelarem junto: a resposta
- * demora, e um formulário que continua aceitando digitação durante a espera
- * promete que o que for digitado conta.
+ * A espera é pelos dois agentes, que são duas inferências em série, e leva
+ * minutos — não o instante de um `submit`. Por isso ela é um diálogo modal e
+ * não um punhado de campos desabilitados: congelar os controles deste
+ * formulário deixaria de fora tudo o que está em volta dele — a barra lateral,
+ * o cabeçalho, o menu do usuário —, e sair da tela joga fora a inferência
+ * inteira sem que nada tenha avisado. O `AnalysisDialog` tranca a página,
+ * conta o que está acontecendo e não se deixa fechar.
  */
 export default function LegalCaseAssistedForm({
     customers,
@@ -142,7 +164,6 @@ export default function LegalCaseAssistedForm({
                                 onValueChange={setCustomerId}
                                 options={customers}
                                 placeholder="Selecione o cliente"
-                                disabled={classifying}
                             />
                         </Field>
 
@@ -159,7 +180,6 @@ export default function LegalCaseAssistedForm({
                                 onChange={(e) => setFacts(e.target.value)}
                                 rows={18}
                                 placeholder="Relate o caso como o cliente o contou: quando começou, o que foi feito, o que foi cobrado, o que se tentou resolver antes de procurar a Justiça…"
-                                disabled={classifying}
                             />
                         </Field>
                     </CardContent>
@@ -167,9 +187,8 @@ export default function LegalCaseAssistedForm({
 
                 <div className="flex flex-wrap items-center justify-end gap-3">
                     <p className="mr-auto text-sm text-muted-foreground">
-                        {classifying
-                            ? "Os agentes estão lendo o relato. A análise pode levar alguns minutos — mantenha esta aba aberta."
-                            : "A área de atuação e a classe processual serão sugeridas, e você poderá revisá-las no assistente."}
+                        A área de atuação e a classe processual serão sugeridas,
+                        e você poderá revisá-las no assistente.
                     </p>
 
                     <Button variant="outline" asChild>
@@ -190,6 +209,17 @@ export default function LegalCaseAssistedForm({
                     </Button>
                 </div>
             </div>
+
+            {/* Fica montado durante a navegação para `/pecas/nova`: o diálogo
+                some junto com a tela, e não antes dela. Desligá-lo ao receber
+                a resposta devolveria o formulário por uma fração de segundo —
+                clicável, e com um botão convidando ao mesmo pedido de novo. */}
+            <AnalysisDialog
+                open={classifying}
+                title="Analisando o caso"
+                hint="A análise pode levar alguns minutos. Mantenha esta aba aberta: ao terminar, o assistente abre com o enquadramento preenchido."
+                messages={ANALYSIS_STEPS}
+            />
         </AppLayout>
     );
 }

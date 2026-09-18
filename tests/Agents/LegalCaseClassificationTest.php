@@ -45,17 +45,17 @@ final class LegalCaseClassificationTest extends TestCase
         // Por sorte, consegui capturar a placa do carro do homem, que correspondia na numeração YTD123, e era do modelo Chevrolet Onix.
         // TXT;
 
-        // $facts = <<<'TXT'
-        // Em frente ao condomínio onde eu moro, existe uma obra da construtora Marinho, eles iniciam as obras todos os dias às 6 da manhã e terminam às 18h.
-        // Porém a obra continua aos finais de semana e não para nem no domingo, causando barulho e poluição sonora.
-        // O condomínio não faz nada para resolver o problema, e nem mesmo reconhece que é um problema. Além de dificultarem o trânsito por conta do tráfego de caminhões, ergueram
-        // alguns carros de moradores e visitantes, sem autorização.
-        // TXT;
-
         $facts = <<<'TXT'
-        Doutor, acabei de passar por um susto terrível aqui na loja de roupas porque flagrei uma pessoa furtando algumas peças de vestuário no meio do expediente,
-        escondendo as roupas dentro da bolsa enquanto disfarçava nas araras, e preciso saber exatamente como agir e quais providências tomar agora com as filmagens das câmeras de segurança para não ter nenhum problema jurídico.
+        Em frente ao condomínio onde eu moro, existe uma obra da construtora Marinho, eles iniciam as obras todos os dias às 6 da manhã e terminam às 18h.
+        Porém a obra continua aos finais de semana e não para nem no domingo, causando barulho e poluição sonora.
+        O condomínio não faz nada para resolver o problema, e nem mesmo reconhece que é um problema. Além de dificultarem o trânsito por conta do tráfego de caminhões, ergueram
+        alguns carros de moradores e visitantes, sem autorização.
         TXT;
+
+        // $facts = <<<'TXT'
+        // Doutor, acabei de passar por um susto terrível aqui na loja de roupas porque flagrei uma pessoa furtando algumas peças de vestuário no meio do expediente,
+        // escondendo as roupas dentro da bolsa enquanto disfarçava nas araras, e preciso saber exatamente como agir e quais providências tomar agora com as filmagens das câmeras de segurança para não ter nenhum problema jurídico.
+        // TXT;
 
         $classification = ClassifyLegalCase::run($facts);
 

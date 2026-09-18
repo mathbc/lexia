@@ -40,8 +40,9 @@ function DialogOverlay({ className, ...props }: React.ComponentProps<typeof Dial
 function DialogContent({
     className,
     children,
+    showClose = true,
     ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+}: React.ComponentProps<typeof DialogPrimitive.Content> & { showClose?: boolean }) {
     return (
         <DialogPrimitive.Portal data-slot="dialog-portal">
             <DialogOverlay />
@@ -58,10 +59,16 @@ function DialogContent({
                 {...props}
             >
                 {children}
-                <DialogPrimitive.Close className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none disabled:pointer-events-none">
-                    <XIcon className="size-4" />
-                    <span className="sr-only">Fechar</span>
-                </DialogPrimitive.Close>
+                {/* `showClose` existe para o diálogo que não se fecha: uma
+                    espera que o usuário não pode interromper sem perder o
+                    trabalho não deve oferecer um X que, clicado, não faz nada
+                    — ou pior, que a escondesse e a deixasse correndo. */}
+                {showClose && (
+                    <DialogPrimitive.Close className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none disabled:pointer-events-none">
+                        <XIcon className="size-4" />
+                        <span className="sr-only">Fechar</span>
+                    </DialogPrimitive.Close>
+                )}
             </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
     )
