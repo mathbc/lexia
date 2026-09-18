@@ -1,8 +1,9 @@
-import { Head, Link } from "@inertiajs/react";
-import { Sparkles } from "lucide-react";
+import { Head, Link, router } from "@inertiajs/react";
+import { LoaderCircle, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { AppLayout } from "@/layouts/app-layout";
 import { CustomerCreateDialog } from "@/components/customer-create-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
     Card,
@@ -12,7 +13,9 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Field, Select, Textarea } from "@/components/ui/field";
-import type { Option } from "@/types";
+import { postJson } from "@/lib/api";
+import { stashHandoff } from "@/lib/legal-case-handoff";
+import type { LegalCaseClassification, Option } from "@/types";
 
 interface Props {
     customers: Option[];
@@ -29,15 +32,18 @@ interface Props {
  * endereçamento —, aqui ele é deduzido dos fatos; o destino das duas é o mesmo
  * formulário, e a diferença é só quem preenche o quê.
  *
- * Por isso não há trilha de etapas nem `useForm`: nada é salvo desta tela. O
- * estado é local porque ele não sobrevive à navegação de propósito — quando a
- * geração existir, é ela que devolve o advogado ao assistente já preenchido,
- * e não um rascunho guardado aqui.
+ * Por isso não há trilha de etapas nem `useForm`: nada é salvo desta tela. Ela
+ * faz uma chamada só, `POST /pecas/classificar`, que não devolve tela nenhuma
+ * — devolve o enquadramento —, guarda o resultado junto com o cliente e o
+ * relato e navega para `/pecas/nova`, onde o assistente abre com a área e a
+ * classe escolhidas e os fatos já escritos. O `?area=` é o que faz o servidor
+ * mandar as classes daquela área; o resto viaja pelo `sessionStorage`, e
+ * `@/lib/legal-case-handoff` explica por quê.
  *
- * O botão de gerar fica desabilitado enquanto os agentes não existem, e
- * desabilitado sempre — não "até preencher". A razão é a funcionalidade
- * ausente, e um botão que acende ao preencher prometeria que o preenchimento
- * adianta alguma coisa. É o mesmo acordo do "Ditar" na etapa de fatos.
+ * O botão espera pelos dois agentes, que são duas inferências em série. Daí o
+ * estado de espera ser explícito e os campos congelarem junto: a resposta
+ * demora, e um formulário que continua aceitando digitação durante a espera
+ * promete que o que for digitado conta.
  */
 export default function LegalCaseAssistedForm({
     customers,
@@ -47,12 +53,59 @@ export default function LegalCaseAssistedForm({
 }: Props) {
     const [customerId, setCustomerId] = useState("");
     const [facts, setFacts] = useState("");
+    const [classifying, setClassifying] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const ready = customerId !== "" && facts.trim() !== "";
+
+    const classify = async () => {
+        setClassifying(true);
+        setError(null);
+
+        try {
+            const classification = await postJson<LegalCaseClassification>(
+                "/pecas/classificar",
+                { facts },
+            );
+
+            const area = classification.practice_area.slug;
+
+            stashHandoff({
+                practice_area: area,
+                customer_id: customerId,
+                // A área sem classe de ajuizamento não existe no catálogo de
+                // hoje, mas o payload admite o caso: sem classe, o assistente
+                // abre a lista da área para o advogado escolher.
+                procedural_class_id: classification.procedural_class?.id ?? "",
+                facts,
+            });
+
+            // Sem desligar o estado de espera: a navegação já está em curso, e
+            // o botão voltando a "Gerar peça" por um instante convidaria a um
+            // segundo pedido tão demorado quanto o primeiro.
+            router.visit(`/pecas/nova?area=${encodeURIComponent(area)}`);
+        } catch (failure) {
+            setError(
+                failure instanceof Error
+                    ? failure.message
+                    : "Não foi possível enquadrar o caso agora.",
+            );
+            setClassifying(false);
+        }
+    };
 
     return (
         <AppLayout title="Nova peça" subtitle="Preenchimento inteligente">
             <Head title="Nova peça — preenchimento inteligente" />
 
             <div className="mx-auto w-full max-w-3xl space-y-6 pb-4">
+                {error && (
+                    <Alert variant="destructive">
+                        <AlertTitle>A análise não foi concluída</AlertTitle>
+                        <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                )}
+
                 <Card>
                     <CardHeader>
                         <CardTitle>Cliente e fatos</CardTitle>
@@ -89,6 +142,7 @@ export default function LegalCaseAssistedForm({
                                 onValueChange={setCustomerId}
                                 options={customers}
                                 placeholder="Selecione o cliente"
+                                disabled={classifying}
                             />
                         </Field>
 
@@ -105,6 +159,7 @@ export default function LegalCaseAssistedForm({
                                 onChange={(e) => setFacts(e.target.value)}
                                 rows={18}
                                 placeholder="Relate o caso como o cliente o contou: quando começou, o que foi feito, o que foi cobrado, o que se tentou resolver antes de procurar a Justiça…"
+                                disabled={classifying}
                             />
                         </Field>
                     </CardContent>
@@ -112,7 +167,9 @@ export default function LegalCaseAssistedForm({
 
                 <div className="flex flex-wrap items-center justify-end gap-3">
                     <p className="mr-auto text-sm text-muted-foreground">
-                        A geração assistida entra numa próxima versão.
+                        {classifying
+                            ? "Os agentes estão lendo o relato. A análise pode levar alguns minutos — mantenha esta aba aberta."
+                            : "A área de atuação e a classe processual serão sugeridas, e você poderá revisá-las no assistente."}
                     </p>
 
                     <Button variant="outline" asChild>
@@ -121,11 +178,15 @@ export default function LegalCaseAssistedForm({
 
                     <Button
                         type="button"
-                        disabled
-                        aria-label="Gerar peça (em breve)"
+                        disabled={!ready || classifying}
+                        onClick={classify}
                     >
-                        <Sparkles />
-                        Gerar peça
+                        {classifying ? (
+                            <LoaderCircle className="animate-spin" />
+                        ) : (
+                            <Sparkles />
+                        )}
+                        {classifying ? "Analisando os fatos…" : "Gerar peça"}
                     </Button>
                 </div>
             </div>

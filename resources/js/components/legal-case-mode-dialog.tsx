@@ -94,8 +94,7 @@ export function LegalCaseModeDialog() {
                         href="/pecas/nova/inteligente"
                         icon={Sparkles}
                         title="Preenchimento inteligente"
-                        badge="Em breve"
-                        description="Informe o cliente e relate os fatos com detalhe. A partir do relato, os agentes definem a área de atuação, a classe processual e o endereçamento, e ampliam a narrativa antes de redigir."
+                        description="Informe o cliente e relate os fatos com detalhe. A partir do relato, os agentes deduzem a área de atuação e a classe processual, e devolvem você ao assistente com elas já escolhidas para revisar."
                         onNavigate={() => setOpen(false)}
                     />
 

@@ -92,6 +92,51 @@ final class SaveLegalCaseStepsTest extends TestCase
         $this->assertNull(LegalCase::query()->sole()->court_addressing);
     }
 
+    /**
+     * O relato é da etapa 3 e entra na etapa 1 mesmo assim, quando existe.
+     *
+     * Quem vem do preenchimento inteligente escreveu os fatos antes de a peça
+     * existir, e foram eles que produziram a área e a classe. Salvá-los junto é
+     * o que os faz sobreviver à navegação que a criação provoca — sem isso a
+     * etapa de fatos abriria em branco depois de escrita. A marca d'água não se
+     * mexe: o advogado continua devendo as etapas do meio.
+     */
+    #[Test]
+    public function the_narrative_that_framed_the_case_is_saved_with_it(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        $this->actingAs($owner)
+            ->post('/pecas', $this->basics($account, addressing: null) + [
+                'facts' => '  O vizinho derrubou o muro e se recusa a reconstruí-lo.  ',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $legalCase = LegalCase::query()->sole();
+
+        $this->assertSame(
+            'O vizinho derrubou o muro e se recusa a reconstruí-lo.',
+            $legalCase->facts,
+        );
+        $this->assertSame(LegalCaseStep::Defendant, $legalCase->current_step);
+    }
+
+    /**
+     * E continua opcional: o caminho manual manda a caixa vazia, e a peça nasce
+     * sem relato como sempre nasceu.
+     */
+    #[Test]
+    public function a_pleading_opened_by_hand_is_born_without_a_narrative(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        $this->actingAs($owner)
+            ->post('/pecas', $this->basics($account, addressing: null) + ['facts' => ''])
+            ->assertSessionHasNoErrors();
+
+        $this->assertNull(LegalCase::query()->sole()->facts);
+    }
+
     #[Test]
     public function a_class_that_does_not_belong_to_the_chosen_area_is_refused(): void
     {

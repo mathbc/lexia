@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/field";
 import { toDocumentDrafts, type DocumentDraft } from "@/lib/documents";
+import { readHandoff } from "@/lib/legal-case-handoff";
 import { newRequirement, type RequirementDraft } from "@/lib/requirements";
 import type {
     LegalCaseDraft,
@@ -124,6 +125,13 @@ interface Props {
  * o próprio `File`, que não sobrevive a um reload, e não há onde guardá-lo
  * ainda. O "Continuar" deles não salva nada — só avança a etapa, que é
  * informação verdadeira sobre a peça.
+ *
+ * Uma peça nova pode chegar aqui preenchida: quem vem do preenchimento
+ * inteligente traz o cliente, a classe e o relato numa entrega guardada pelo
+ * browser, e a área na própria URL — ver `@/lib/legal-case-handoff`. Nada disso
+ * está salvo, e é o "Continuar" da primeira etapa que grava tudo de uma vez,
+ * relato incluído. O advogado vê o enquadramento antes de aceitá-lo, que é o
+ * ponto de devolvê-lo ao assistente em vez de abrir a minuta direto.
  */
 export default function LegalCaseForm({
     legalCase,
@@ -143,10 +151,22 @@ export default function LegalCaseForm({
         Math.max(STEP_ORDER.indexOf(initialStep), 0),
     );
 
+    /**
+     * A entrega do preenchimento inteligente, lida uma vez na montagem.
+     *
+     * Trocar de área é um `reload` parcial, que não remonta a tela — então o
+     * rascunho não é relido a cada área visitada, e o que o advogado escolher
+     * à mão daqui em diante prevalece. Com uma peça salva na mão não há o que
+     * aproveitar, e a leitura descarta: foi a criação que transformou aquela
+     * entrega em linha no banco.
+     */
+    const [handoff] = useState(() => readHandoff(legalCase ? "" : selectedArea));
+
     const basics = useForm({
-        customer_id: legalCase?.customer_id ?? "",
+        customer_id: legalCase?.customer_id ?? handoff?.customer_id ?? "",
         practice_area: selectedArea,
-        procedural_class_id: legalCase?.procedural_class_id ?? "",
+        procedural_class_id:
+            legalCase?.procedural_class_id ?? handoff?.procedural_class_id ?? "",
         court_addressing: legalCase?.court_addressing ?? "",
     });
 
@@ -155,7 +175,9 @@ export default function LegalCaseForm({
         ...(legalCase?.defendant as Partial<DefendantFormValues> | undefined),
     });
 
-    const facts = useForm<FactsFormValues>(legalCase?.facts ?? EMPTY_FACTS);
+    const facts = useForm<FactsFormValues>(
+        legalCase?.facts ?? { ...EMPTY_FACTS, facts: handoff?.facts ?? "" },
+    );
 
     // Os pedidos começam vazios numa peça nova: a lista é do caso, e uma peça
     // pré-preenchida com pedidos que ninguém escolheu é pior do que uma em
@@ -211,30 +233,66 @@ export default function LegalCaseForm({
         facts.processing ||
         requirements.processing;
 
+    /**
+     * O que acontece quando a etapa é salva: abre a que o servidor mandou abrir.
+     *
+     * Quem decide a próxima etapa continua sendo o redirecionamento — o
+     * `?etapa` —, mas o valor não chega aqui sozinho. `useForm` navega com
+     * `preserveState`, e com ele o adapter do Inertia mantém a mesma `key` no
+     * componente da página: props novas, mesma instância, nenhum `useState`
+     * reinicializado. Sem isto o "Continuar" salvaria e ficaria parado, que é
+     * exatamente o que o `initialStep` da montagem continua dizendo.
+     */
+    const openSavedStep = {
+        onSuccess: (page: { props: Record<string, unknown> }) => {
+            const next = STEP_ORDER.indexOf(
+                page.props.initialStep as LegalCaseStepValue,
+            );
+
+            // Uma etapa fora da trilha não existe hoje — o servidor redireciona
+            // com valores do enum —, mas cair no `-1` recuaria para a primeira,
+            // que seria pior do que não andar.
+            if (next >= 0) {
+                setStep(next);
+            }
+        },
+    };
+
     const submit = () => {
         if (step === 0) {
-            return id
-                ? basics.put(`/pecas/${id}/dados-basicos`)
-                : basics.post("/pecas");
+            if (id) {
+                return basics.put(`/pecas/${id}/dados-basicos`, openSavedStep);
+            }
+
+            // O relato viaja junto da criação, e só dela: até aqui ele vive no
+            // navegador, e é o primeiro reload que o perderia — a etapa de
+            // fatos abriria em branco depois de o advogado já a ter escrito lá
+            // atrás, no preenchimento inteligente. Numa peça montada à mão a
+            // caixa está vazia e o servidor grava null.
+            basics.transform((data) => ({ ...data, facts: facts.data.facts }));
+
+            return basics.post("/pecas", openSavedStep);
         }
 
         if (step === 1) {
-            return defendant.put(`/pecas/${id}/reu`);
+            return defendant.put(`/pecas/${id}/reu`, openSavedStep);
         }
 
         if (step === 2) {
-            return facts.put(`/pecas/${id}/fatos`);
+            return facts.put(`/pecas/${id}/fatos`, openSavedStep);
         }
 
         if (step === 3) {
-            return requirements.put(`/pecas/${id}/pedidos`);
+            return requirements.put(`/pecas/${id}/pedidos`, openSavedStep);
         }
 
         // Documentos e revisão não persistem nada: só dizem até onde a peça
         // chegou.
-        return router.patch(`/pecas/${id}/etapa`, {
-            step: STEP_ORDER[step + 1] ?? "review",
-        });
+        return router.patch(
+            `/pecas/${id}/etapa`,
+            { step: STEP_ORDER[step + 1] ?? "review" },
+            openSavedStep,
+        );
     };
 
     const title = legalCase ? "Editar peça" : "Nova peça";

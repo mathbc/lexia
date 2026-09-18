@@ -18,6 +18,7 @@ use App\Domain\Customers\Actions\ShowCustomer;
 use App\Domain\Customers\Actions\ShowCustomerForm;
 use App\Domain\Customers\Actions\UpdateCustomer;
 use App\Domain\LegalCases\Actions\AdvanceLegalCaseStep;
+use App\Domain\LegalCases\Actions\ClassifyLegalCase;
 use App\Domain\LegalCases\Actions\CreateLegalCase;
 use App\Domain\LegalCases\Actions\ListLegalCases;
 use App\Domain\LegalCases\Actions\SaveLegalCaseRequirements;
@@ -93,6 +94,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     // agentes que deduzem o enquadramento antes de devolver o advogado ao
     // assistente acima, já preenchido.
     Route::get('/pecas/nova/inteligente', ShowAssistedLegalCaseForm::class)->name('legal-cases.create-assisted');
+
+    // A única rota de peça que não devolve tela: o enquadramento sai em JSON
+    // porque quem o pede — o preenchimento inteligente — leva o resultado até
+    // o assistente em vez de exibi-lo.
+    Route::post('/pecas/classificar', ClassifyLegalCase::class)->name('legal-cases.classify');
 
     Route::post('/pecas', CreateLegalCase::class)->name('legal-cases.store');
 

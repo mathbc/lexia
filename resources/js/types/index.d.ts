@@ -261,6 +261,22 @@ export interface LegalCaseDraft {
     requirements: { id: string; description: string; amount: string }[];
 }
 
+/**
+ * O enquadramento que os agentes deduziram de um relato — espelha
+ * `LegalCaseClassification::toArray()`, a resposta de `POST /pecas/classificar`.
+ *
+ * A área viaja com o slug e a classe com o uuid, que são exatamente as formas
+ * que o assistente preenche: `?area=` na URL e `procedural_class_id` no
+ * formulário. A classe é nula quando a área não oferece nenhuma de ajuizamento
+ * — hoje nenhuma das 24 está nessa situação.
+ */
+export interface LegalCaseClassification {
+    practice_area: { id: string; slug: string; label: string };
+    practice_area_justification: string;
+    procedural_class: { id: string; code: number; name: string } | null;
+    procedural_class_justification: string | null;
+}
+
 /** Mirrors LegalCasePageProps::abilities(). */
 export interface LegalCaseAbilities {
     view: boolean;
