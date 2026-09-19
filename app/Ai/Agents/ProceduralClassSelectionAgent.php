@@ -44,10 +44,15 @@ use Laravel\Ai\Promptable;
  * the worst area would overrun the context window beside the knowledge guide.
  *
  * The traps the sibling agent documents apply here unchanged: never send
- * `think: false`, never drop the `description()` on the justification, and
- * leave the model to `config/ai.php` rather than naming one in a `#[Model]`.
+ * `think: false` to an Ollama that reasons, never drop the `description()` on
+ * the justification, and leave the model to `config/ai.php` rather than naming
+ * one in a `#[Model]`. So does the note on where the `enum` guarantee comes
+ * from now — Gemini's `response_json_schema` rather than Ollama's grammar —
+ * which matters here because this agent's `enum` is a list of integers.
  */
-#[Provider('ollama')]
+// Trocar as duas linhas de lugar devolve a inferência ao Ollama local.
+// #[Provider('ollama')]
+#[Provider('gemini')]
 #[Timeout(180)]
 #[Temperature(0.2)]
 final class ProceduralClassSelectionAgent implements Agent, HasProviderOptions, HasStructuredOutput

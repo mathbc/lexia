@@ -19,9 +19,16 @@ use Laravel\Ai\Enums\Lab;
  * the same window whoever is answering, and every model worth running here
  * clears it several times over.
  *
- * `num_ctx` is Ollama's spelling of the idea. Another driver gets nothing
- * rather than an option it would reject — the option list reaches the wire as
- * the request's `options` key, unvalidated.
+ * `num_ctx` is Ollama's spelling of the idea, and the only spelling there is:
+ * another driver gets nothing rather than an option it would reject — the
+ * option list reaches the wire as the request's `options` key, unvalidated.
+ *
+ * Which means that under Gemini, the provider the agents point at today, this
+ * trait sends nothing at all. That is correct and not a gap: Gemini's window
+ * is orders of magnitude larger than anything we build, and it answers an
+ * overlong prompt with an error instead of a quiet truncation. The trait stays
+ * on every agent because the truncation it guards against is one uncommented
+ * `#[Provider('ollama')]` away.
  */
 trait UsesConfiguredContextWindow
 {

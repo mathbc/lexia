@@ -12,7 +12,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * The four agents against the real database and a real Ollama, no fakes.
+ * The four agents against the real database and the real providers, no fakes.
  *
  * This is the integration the rest of the system does: hand the facts of a
  * matter and take back the area, the procedural class, the reasoning for each,

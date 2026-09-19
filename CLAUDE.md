@@ -163,30 +163,46 @@ sessão. O `/register` do Fortify está desligado: o cadastro público é
   em `App\Domain\Shared\Casts\AsVector`.
 - A doc oficial do Laravel AI mostra o Ollama como `driver => openai-compatible`;
   o pacote v0.11.2 tem `OllamaProvider` nativo (`driver => ollama`), que é o que
-  este projeto usa — ele fala `/api/chat` e `/api/embed` de verdade.
+  este projeto usa para embeddings — ele fala `/api/chat` e `/api/embed` de verdade.
 - **Nunca mande `think: false`** a um modelo que raciocina: o `gpt-oss:20b`
   respondia com conteúdo vazio e a linha qwen3 pensa por padrão. O padrão
   (thinking ligado) já entrega JSON limpo, porque o Ollama separa o raciocínio
-  em `message.thinking`. O `qwen2.5:7b` de hoje não raciocina — a armadilha está
-  dormente, não removida.
+  em `message.thinking`. Com o texto no Gemini a armadilha está duplamente
+  dormente — mas não removida.
 - `sebastian/complexity` está vendorizado mas **quebra em enums** — por isso a
   skill de complexidade usa `nikic/php-parser` direto.
 
 ## Os agentes
 
-`laravel/ai` falando com um Ollama local: `qwen2.5:7b` para texto,
-`nomic-embed-text` (768 dimensões) para embeddings. `config/ai.php` declara um
-provider só, de propósito — a narrativa de um caso não sai da infraestrutura do
-escritório para ser processada.
+`laravel/ai` com **dois providers e um trabalho para cada**: o texto dos cinco
+agentes vai para o **Gemini** (`gemini-3.6-flash`, `GEMINI_API_KEY`), e os
+embeddings ficam no **Ollama local** (`nomic-embed-text`, 768 dimensões). O texto
+saiu por latência — `POST /pecas/classificar` são quatro inferências em série com
+o navegador esperando. Os embeddings ficaram porque não havia o que ganhar: as 615
+classes já estão vetorizadas com o nomic, vetor de um modelo não se compara com
+vetor de outro, e mover custaria uma reembutida inteira para comprar nada. O efeito
+colateral é bom — o relato bruto do cliente continua sendo vetorizado dentro do
+escritório.
+
+Consequência operacional: **o Ollama continua sendo dependência de
+desenvolvimento**. Sem o daemon de pé, `ProceduralClassRankingQuery` degrada em
+silêncio para a ordem do pivot e as classificações pioram sem erro nenhum.
+
+Voltar tudo para local são três gestos: `AI_PROVIDER=ollama` no `.env`, trocar o
+`#[Provider('gemini')]` dos cinco agentes pela linha comentada logo acima de cada
+um, e `config:clear`. O bloco `ollama` do `config/ai.php` nunca saiu de lá, com os
+modelos de texto declarados e ociosos, à espera disso.
 
 Nem o modelo nem o tamanho do contexto pertencem a um agente. Nenhum deles carrega
-`#[Model]` — o nome do modelo vive em `OLLAMA_TEXT_MODEL` e o SDK resolve cada
+`#[Model]` — o nome do modelo vive em `GEMINI_TEXT_MODEL` e o SDK resolve cada
 agente por `defaultTextModel()` —, e o `num_ctx` sai de `ai.context_window`
 (`AI_CONTEXT_WINDOW`, 24576) através do trait `UsesConfiguredContextWindow`. É
 o que torna a troca de modelo uma linha de `.env`: o número descreve o tamanho
-dos prompts que escrevemos, não a janela do modelo da vez. Sem ele o Ollama
-truncaria em silêncio um prompt grande — o maior prompt de classe tem 10.946
-tokens medidos pelo `prompt_eval_count` do próprio Ollama.
+dos prompts que escrevemos, não a janela do modelo da vez. Hoje o trait não emite
+nada, porque `num_ctx` é grafia do Ollama; ele volta a valer no dia em que os
+agentes voltarem para lá — e sem ele o Ollama truncaria em silêncio um prompt
+grande, sendo que o maior prompt de classe tem 10.946 tokens medidos pelo
+`prompt_eval_count` do próprio Ollama.
 
 O conhecimento tem **dois regimes de recuperação**, cada um onde ganha. O markdown
 de `app/Rag/knowledge/` vai inteiro pelo `KnowledgeBase`: para escolher entre 24
@@ -209,9 +225,9 @@ O enquadramento de um caso são **dois** agentes em série, e a ordem é imposta
 escolhida. `PracticeAreaClassificationAgent` recebe os fatos e devolve a área de
 atuação; `ProceduralClassSelectionAgent` recebe a área já decidida e escolhe entre
 as classes processuais vinculadas a ela. As opções chegam **injetadas** nas
-instruções e também como `enum()` no `schema()` — o Ollama converte isso em
-gramática, então nem uma área nem uma classe inventada é algo que o modelo consiga
-emitir. E as classes candidatas só existem depois que a área é conhecida: daí não
+instruções e também como `enum()` no `schema()`, e o provider impõe o schema —
+gramática no Ollama, `response_json_schema` no Gemini —, então nem uma área nem uma
+classe inventada é algo que o modelo consiga emitir. E as classes candidatas só existem depois que a área é conhecida: daí não
 caber numa chamada só.
 
 A classe é escolhida pelo **código do CNJ**, um inteiro, e não pelo slug: slug de
@@ -300,8 +316,9 @@ medido contra o `qwen3.8:27b` no `app/Ai/README.md`, e é por isso que a saída 
 agente é uma minuta para o advogado aceitar, nunca um campo que se preenche sozinho.
 
 Testes de agente ficam em `tests/Agents`, no grupo `agents`, **fora** do
-`php artisan test` padrão porque exigem o Ollama de pé e gastam segundos de
-inferência. O grupo é o que os habilita — `--testsuite=Agents` sozinho não
+`php artisan test` padrão porque gastam inferência de verdade: hoje isso é uma
+`GEMINI_API_KEY` válida e uma cota que se paga, mais o Ollama de pé para o
+ranking vetorial do teste de classificação. O grupo é o que os habilita — `--testsuite=Agents` sozinho não
 encontra nada, porque a exclusão do grupo continua valendo:
 
 ```bash

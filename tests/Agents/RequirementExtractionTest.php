@@ -11,7 +11,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * The requirement agent against a real Ollama, no fakes.
+ * The requirement agent against the real text provider, no fakes.
  *
  * No RefreshDatabase, like the defendant test next door and unlike the
  * classification one: this agent reads nothing from the catalogue and writes

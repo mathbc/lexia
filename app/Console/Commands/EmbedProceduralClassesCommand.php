@@ -54,9 +54,14 @@ final class EmbedProceduralClassesCommand extends Command
         try {
             $embedded = $embed->handle($classes);
         } catch (Throwable $e) {
+            $provider = (string) config('ai.default_for_embeddings');
+            $model = (string) config("ai.providers.{$provider}.models.embeddings.default");
+
             $this->error('Falha ao gerar embeddings: '.$e->getMessage());
-            $this->line('Verifique se o Ollama está de pé e se o modelo de embeddings foi baixado:');
-            $this->line('  ollama pull '.config('ai.providers.ollama.models.embeddings.default'));
+            $this->line("Provedor de embeddings: [{$provider}], modelo [{$model}].");
+            $this->line($provider === 'ollama'
+                ? "Verifique se o Ollama está de pé e se o modelo foi baixado: ollama pull {$model}"
+                : 'Verifique a GEMINI_API_KEY e se o modelo aceita as dimensões configuradas.');
 
             return self::FAILURE;
         }

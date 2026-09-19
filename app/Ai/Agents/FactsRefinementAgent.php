@@ -77,15 +77,17 @@ use Laravel\Ai\Promptable;
  * as invented, and it arrives in worse Portuguese.
  *
  * The traps the sibling agents document apply unchanged: never send
- * `think: false`, and leave the model to `config/ai.php` rather than naming one
- * in a `#[Model]`.
+ * `think: false` to an Ollama that reasons, and leave the model to
+ * `config/ai.php` rather than naming one in a `#[Model]`.
  *
  * Reached through RefineLegalCaseFacts. Deliberately **not** wired into
  * ClassifyLegalCase: that Action reads a narrative to fill the wizard, while
  * this one rewrites a narrative the lawyer is looking at, which is a second
  * gesture on a screen and not part of the first.
  */
-#[Provider('ollama')]
+// Trocar as duas linhas de lugar devolve a inferência ao Ollama local.
+// #[Provider('ollama')]
+#[Provider('gemini')]
 #[Timeout(180)]
 #[Temperature(0.3)]
 final class FactsRefinementAgent implements Agent, HasProviderOptions, HasStructuredOutput

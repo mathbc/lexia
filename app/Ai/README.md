@@ -196,10 +196,16 @@ chega e a redação é que não a carrega.
 
 É por isso que a saída deste agente é uma **minuta para o advogado aceitar**, e não um
 campo que se preenche sozinho. A tela que expuser isto deve mostrar os dois textos lado a
-lado; `RefineLegalCaseFacts` diz o mesmo no docblock. E trocar `OLLAMA_TEXT_MODEL` é uma
-linha de `.env`: é o agente que mais ganha com um modelo maior.
+lado; `RefineLegalCaseFacts` diz o mesmo no docblock. E trocar `GEMINI_TEXT_MODEL` é uma
+linha de `.env`: é o agente que mais ganha com um modelo maior — a tabela acima foi medida
+quando o texto ainda era local, e é justamente a coluna que a ida para o Gemini endereça.
 
 ## Contexto: `AI_CONTEXT_WINDOW`, e por que ele é explícito
+
+Hoje o número é documentação: com o texto no Gemini, a janela é ordens de grandeza maior
+do que qualquer prompt que montamos, e o trait não emite opção nenhuma. Ele volta a ser
+configuração no dia em que os agentes apontarem de volta para o Ollama, e é por isso que
+continua aqui.
 
 Sem `num_ctx` o tamanho de contexto é o default do daemon, e o Ollama **trunca em
 silêncio** quando o prompt estoura — a resposta volta plausível, construída sobre um
@@ -228,28 +234,59 @@ Cuidado ao mexer: `providerOptions` cai na chave `options` do corpo, mas `think`
 
 ## Provider e modelo
 
-Ollama local, configurado em `config/ai.php`: `qwen2.5:7b` para texto e
-`nomic-embed-text` (768 dimensões) para embeddings. É o único provider declarado —
-a história do cliente não sai da infraestrutura do escritório para ser classificada.
+**Dois providers, um trabalho cada**, e a linha entre eles é onde custa menos:
+
+| | provider | modelo | env |
+|---|---|---|---|
+| Texto (os cinco agentes) | `gemini` | `gemini-3.6-flash` | `GEMINI_API_KEY`, `GEMINI_TEXT_MODEL` |
+| Embeddings (o catálogo) | `ollama` | `nomic-embed-text`, 768 dim. | `OLLAMA_URL`, `OLLAMA_EMBEDDINGS_MODEL` |
+
+O texto saiu porque a latência era o problema: `POST /pecas/classificar` são quatro
+inferências em série com o navegador esperando, e a tabela de qualidade acima já dizia
+que o `qwen2.5:7b` não sustentava a redação dos fatos.
+
+Os embeddings **ficaram**, e de propósito. Não havia o que ganhar movendo-os: o catálogo
+são 615 linhas já vetorizadas com `nomic-embed-text`, e vetor de um modelo não se compara
+com vetor de outro — a mudança custaria uma reembutida inteira para comprar nada. Como
+efeito colateral, o relato bruto do cliente continua sendo vetorizado dentro do
+escritório.
+
+Isso significa que o Ollama **continua sendo dependência de desenvolvimento**, e que
+`docker compose up -d` não basta: sem o daemon de pé, `ProceduralClassRankingQuery`
+degrada em silêncio para a ordem do pivot (é o desenho dela) e as classificações pioram
+sem erro nenhum.
 
 **Nenhum agente carrega `#[Model]`.** O modelo é nomeado em um lugar só,
-`ai.providers.ollama.models.text` (env `OLLAMA_TEXT_MODEL`), e sem o atributo o SDK
+`ai.providers.gemini.models.text` (env `GEMINI_TEXT_MODEL`), e sem o atributo o SDK
 resolve cada agente por `defaultTextModel()`. Trocar de modelo é editar o `.env` e
 rodar `php artisan config:clear`.
 
-## Três armadilhas, nenhuma exclusiva de um modelo
+**Voltar tudo para local** são três gestos: `AI_PROVIDER=ollama` e `OLLAMA_TEXT_MODEL` no
+`.env`, trocar o `#[Provider('gemini')]` dos cinco agentes pela linha comentada logo
+acima de cada um, e `php artisan config:clear`. O bloco `ollama` do `config/ai.php` nunca
+saiu de lá: os modelos de texto seguem declarados, ociosos, à espera disso.
+
+## Armadilhas
 
 1. **Nunca mande `think: false`.** O `gpt-oss:20b` respondia com `content` vazio, e a
    linha qwen3 também raciocina por padrão. Deixado em paz, o Ollama separa o raciocínio
    em `message.thinking` e o JSON chega limpo em `message.content`, que é o que a saída
-   estruturada consome. O `qwen2.5:7b` de hoje não raciocina, então a armadilha está
-   dormente — o que não é motivo para acrescentar a chave: ela volta a morder no dia em
-   que o `OLLAMA_TEXT_MODEL` apontar para um modelo que pensa.
-2. **A chave `models` no `config/ai.php` é obrigatória.** Sem ela o `OllamaProvider` cai
-   no default do pacote, `qwen3.5:4b`, que este projeto não baixa.
-3. **O modelo precisa suportar `tools`/saída estruturada.** O `format` do Ollama vira
-   gramática; um modelo sem essa capacidade devolve JSON só por boa vontade. Confira com
-   `ollama show <modelo>` antes de trocar.
+   estruturada consome. Dormente duas vezes hoje — o texto é do Gemini, e o SDK não tem
+   essa opção para ele —, o que não é motivo para acrescentar a chave: ela volta a morder
+   no dia em que os agentes voltarem para o Ollama.
+2. **A chave `models` no `config/ai.php` é obrigatória** para os dois providers. Sem ela
+   o `OllamaProvider` cai no default do pacote, `qwen3.5:4b`, que este projeto não baixa,
+   e o `GeminiProvider` cai num default que muda com a versão do pacote.
+3. **O modelo de texto precisa suportar saída estruturada.** No Ollama o `format` vira
+   gramática e um modelo sem essa capacidade devolve JSON só por boa vontade — confira
+   com `ollama show <modelo>`. No Gemini o schema viaja como `response_json_schema` e é
+   imposto do lado do servidor.
+4. **As dimensões do embedding são a largura da coluna.** `procedural_classes.embedding`
+   é `vector(768)`; trocar o modelo de embeddings por um de outra largura exige migration,
+   e trocar por um de mesma largura já exige
+   `php artisan lexia:embed-procedural-classes --fresh` — o hash é do texto, e o texto não
+   muda quando só o modelo muda. Sem isso, os vetores velhos ficam, e a distância entre
+   um relato novo e um catálogo antigo é lixo silencioso.
 
 ## Busca vetorial no catálogo
 
@@ -260,7 +297,8 @@ próximas chegam com descrição, matérias típicas e base legal, as demais só
 código.
 
 **Todas continuam no `enum`.** O que o vetor decide é orçamento de janela, nunca o
-conjunto de respostas possíveis — a garantia de gramática segue intacta.
+conjunto de respostas possíveis — a garantia segue intacta, e atravessou a troca de
+provider junto com ela.
 
 É isso que paga o catálogo enriquecido: as descrições passaram a carregar prazo, gatilho
 e instrumentos, e a lista inteira da maior área não caberia ao lado do guia. Detalhes,
@@ -268,7 +306,12 @@ inclusive por que o documento markdown continua indo inteiro, em `app/Rag/README
 
 ## Saída estruturada
 
-Um agente que implementa `HasStructuredOutput` tem seu `schema()` convertido em gramática
-pelo Ollama. `enum()` num campo string é o que impede o modelo de inventar um valor — é
-assim que a classificação de área garante devolver um dos 24 slugs do catálogo, e não uma
-área plausível que não existe.
+Um agente que implementa `HasStructuredOutput` tem seu `schema()` imposto pelo provider:
+o Ollama o compila em gramática, o Gemini o recebe como `response_json_schema` e o aplica
+do lado dele. Mecanismos diferentes, mesma promessa — `enum()` é o que impede o modelo de
+inventar um valor, e é assim que a classificação de área garante devolver um dos 24 slugs
+do catálogo, e não uma área plausível que não existe.
+
+Vale para `enum` de inteiros também, que é o caso do código CNJ em
+`ProceduralClassSelectionAgent`: o gateway do Gemini manda o JSON Schema inteiro, não o
+subconjunto OpenAPI que só aceitaria enums de string.

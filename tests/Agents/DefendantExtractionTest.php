@@ -11,7 +11,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * The defendant agent against a real Ollama, no fakes.
+ * The defendant agent against the real text provider, no fakes.
  *
  * No RefreshDatabase, unlike its sibling: this agent reads nothing from the
  * catalogue and writes nothing back. What it takes is a narrative and what it

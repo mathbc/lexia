@@ -18,7 +18,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * The facts refinement agent against a real Ollama, no fakes.
+ * The facts refinement agent against the real text provider, no fakes.
  *
  * No RefreshDatabase, like the two extraction tests: the pleading here is built
  * in memory — `new LegalCase(...)` with its four relations set by hand — so

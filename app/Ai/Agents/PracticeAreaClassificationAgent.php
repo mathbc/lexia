@@ -19,32 +19,44 @@ use Laravel\Ai\Promptable;
  *
  * The 24 areas are handed to the agent rather than fetched by it. A tool call
  * would have matched the shape of the problem, but the schema below is what
- * actually makes the answer trustworthy: `enum` reaches Ollama as a grammar
- * constraint, so an invented area is not something the model is allowed to
- * emit. That guarantee is worth more than the round trip it costs, and it is
- * why the caller resolves the slug against the same collection it passed in.
+ * actually makes the answer trustworthy: `enum` constrains the decoding, so an
+ * invented area is not something the model is allowed to emit. That guarantee
+ * is worth more than the round trip it costs, and it is why the caller resolves
+ * the slug against the same collection it passed in.
+ *
+ * It survived the move to Gemini, which is the one thing that had to survive
+ * it. Ollama compiled the schema into a grammar; Gemini receives it as
+ * `response_json_schema` and enforces it server-side. Different mechanism, same
+ * promise — and the caller is written so that it would fail loudly rather than
+ * quietly if the promise ever broke.
  *
  * Two things learned the hard way, both easy to undo by accident:
  *
  * 1. Never send `think: false` to a thinking model. gpt-oss:20b answered with
  *    empty content when told to skip it, and the qwen3 line reasons by default
- *    too. Left alone, Ollama puts the reasoning in `message.thinking` and the
- *    JSON arrives clean in `message.content`, which is exactly what we want.
+ *    too. Dormant while the provider is Gemini — the SDK has no such option to
+ *    send there — and live again the moment the commented attribute below is
+ *    uncommented.
  * 2. The justification needs its `description()`. Without one the model
- *    answers with a slug-shaped fragment instead of a sentence.
+ *    answers with a slug-shaped fragment instead of a sentence. Still true
+ *    under Gemini, which reads per-property descriptions out of the schema.
  *
  * No `#[Model]` here on purpose: the model is `config/ai.php`'s to name, so a
  * swap is an env change rather than an edit to every agent.
  *
- * The schema is not repeated in the instructions: the SDK's Ollama gateway
- * already appends it to the system prompt (ComposesSchemaInstructions).
+ * The schema is not repeated in the instructions, under either provider, but
+ * for different reasons: the Ollama gateway appends it to the system prompt
+ * itself (ComposesSchemaInstructions), while the Gemini gateway does not need
+ * to, because the schema travels as a field of the request.
  *
  * This is the first of two steps — ProceduralClassSelectionAgent decides the
  * procedural class afterwards, out of the classes linked to the area named
  * here. It cannot be one call: the classes it chooses between are the ones this
  * answer selects.
  */
-#[Provider('ollama')]
+// Trocar as duas linhas de lugar devolve a inferência ao Ollama local.
+// #[Provider('ollama')]
+#[Provider('gemini')]
 #[Timeout(180)]
 #[Temperature(0.2)]
 final class PracticeAreaClassificationAgent implements Agent, HasProviderOptions, HasStructuredOutput

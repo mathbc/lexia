@@ -71,14 +71,16 @@ use Laravel\Ai\Promptable;
  * request out of a narrative are the instructions themselves.
  *
  * The traps the sibling agents document apply unchanged: never send
- * `think: false`, and leave the model to `config/ai.php` rather than naming one
- * in a `#[Model]`.
+ * `think: false` to an Ollama that reasons, and leave the model to
+ * `config/ai.php` rather than naming one in a `#[Model]`.
  *
  * Reached through ExtractLegalCaseRequirements, which ClassifyLegalCase calls
  * alongside the framing rather than after it — nothing here needs an area or a
  * class, only the facts.
  */
-#[Provider('ollama')]
+// Trocar as duas linhas de lugar devolve a inferência ao Ollama local.
+// #[Provider('ollama')]
+#[Provider('gemini')]
 #[Timeout(180)]
 #[Temperature(0.2)]
 final class RequirementExtractionAgent implements Agent, HasProviderOptions, HasStructuredOutput
@@ -91,7 +93,8 @@ final class RequirementExtractionAgent implements Agent, HasProviderOptions, Has
      *
      * Não é juízo sobre o caso: é o freio para o modelo que começa a repetir a
      * mesma pretensão com outras palavras, que é como um modelo pequeno falha
-     * numa lista sem fim à vista. A gramática do Ollama para de emitir aqui.
+     * numa lista sem fim à vista. É o schema que para de emitir aqui — grammar
+     * no Ollama, `response_json_schema` no Gemini.
      */
     private const MAX_REQUIREMENTS = 10;
 

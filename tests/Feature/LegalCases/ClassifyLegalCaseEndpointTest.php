@@ -284,6 +284,138 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
     }
 
     /**
+     * A fila. As quatro inferências correm uma de cada vez, nesta ordem.
+     *
+     * O que se verifica aqui não é o resultado, é a sequência: `globally()
+     * ->ordered()` reprova uma etapa que rode antes da anterior ter voltado, e
+     * é a única forma de este arranjo ser afirmado em teste. Ele existe para
+     * que a ordem continue sendo do desenho — quatro `statement` no `handle()`
+     * — e não da ordem de avaliação de argumentos do PHP, que é como já foi e
+     * corria igual sem estar dito em lugar nenhum.
+     */
+    #[Test]
+    public function the_four_agents_run_one_at_a_time_and_in_order(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+
+        $area = PracticeArea::query()->where('slug', 'civil')->sole();
+
+        $this->fakeAction(ClassifyPracticeArea::class)
+            ->shouldReceive('handle')
+            ->once()
+            ->globally()
+            ->ordered()
+            ->andReturn(new PracticeAreaClassification(
+                practiceArea: $area,
+                justification: 'O réu é um particular.',
+            ));
+
+        $this->fakeAction(SelectProceduralClass::class)
+            ->shouldReceive('handle')
+            ->once()
+            ->globally()
+            ->ordered()
+            ->andReturn(new ProceduralClassSelection(
+                proceduralClass: ProceduralClass::query()->where('code', 7)->sole(),
+                justification: 'O pedido é indenizatório.',
+            ));
+
+        $this->fakeAction(ExtractLegalCaseDefendant::class)
+            ->shouldReceive('handle')
+            ->once()
+            ->globally()
+            ->ordered()
+            ->andReturn(new DefendantData(
+                name: 'Joaquim Vizinho',
+                document: null,
+                email: null,
+                phone: null,
+                postalCode: null,
+                street: null,
+                number: null,
+                complement: null,
+                district: null,
+                city: null,
+                state: null,
+                notes: null,
+            ));
+
+        $this->fakeAction(ExtractLegalCaseRequirements::class)
+            ->shouldReceive('handle')
+            ->once()
+            ->globally()
+            ->ordered()
+            ->andReturn(new RequirementListData([]));
+
+        $this->actingAs($owner)
+            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
+            ->assertOk();
+    }
+
+    /**
+     * A classe é a segunda da fila, e a queda dela não cancela as duas últimas.
+     *
+     * Nem o réu nem os pedidos dependem da classe — dependem dos mesmos fatos,
+     * que continuam de pé. Devolver 503 aqui jogaria fora a área, que já custou
+     * uma inferência, para entregar uma tela de erro; o assistente sabe abrir
+     * sem classe e deixar o advogado escolher na lista da área.
+     */
+    #[Test]
+    public function a_class_that_could_not_be_chosen_does_not_stop_the_queue(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+
+        $this->fakeAction(ClassifyPracticeArea::class)
+            ->shouldReceive('handle')
+            ->andReturn(new PracticeAreaClassification(
+                practiceArea: PracticeArea::query()->where('slug', 'civil')->sole(),
+                justification: 'O réu é um particular.',
+            ));
+
+        $this->fakeAction(SelectProceduralClass::class)
+            ->shouldReceive('handle')
+            ->andThrow(new RuntimeException('Connection refused'));
+
+        $this->fakeAction(ExtractLegalCaseDefendant::class)
+            ->shouldReceive('handle')
+            ->once()
+            ->andReturn(new DefendantData(
+                name: 'Joaquim Vizinho',
+                document: null,
+                email: null,
+                phone: null,
+                postalCode: null,
+                street: null,
+                number: null,
+                complement: null,
+                district: null,
+                city: null,
+                state: null,
+                notes: null,
+            ));
+
+        $this->fakeAction(ExtractLegalCaseRequirements::class)
+            ->shouldReceive('handle')
+            ->once()
+            ->andReturn(new RequirementListData([
+                new RequirementData(
+                    id: null,
+                    description: 'A condenação do Réu à reconstrução do muro derrubado;',
+                    amount: null,
+                ),
+            ]));
+
+        $this->actingAs($owner)
+            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
+            ->assertOk()
+            ->assertJsonPath('practice_area.slug', 'civil')
+            ->assertJsonPath('procedural_class', null)
+            ->assertJsonPath('procedural_class_justification', null)
+            ->assertJsonPath('defendant.defendant_name', 'Joaquim Vizinho')
+            ->assertJsonCount(1, 'requirements');
+    }
+
+    /**
      * Um dublê para uma Action `final`.
      *
      * `AsFake::mock()` faz `Mockery::mock(static::class)`, que o PHP recusa numa

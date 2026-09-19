@@ -14,11 +14,22 @@ use Lorisleiva\Actions\Concerns\AsAction;
  *
  * O texto embutido é o mesmo que o advogado leria — nome, descrição, matérias
  * típicas e a fundamentação —, porque é contra ele que o relato de fatos vai
- * ser comparado. O prefixo `search_document:` não é enfeite: o
- * `nomic-embed-text` foi treinado com prefixos de tarefa, e documento e
- * consulta caem em regiões diferentes do espaço quando cada um usa o seu. Sem
- * eles a similaridade entre um relato leigo e uma definição jurídica fica
+ * ser comparado.
+ *
+ * O prefixo `search_document:` não é enfeite, e é do `nomic-embed-text`: o
+ * modelo foi treinado com prefixos de tarefa, e documento e consulta caem em
+ * regiões diferentes do espaço quando cada um usa o seu. Sem eles a
+ * similaridade entre um relato leigo e uma definição jurídica fica
  * visivelmente pior.
+ *
+ * Ele segue `ai.default_for_embeddings` em vez de ser fixo porque o texto dos
+ * agentes saiu para o Gemini e este lado não: enquanto o par continuar sendo
+ * Ollama, nada muda aqui. Se um dia a vetorização também sair, o prefixo tem
+ * de sair junto — o Gemini expressa a mesma ideia por `taskType`, que o SDK não
+ * deixa passar daqui, e receberia o prefixo como texto literal no começo de
+ * cada documento: ruído, não instrução. Que o prefixo entre no texto e o texto
+ * no hash é o que faz essa mudança se cobrar sozinha, regenerando os vetores
+ * que deixaram de bater.
  *
  * O hash é o que torna isto barato de repetir: uma classe cujo texto não mudou
  * não é reembutida. A migration de recarga do catálogo zera os hashes
@@ -110,7 +121,7 @@ final class EmbedProceduralClasses
             $parts[] = 'Base legal: '.implode('; ', $bases).'.';
         }
 
-        return 'search_document: '.implode(' ', $parts);
+        return self::taskPrefix('search_document: ').implode(' ', $parts);
     }
 
     /**
@@ -118,6 +129,18 @@ final class EmbedProceduralClasses
      */
     public static function queryFor(string $facts): string
     {
-        return 'search_query: '.trim($facts);
+        return self::taskPrefix('search_query: ').trim($facts);
+    }
+
+    /**
+     * O prefixo de tarefa, quando o provedor de embeddings for um que os leia.
+     *
+     * Só o Ollama, hoje, porque só o `nomic-embed-text` foi treinado com eles.
+     * Qualquer outro recebe a string vazia: um provedor que não conhece o
+     * prefixo não o ignora, ele o embute.
+     */
+    private static function taskPrefix(string $prefix): string
+    {
+        return config('ai.default_for_embeddings') === 'ollama' ? $prefix : '';
     }
 }
