@@ -278,6 +278,27 @@ nada apontar para elas. O preço da rota é a latência de **quatro** `Timeout(1
 em série, com o navegador esperando — dívida conhecida, documentada no
 `asController()`, e o lugar de trocá-la por uma fila.
 
+O quinto agente não está na cadeia e não é chamado por ela. `FactsRefinementAgent`,
+exposto por `RefineLegalCaseFacts`, reescreve o relato do cliente como a narrativa de
+fatos de uma inicial: registro formal, terceira pessoa, ordem cronológica — e, quando o
+relato narra uma perda que não se repõe (morte na família, o animal da casa, o bem de
+valor afetivo insubstituível, a humilhação, o tratamento negado), o peso que ela tem. Em
+cobrança, atraso de entrega e contrato entre empresas, nenhum: as duas listas estão nas
+instruções para que a decisão seja tomada e não sentida, e `impact_basis` é onde o agente
+declara qual fato do relato autorizou o destaque. É o único que recebe um `LegalCase` em
+vez de uma string — `LegalCaseDossier` monta a peça em volta (área, classe, cliente, réu
+e pedidos já registrados), porque é ela que diz como chamar as partes e o que a narrativa
+precisa sustentar.
+
+É também o primeiro cuja resposta é **prosa**, e isso muda o que se pode garantir. A
+cifra inventada do agente de pedidos reaparece aqui como "totalizando R$ 24.000,00", e
+`RefinedFactsData` a **relata** em `unsupportedAmounts` em vez de apagá-la: uma coluna
+pode ficar em branco, uma frase não. No prompt, o que segurou a conta foi proibir os
+conectivos ("totalizando", "no total de", "perfazendo") e não a operação. O que o
+`qwen2.5:7b` ainda não segura — a oração encaixada que carrega o fato central — está
+medido contra o `qwen3.8:27b` no `app/Ai/README.md`, e é por isso que a saída deste
+agente é uma minuta para o advogado aceitar, nunca um campo que se preenche sozinho.
+
 Testes de agente ficam em `tests/Agents`, no grupo `agents`, **fora** do
 `php artisan test` padrão porque exigem o Ollama de pé e gastam segundos de
 inferência. O grupo é o que os habilita — `--testsuite=Agents` sozinho não
