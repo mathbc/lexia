@@ -131,8 +131,14 @@ sua descrição, e entram e saem um a um. Ver [document.md](document.md).
 ## O que ainda não existe
 
 A peça já é escrita e salva: `POST /pecas` a abre, e
-`/pecas/{legalCase}/dados-basicos`, `/reu`, `/fatos` e `/pedidos` gravam uma
-etapa cada. `GET /pecas/{legalCase}/editar` a reabre onde parou.
+`/pecas/{legalCase}/dados-basicos`, `/reu`, `/fatos`, `/pedidos` e
+`/revisao-forense` gravam uma etapa cada. `GET /pecas/{legalCase}/editar` a
+reabre onde parou.
+
+**A etapa 6 tem dados, mas ainda não tem tela.** `LegalThesis` e
+`LegalPrecedent` existem, a rota grava as duas listas e as Actions de cadastro
+por linha estão prontas para o agente de revisão forense — o que falta é o
+formulário e o agente.
 
 **Os documentos são a exceção**: o rascunho carrega o próprio `File`, e onde
 guardá-lo é decisão que ainda não foi tomada — a etapa 5 segue em estado local
@@ -163,7 +169,10 @@ Requerido etc.
 - Enum das etapas: `app/Domain/LegalCases/Enums/LegalCaseStep.php`
 - Actions de escrita: `app/Domain/LegalCases/Actions/` (`CreateLegalCase`,
   `UpdateLegalCaseBasics`, `UpdateLegalCaseDefendant`, `UpdateLegalCaseFacts`,
-  `SaveLegalCaseRequirements`, `AdvanceLegalCaseStep`)
+  `SaveLegalCaseRequirements`, `SaveLegalCaseForensicReview`,
+  `AdvanceLegalCaseStep`)
 - Testes: `tests/Feature/LegalCases/ManageLegalCasesTest.php` (model e schema),
   `SaveLegalCaseStepsTest.php` (o fluxo de montagem),
-  `tests/Feature/Requirements/SaveLegalCaseRequirementsTest.php`
+  `tests/Feature/Requirements/SaveLegalCaseRequirementsTest.php`,
+  `tests/Feature/LegalCases/SaveLegalCaseForensicReviewTest.php` (o mapa de ids
+  que liga precedente a tese)

@@ -330,6 +330,50 @@ encontra nada, porque a exclusão do grupo continua valendo:
 composer test:agents
 ```
 
+## A revisão forense
+
+A sexta etapa da peça (`LegalCaseStep::Review`) tem duas entidades filhas de
+`LegalCase`, ambas 1-N: `LegalThesis` é o que a peça argumenta — nome, tipo
+(`LegalThesisType`), descrição, impacto e a fundamentação em `legal_bases`, um
+jsonb de `{type, reference, source}` —, e `LegalPrecedent` é o julgado que
+sustenta a tese, com a ementa, a citação ABNT e a aderência ao caso.
+
+O precedente aponta para a tese por **FK** (`legal_thesis_id`, nullable), e não
+por pivot, porque a linha não guarda a súmula e sim o *achado*: a Súmula 393
+existe uma vez no direito brasileiro e uma vez por peça nesta tabela, já que a
+aderência e o que ela fundamenta mudam de caso para caso.
+
+`adherence` e `legal_bases` são nulos quando ninguém mediu e ninguém escreveu —
+a mesma distinção que `requirements.amount` faz. Zero diria que foi medido e
+julgado irrelevante, que é outra afirmação.
+
+**A armadilha está na gravação, e é por ela que existe uma Action só.** Um
+precedente carrega a chave da tese que fundamenta, e essa chave pode nomear uma
+tese criada no mesmo request — cujo id real não existe até ser gravada, porque
+o palpite do navegador é descartado e o `HasUuids` cunha o seu. Então
+`SaveLegalCaseForensicReview` grava as teses primeiro e a gravação devolve um
+**mapa do id postado para o id persistido**; a FK do precedente sai desse mapa e
+nunca do payload. Duas Actions não teriam onde guardá-lo.
+
+O mapa é também a defesa de tenant, de graça: ele só contém as teses que aquela
+gravação escreveu, então a tese de outra conta — que o banco aceitaria, já que
+uma foreign key confere existência e não propriedade —, a da peça irmã e a que o
+advogado acabou de remover aterram todas em `null`. Note que o `nullOnDelete` da
+FK quase nunca dispara: `LegalThesis` é soft-deleted, o `delete()` só escreve
+`deleted_at` e a constraint não é consultada. Quem desliga é o mapa; a constraint
+é a rede do apagamento duro. `DeleteLegalThesis` desliga à mão pelo mesmo motivo.
+
+Uma linha de `saveTheses()` merece a própria frase: o mapa é chaveado em
+`$thesis->id ?? $row->id`. Sem o fallback, duas teses novas colidem na string
+vazia, a segunda sobrescreve a primeira no mapa, e a primeira é apagada pelo
+`whereNotIn` microssegundos depois de criada.
+
+As Actions de cadastro por linha (`CreateLegalThesis`, `UpdateLegalPrecedent`,
+`DeleteLegalThesis`…) existem para o agente de revisão forense que virá, e não
+têm `asController()` enquanto nada apontar para elas. As de precedente recebem a
+tese como **model e não como id**, que é a mesma regra noutra forma: um id
+postado seria um buraco que nenhum teste da classe enxergaria.
+
 ## Ainda não implementado
 
 O módulo de Jurisprudência: ingestão, chunking e busca vetorial sobre o corpus.

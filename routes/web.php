@@ -21,6 +21,7 @@ use App\Domain\LegalCases\Actions\AdvanceLegalCaseStep;
 use App\Domain\LegalCases\Actions\ClassifyLegalCase;
 use App\Domain\LegalCases\Actions\CreateLegalCase;
 use App\Domain\LegalCases\Actions\ListLegalCases;
+use App\Domain\LegalCases\Actions\SaveLegalCaseForensicReview;
 use App\Domain\LegalCases\Actions\SaveLegalCaseRequirements;
 use App\Domain\LegalCases\Actions\ShowAssistedLegalCaseForm;
 use App\Domain\LegalCases\Actions\ShowLegalCaseForm;
@@ -110,6 +111,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::put('/reu', UpdateLegalCaseDefendant::class)->name('legal-cases.defendant');
         Route::put('/fatos', UpdateLegalCaseFacts::class)->name('legal-cases.facts');
         Route::put('/pedidos', SaveLegalCaseRequirements::class)->name('legal-cases.requirements');
+
+        // A revisão forense: teses e precedentes vão juntos porque o precedente
+        // carrega a chave da tese que fundamenta, e ela pode nascer no mesmo
+        // request. Ver SaveLegalCaseForensicReview.
+        Route::put('/revisao-forense', SaveLegalCaseForensicReview::class)->name('legal-cases.forensic-review');
 
         // Os documentos ainda não persistem, mas o Continuar deles diz uma
         // verdade sobre a peça: ela chegou até ali.

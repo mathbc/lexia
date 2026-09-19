@@ -11,6 +11,8 @@ use App\Domain\Customers\Models\Customer;
 use App\Domain\Documents\Models\Document;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Policies\LegalCasePolicy;
+use App\Domain\LegalPrecedents\Models\LegalPrecedent;
+use App\Domain\LegalTheses\Models\LegalThesis;
 use App\Domain\PracticeAreas\Models\PracticeArea;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
 use App\Domain\Requirements\Models\Requirement;
@@ -101,6 +103,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property-read ProceduralClass $proceduralClass
  * @property-read Collection<int, Document> $documents
  * @property-read Collection<int, Requirement> $requirements
+ * @property-read Collection<int, LegalThesis> $theses
+ * @property-read Collection<int, LegalPrecedent> $precedents
  */
 #[UsePolicy(LegalCasePolicy::class)]
 #[UseFactory(LegalCaseFactory::class)]
@@ -177,6 +181,34 @@ class LegalCase extends Model
     public function requirements(): HasMany
     {
         return $this->hasMany(Requirement::class)->oldest();
+    }
+
+    /**
+     * The lines of argument the pleading will carry — the forensic review.
+     *
+     * Oldest first, like the requirements: insertion order is the order they
+     * were written and the order the drafted document will make them, and there
+     * is no position column until the screen offers reordering.
+     *
+     * @return HasMany<LegalThesis, $this>
+     */
+    public function theses(): HasMany
+    {
+        return $this->hasMany(LegalThesis::class)->oldest();
+    }
+
+    /**
+     * The rulings found to sustain what it argues.
+     *
+     * Hung off the pleading and not only off the theses, because a ruling can be
+     * found before the thesis it will sustain exists — `legal_thesis_id` is
+     * nullable, and an unattached precedent still belongs to this pleading.
+     *
+     * @return HasMany<LegalPrecedent, $this>
+     */
+    public function precedents(): HasMany
+    {
+        return $this->hasMany(LegalPrecedent::class)->oldest();
     }
 
     /**
