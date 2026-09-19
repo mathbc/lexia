@@ -49,11 +49,14 @@ use Tests\TestCase;
  *   hardest rules — it never composes a total, and it carries the clause the
  *   client wrote in passing ("as coisas da minha mãe, que faleceu em janeiro")
  *   into the narrative, which is the fact the whole case rests on.
- * - `qwen2.5:7b`, which is what `OLLAMA_TEXT_MODEL` names today, holds the
- *   commercial case reliably once the prompt names the connectives rather than
- *   the operation ("não escreva totalizando, no total de, perfazendo"). On the
- *   longer narrative it still drops that embedded clause and still reaches for
- *   a total now and then.
+ * - `qwen2.5:7b` holds the commercial case reliably once the prompt names the
+ *   connectives rather than the operation ("não escreva totalizando, no total
+ *   de, perfazendo"). On the longer narrative it still drops that embedded
+ *   clause and still reaches for a total now and then.
+ *
+ * Neither is what `OLLAMA_TEXT_MODEL` names today: the text came back from
+ * Gemini onto `gpt-oss:20b`, which has not been measured against these two
+ * cases. Run this test and rewrite the two bullets above with what it does.
  *
  * So the money question is not asserted on the harder case: it lives in code
  * instead, as `RefinedFactsData::unsupportedAmounts`, which is model

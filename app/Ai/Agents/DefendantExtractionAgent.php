@@ -53,10 +53,11 @@ use Laravel\Ai\Promptable;
  * agent's own prompt in another file.
  *
  * The traps the sibling agents document apply unchanged: never send
- * `think: false` to an Ollama that reasons, and leave the model to
- * `config/ai.php` rather than naming one in a `#[Model]`. The required-and-
- * nullable pair above survives the move to Gemini intact: `response_json_schema`
- * carries `required` and a nullable type the same way the grammar did.
+ * `think: false` to an Ollama that reasons — and the provider is Ollama again,
+ * with `gpt-oss:20b` answering — and leave the model to `config/ai.php` rather
+ * than naming one in a `#[Model]`. The required-and-nullable pair above holds
+ * under either provider: Ollama's grammar and a cloud `response_json_schema`
+ * both carry `required` beside a nullable type.
  *
  * Reached through ExtractLegalCaseDefendant, which ClassifyLegalCase calls
  * alongside the two framing agents rather than after them: the framing of a
@@ -64,9 +65,10 @@ use Laravel\Ai\Promptable;
  * needs no answer from the other two. What they share is only the facts and the
  * moment the lawyer asks for them.
  */
-// Trocar as duas linhas de lugar devolve a inferência ao Ollama local.
-// #[Provider('ollama')]
-#[Provider('gemini')]
+// Trocar as duas linhas de lugar manda a inferência para o Gemini — e o bloco
+// `gemini` do config/ai.php precisa ser descomentado junto.
+// #[Provider('gemini')]
+#[Provider('ollama')]
 #[Timeout(180)]
 #[Temperature(0.1)]
 final class DefendantExtractionAgent implements Agent, HasProviderOptions, HasStructuredOutput

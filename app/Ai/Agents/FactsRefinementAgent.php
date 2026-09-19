@@ -85,9 +85,10 @@ use Laravel\Ai\Promptable;
  * this one rewrites a narrative the lawyer is looking at, which is a second
  * gesture on a screen and not part of the first.
  */
-// Trocar as duas linhas de lugar devolve a inferência ao Ollama local.
-// #[Provider('ollama')]
-#[Provider('gemini')]
+// Trocar as duas linhas de lugar manda a inferência para o Gemini — e o bloco
+// `gemini` do config/ai.php precisa ser descomentado junto.
+// #[Provider('gemini')]
+#[Provider('ollama')]
 #[Timeout(180)]
 #[Temperature(0.3)]
 final class FactsRefinementAgent implements Agent, HasProviderOptions, HasStructuredOutput

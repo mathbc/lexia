@@ -9,22 +9,26 @@ return [
     | Default AI Provider Names
     |--------------------------------------------------------------------------
     |
-    | Split down the middle, and the line is drawn where it costs least.
+    | Everything local again: text and embeddings both answer from the Ollama
+    | daemon on the office machine.
     |
-    | Text goes to Gemini: the five agents read a client's narrative and answer
-    | in seconds instead of minutes, which is what `POST /pecas/classificar`
-    | needs while it is still four inferences with the browser waiting.
+    | Text came back with `gpt-oss:20b`, and the price is the one the move to
+    | Gemini had bought off — latency. `POST /pecas/classificar` is four
+    | inferences in series with the browser waiting, which is the debt the
+    | route's `asController()` documents and a queue is the way out of. What it
+    | buys back: the client's narrative never leaves the office, and there is no
+    | quota to pay.
     |
-    | Embeddings stay on the local Ollama. There was nothing to gain by moving
-    | them — the catalogue is 615 rows already vectorised with
-    | `nomic-embed-text`, and a vector from one model is not comparable with a
-    | vector from another, so the move would have cost a full re-embed to buy
-    | nothing. Keeping them here also keeps `nomic-embed-text` as the width the
-    | Jurisprudência corpus will be declared with.
+    | Embeddings never left. The catalogue is 615 rows already vectorised with
+    | `nomic-embed-text`, a vector from one model is not comparable with a
+    | vector from another, and it is the width `procedural_classes.embedding`
+    | was declared with — and the width the Jurisprudência corpus will be
+    | declared with.
     |
-    | The Ollama text models are still configured below, unused, so that
-    | putting `AI_PROVIDER=ollama` in the `.env` and uncommenting one line per
-    | agent takes the narrative back off the network entirely.
+    | The Gemini block below is kept, commented out, so the move back to the
+    | cloud is three gestures: uncomment it, put `AI_PROVIDER=gemini` in the
+    | `.env`, and swap the `#[Provider('ollama')]` of the five agents for the
+    | line commented above each one.
     |
     | The keys for images, audio, transcription and reranking are deliberately
     | absent — the published default points each of them at a provider that
@@ -33,7 +37,7 @@ return [
     |
     */
 
-    'default' => env('AI_PROVIDER', 'gemini'),
+    'default' => env('AI_PROVIDER', 'ollama'),
     'default_for_embeddings' => env('AI_EMBEDDINGS_PROVIDER', 'ollama'),
 
     /*
@@ -71,10 +75,9 @@ return [
     | narrative and the answer, and 24k leaves real headroom where 16k left
     | almost none.
     |
-    | With text on Gemini the number is currently documentation rather than a
-    | setting: `UsesConfiguredContextWindow` only emits `num_ctx`, which is
-    | Ollama's spelling, so today it sends nothing. It stops being documentation
-    | the moment the agents point back at Ollama — which truncates an
+    | With text back on Ollama this is a setting again rather than documentation:
+    | `UsesConfiguredContextWindow` emits `num_ctx`, which is Ollama's spelling,
+    | so the number now reaches the wire. It matters because Ollama truncates an
     | overrunning prompt in silence, leaving an answer that still reads
     | plausible on top of a system prompt that lost its tail.
     |
@@ -101,11 +104,12 @@ return [
     | (ProceduralClassRankingQuery). O piso garante um mínimo de classes
     | descritas mesmo que as primeiras sejam anormalmente longas.
     |
-    | O teto sobreviveu à ida do texto para o Gemini de propósito. A janela de
-    | lá comportaria o catálogo inteiro, mas o corte nunca foi só sobre caber:
-    | descrever 54 classes para escolher uma dilui a atenção, e agora também se
-    | paga por token. Suba se o modelo errar por não ter visto a classe certa
-    | descrita.
+    | Com o texto de volta no Ollama o teto volta a ser também restrição física:
+    | 16 KB de descrições mais o guia de conhecimento têm de caber nos 24k de
+    | `context_window` acima, e não há janela de nuvem para absorver o excesso.
+    | Continua valendo o motivo original — descrever 54 classes para escolher
+    | uma dilui a atenção. Suba se o modelo errar por não ter visto a classe
+    | certa descrita, mas suba `AI_CONTEXT_WINDOW` junto.
     |
     */
 
@@ -119,11 +123,11 @@ return [
     | AI Providers
     |--------------------------------------------------------------------------
     |
-    | Two providers, one job each, and every other one removed: failover walks
-    | this list, so a provider left here without credentials is just a slower
-    | way to fail. Neither of these is a fallback for the other — `default`
-    | picks the one that answers in prose, `default_for_embeddings` the one that
-    | answers in vectors.
+    | One provider, both jobs, and every other one removed: failover walks this
+    | list, so a provider left here without credentials is just a slower way to
+    | fail. `default` picks who answers in prose and `default_for_embeddings`
+    | who answers in vectors — hoje é o mesmo daemon respondendo às duas
+    | perguntas com modelos diferentes.
     |
     | The `models` key is not decoration, and it is the *only* place a text
     | model is named: no agent carries a `#[Model]` attribute, so every one of
@@ -139,29 +143,33 @@ return [
     */
 
     'providers' => [
-        'gemini' => [
-            'driver' => 'gemini',
-            'key' => env('GEMINI_API_KEY'),
-            'url' => env('GEMINI_URL', 'https://generativelanguage.googleapis.com/v1beta/'),
 
-            /*
-            | Sem a chave `models` o GeminiProvider ainda acharia um padrão,
-            | mas um que muda com a versão do pacote. Nomear aqui é o que faz
-            | a troca de modelo ser uma linha de `.env`.
-            |
-            | Não há `embeddings`: quem embute é o Ollama, logo abaixo. Se um
-            | dia esta entrada voltar, `dimensions` chega ao Gemini como
-            | `outputDimensionality` e precisa valer 768, ou a coluna vetorial
-            | precisa de migration no mesmo fôlego.
-            */
-            'models' => [
-                'text' => [
-                    'default' => env('GEMINI_TEXT_MODEL', 'gemini-3.6-flash'),
-                    'cheapest' => env('GEMINI_TEXT_MODEL', 'gemini-3.6-flash'),
-                    'smartest' => env('GEMINI_TEXT_MODEL', 'gemini-3.6-flash'),
-                ],
-            ],
-        ],
+        /*
+        | Comentado enquanto o texto for local. Descomentar este bloco é o
+        | primeiro dos três gestos que devolvem a inferência ao Gemini — os
+        | outros dois são `AI_PROVIDER=gemini` no `.env` e o `#[Provider]` dos
+        | cinco agentes. Fica aqui, e não no histórico do git, porque o que
+        | custa a lembrar não é o driver: é que sem a chave `models` o
+        | GeminiProvider acha um padrão que muda com a versão do pacote, e que
+        | não há `embeddings` de propósito — quem embute é o Ollama abaixo. Se
+        | uma entrada de embeddings voltar, `dimensions` chega ao Gemini como
+        | `outputDimensionality` e precisa valer 768, ou a coluna vetorial
+        | precisa de migration no mesmo fôlego.
+        |
+        | 'gemini' => [
+        |     'driver' => 'gemini',
+        |     'key' => env('GEMINI_API_KEY'),
+        |     'url' => env('GEMINI_URL', 'https://generativelanguage.googleapis.com/v1beta/'),
+        |
+        |     'models' => [
+        |         'text' => [
+        |             'default' => env('GEMINI_TEXT_MODEL', 'gemini-3.6-flash'),
+        |             'cheapest' => env('GEMINI_TEXT_MODEL', 'gemini-3.6-flash'),
+        |             'smartest' => env('GEMINI_TEXT_MODEL', 'gemini-3.6-flash'),
+        |         ],
+        |     ],
+        | ],
+        */
 
         'ollama' => [
             'driver' => 'ollama',
@@ -170,20 +178,24 @@ return [
 
             'models' => [
                 /*
-                | Ocioso enquanto `default` apontar para o Gemini, e mantido
-                | justamente por isso: com o bloco aqui, voltar a inferência
-                | para a máquina do escritório é `AI_PROVIDER=ollama` mais o
-                | `#[Provider('ollama')]` comentado acima de cada um dos cinco
-                | agentes. Sem ele, o OllamaProvider cairia em `qwen3.5:4b`,
+                | Em uso pelos cinco agentes. O `gpt-oss:20b` raciocina, e é
+                | exatamente o modelo que respondia com conteúdo vazio quando
+                | lhe mandavam `think: false` — a armadilha que o
+                | `providerOptions()` dos agentes não deve reintroduzir. Com o
+                | thinking ligado (o padrão) o Ollama separa o raciocínio em
+                | `message.thinking` e o JSON chega limpo.
+                |
+                | Nomear aqui é o que faz a troca de modelo ser uma linha de
+                | `.env`: sem este bloco o OllamaProvider cairia em `qwen3.5:4b`,
                 | que não é um modelo que este projeto baixe.
                 */
                 'text' => [
-                    'default' => env('OLLAMA_TEXT_MODEL', 'qwen2.5:7b'),
-                    'cheapest' => env('OLLAMA_TEXT_MODEL', 'qwen2.5:7b'),
-                    'smartest' => env('OLLAMA_TEXT_MODEL', 'qwen2.5:7b'),
+                    'default' => env('OLLAMA_TEXT_MODEL', 'gpt-oss:20b'),
+                    'cheapest' => env('OLLAMA_TEXT_MODEL', 'gpt-oss:20b'),
+                    'smartest' => env('OLLAMA_TEXT_MODEL', 'gpt-oss:20b'),
                 ],
 
-                // Este, sim, está em uso: é o que vetoriza o catálogo.
+                // É o que vetoriza o catálogo, e não mudou com a volta do texto.
                 'embeddings' => [
                     'default' => env('OLLAMA_EMBEDDINGS_MODEL', 'nomic-embed-text'),
                     'dimensions' => 768,

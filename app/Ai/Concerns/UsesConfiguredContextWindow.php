@@ -23,12 +23,12 @@ use Laravel\Ai\Enums\Lab;
  * another driver gets nothing rather than an option it would reject — the
  * option list reaches the wire as the request's `options` key, unvalidated.
  *
- * Which means that under Gemini, the provider the agents point at today, this
- * trait sends nothing at all. That is correct and not a gap: Gemini's window
- * is orders of magnitude larger than anything we build, and it answers an
- * overlong prompt with an error instead of a quiet truncation. The trait stays
- * on every agent because the truncation it guards against is one uncommented
- * `#[Provider('ollama')]` away.
+ * Which is the provider the five agents point at today, so the option reaches
+ * the wire on every call: this trait is doing its job rather than documenting
+ * it. Under a cloud provider it would send nothing at all, and that is correct
+ * and not a gap — a hosted window is orders of magnitude larger than anything
+ * we build, and it answers an overlong prompt with an error instead of a quiet
+ * truncation. The trait stays on every agent either way.
  */
 trait UsesConfiguredContextWindow
 {

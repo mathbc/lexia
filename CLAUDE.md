@@ -167,42 +167,46 @@ sessão. O `/register` do Fortify está desligado: o cadastro público é
 - **Nunca mande `think: false`** a um modelo que raciocina: o `gpt-oss:20b`
   respondia com conteúdo vazio e a linha qwen3 pensa por padrão. O padrão
   (thinking ligado) já entrega JSON limpo, porque o Ollama separa o raciocínio
-  em `message.thinking`. Com o texto no Gemini a armadilha está duplamente
-  dormente — mas não removida.
+  em `message.thinking`. A armadilha está **viva**, e no pior arranjo possível:
+  o modelo de texto configurado é exatamente aquele em que ela foi medida.
 - `sebastian/complexity` está vendorizado mas **quebra em enums** — por isso a
   skill de complexidade usa `nikic/php-parser` direto.
 
 ## Os agentes
 
-`laravel/ai` com **dois providers e um trabalho para cada**: o texto dos cinco
-agentes vai para o **Gemini** (`gemini-3.6-flash`, `GEMINI_API_KEY`), e os
-embeddings ficam no **Ollama local** (`nomic-embed-text`, 768 dimensões). O texto
-saiu por latência — `POST /pecas/classificar` são quatro inferências em série com
-o navegador esperando. Os embeddings ficaram porque não havia o que ganhar: as 615
-classes já estão vetorizadas com o nomic, vetor de um modelo não se compara com
-vetor de outro, e mover custaria uma reembutida inteira para comprar nada. O efeito
-colateral é bom — o relato bruto do cliente continua sendo vetorizado dentro do
-escritório.
+`laravel/ai` com **um provider local e dois trabalhos**: o texto dos cinco agentes
+e os embeddings do catálogo saem do mesmo **Ollama** da máquina — `gpt-oss:20b`
+para a prosa, `nomic-embed-text` (768 dimensões) para os vetores. O texto já esteve
+no Gemini e voltou; o preço da volta é a latência, já que `POST /pecas/classificar`
+são quatro inferências em série com o navegador esperando. O que se compra de volta
+é não ter cota para pagar e o relato do cliente nunca sair do escritório. Os
+embeddings nunca saíram: as 615 classes já estão vetorizadas com o nomic, vetor de
+um modelo não se compara com vetor de outro, e mover custaria uma reembutida
+inteira para comprar nada.
 
-Consequência operacional: **o Ollama continua sendo dependência de
-desenvolvimento**. Sem o daemon de pé, `ProceduralClassRankingQuery` degrada em
-silêncio para a ordem do pivot e as classificações pioram sem erro nenhum.
+Consequência operacional: **o Ollama é dependência de desenvolvimento inteira** —
+`ollama pull gpt-oss:20b` e `ollama pull nomic-embed-text` antes de começar. Sem o
+daemon de pé nada infere, e a degradação não é uniforme: o texto falha alto, e
+`ProceduralClassRankingQuery` degrada em **silêncio** para a ordem do pivot, com as
+classificações piorando sem erro nenhum.
 
-Voltar tudo para local são três gestos: `AI_PROVIDER=ollama` no `.env`, trocar o
-`#[Provider('gemini')]` dos cinco agentes pela linha comentada logo acima de cada
-um, e `config:clear`. O bloco `ollama` do `config/ai.php` nunca saiu de lá, com os
-modelos de texto declarados e ociosos, à espera disso.
+Mandar o texto para a nuvem são três gestos: descomentar o bloco `gemini` do
+`config/ai.php`, pôr `AI_PROVIDER=gemini` e `GEMINI_API_KEY` no `.env`, e trocar o
+`#[Provider('ollama')]` dos cinco agentes pela linha comentada logo acima de cada
+um — mais `config:clear`. O bloco ficou comentado no arquivo, e não no histórico do
+git, porque o que custa a lembrar não é o driver: é a chave `models`, sem a qual o
+`GeminiProvider` cai num default que muda com a versão do pacote.
 
 Nem o modelo nem o tamanho do contexto pertencem a um agente. Nenhum deles carrega
-`#[Model]` — o nome do modelo vive em `GEMINI_TEXT_MODEL` e o SDK resolve cada
+`#[Model]` — o nome do modelo vive em `OLLAMA_TEXT_MODEL` e o SDK resolve cada
 agente por `defaultTextModel()` —, e o `num_ctx` sai de `ai.context_window`
 (`AI_CONTEXT_WINDOW`, 24576) através do trait `UsesConfiguredContextWindow`. É
 o que torna a troca de modelo uma linha de `.env`: o número descreve o tamanho
-dos prompts que escrevemos, não a janela do modelo da vez. Hoje o trait não emite
-nada, porque `num_ctx` é grafia do Ollama; ele volta a valer no dia em que os
-agentes voltarem para lá — e sem ele o Ollama truncaria em silêncio um prompt
-grande, sendo que o maior prompt de classe tem 10.946 tokens medidos pelo
-`prompt_eval_count` do próprio Ollama.
+dos prompts que escrevemos, não a janela do modelo da vez. Com o texto local o
+trait está **valendo**, porque `num_ctx` é grafia do Ollama — e sem ele o daemon
+truncaria em silêncio um prompt grande, sendo que o maior prompt de classe tem
+10.946 tokens medidos pelo `prompt_eval_count` do próprio Ollama. Ele volta a ser
+documentação no dia em que os agentes apontarem para um provedor de nuvem.
 
 O conhecimento tem **dois regimes de recuperação**, cada um onde ganha. O markdown
 de `app/Rag/knowledge/` vai inteiro pelo `KnowledgeBase`: para escolher entre 24
@@ -226,7 +230,7 @@ escolhida. `PracticeAreaClassificationAgent` recebe os fatos e devolve a área d
 atuação; `ProceduralClassSelectionAgent` recebe a área já decidida e escolhe entre
 as classes processuais vinculadas a ela. As opções chegam **injetadas** nas
 instruções e também como `enum()` no `schema()`, e o provider impõe o schema —
-gramática no Ollama, `response_json_schema` no Gemini —, então nem uma área nem uma
+gramática no Ollama, `response_json_schema` na nuvem —, então nem uma área nem uma
 classe inventada é algo que o modelo consiga emitir. E as classes candidatas só existem depois que a área é conhecida: daí não
 caber numa chamada só.
 
@@ -275,9 +279,9 @@ honorários —, que a tela já oferece num clique em `SUGGESTED_REQUIREMENTS`;
 escrevê-los aqui entregaria duas cópias de cada um.
 
 **A cifra de um pedido tem guarda estrutural, e é o único lugar do projeto onde
-um prompt não bastou.** O `qwen2.5:7b` não soma — a instrução segura isso —, mas
-*compõe*: para um caso sem cifra de dano moral no relato ele devolveu R$ 5.000,00
-numa rodada e R$ 12.000,00 noutra. Por isso `RequirementListData::fromAgent()`
+um prompt não bastou.** Medido no `qwen2.5:7b`: ele não soma — a instrução segura
+isso —, mas *compõe*: para um caso sem cifra de dano moral no relato devolveu
+R$ 5.000,00 numa rodada e R$ 12.000,00 noutra. Por isso `RequirementListData::fromAgent()`
 recebe o relato junto da resposta e recusa toda cifra que os fatos não escrevam.
 A guarda é generosa (qualquer número do texto autoriza) e protege a coluna, não a
 prosa. Detalhes e o custo conhecido em `app/Ai/README.md`.
@@ -311,14 +315,15 @@ cifra inventada do agente de pedidos reaparece aqui como "totalizando R$ 24.000,
 `RefinedFactsData` a **relata** em `unsupportedAmounts` em vez de apagá-la: uma coluna
 pode ficar em branco, uma frase não. No prompt, o que segurou a conta foi proibir os
 conectivos ("totalizando", "no total de", "perfazendo") e não a operação. O que o
-`qwen2.5:7b` ainda não segura — a oração encaixada que carrega o fato central — está
-medido contra o `qwen3.8:27b` no `app/Ai/README.md`, e é por isso que a saída deste
-agente é uma minuta para o advogado aceitar, nunca um campo que se preenche sozinho.
+`qwen2.5:7b` não segurava — a oração encaixada que carrega o fato central — está
+medido contra o `qwen3.8:27b` no `app/Ai/README.md`; o `gpt-oss:20b` de hoje não foi
+medido contra essa tabela, e é por isso que a saída deste agente é uma minuta para o
+advogado aceitar, nunca um campo que se preenche sozinho.
 
 Testes de agente ficam em `tests/Agents`, no grupo `agents`, **fora** do
-`php artisan test` padrão porque gastam inferência de verdade: hoje isso é uma
-`GEMINI_API_KEY` válida e uma cota que se paga, mais o Ollama de pé para o
-ranking vetorial do teste de classificação. O grupo é o que os habilita — `--testsuite=Agents` sozinho não
+`php artisan test` padrão porque gastam inferência de verdade: hoje isso é o Ollama
+de pé com `gpt-oss:20b` e `nomic-embed-text` baixados — a conta é o tempo da máquina,
+não uma cota. O grupo é o que os habilita — `--testsuite=Agents` sozinho não
 encontra nada, porque a exclusão do grupo continua valendo:
 
 ```bash

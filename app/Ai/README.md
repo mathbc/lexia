@@ -182,7 +182,7 @@ Só cifra é conferida, de propósito: número solto muda de forma numa reescrit
 
 Medido com o mesmo prompt e os mesmos dois casos de `tests/Agents/FactsRefinementTest.php`:
 
-| | `qwen2.5:7b` (configurado) | `qwen3.8:27b` |
+| | `qwen2.5:7b` (medido) | `qwen3.8:27b` |
 |---|---|---|
 | Registro, terceira pessoa, sem coloquialismo | sim | sim |
 | Destaque só onde cabe, com `impact_basis` | sim | sim |
@@ -194,18 +194,21 @@ caso inteiro se apoia, e nenhuma guarda pega o que não está escrito. O `impact
 costuma mencionar a morte que a narrativa perdeu, o que é um bom sinal de que a instrução
 chega e a redação é que não a carrega.
 
+Nenhuma das duas colunas é o modelo de hoje: o texto voltou para o Ollama com o
+`gpt-oss:20b`, que **não foi medido contra esta tabela** — ele raciocina antes de
+responder, que é a capacidade de que a oração encaixada depende, mas isso é hipótese até
+alguém rodar `composer test:agents` e reescrever as colunas.
+
 É por isso que a saída deste agente é uma **minuta para o advogado aceitar**, e não um
 campo que se preenche sozinho. A tela que expuser isto deve mostrar os dois textos lado a
-lado; `RefineLegalCaseFacts` diz o mesmo no docblock. E trocar `GEMINI_TEXT_MODEL` é uma
-linha de `.env`: é o agente que mais ganha com um modelo maior — a tabela acima foi medida
-quando o texto ainda era local, e é justamente a coluna que a ida para o Gemini endereça.
+lado; `RefineLegalCaseFacts` diz o mesmo no docblock. E trocar `OLLAMA_TEXT_MODEL` é uma
+linha de `.env`: é o agente que mais ganha com um modelo maior.
 
 ## Contexto: `AI_CONTEXT_WINDOW`, e por que ele é explícito
 
-Hoje o número é documentação: com o texto no Gemini, a janela é ordens de grandeza maior
-do que qualquer prompt que montamos, e o trait não emite opção nenhuma. Ele volta a ser
-configuração no dia em que os agentes apontarem de volta para o Ollama, e é por isso que
-continua aqui.
+Hoje o número é **configuração**, e não documentação: com o texto de volta no Ollama, o
+trait emite `num_ctx` em toda chamada. Ele vira documentação de novo no dia em que os
+agentes apontarem para um provedor de nuvem, e é por isso que continua aqui.
 
 Sem `num_ctx` o tamanho de contexto é o default do daemon, e o Ollama **trunca em
 silêncio** quando o prompt estoura — a resposta volta plausível, construída sobre um
@@ -218,7 +221,7 @@ longo de cliente e a resposta, 24576 deixa folga real onde 16384 deixava quase n
 Para remedir depois de mexer nos prompts:
 
 ```bash
-curl -s http://localhost:11434/api/generate -d '{"model":"qwen2.5:7b","prompt":"…","stream":false,"options":{"num_predict":1}}' \
+curl -s http://localhost:11434/api/generate -d '{"model":"gpt-oss:20b","prompt":"…","stream":false,"options":{"num_predict":1}}' \
   | php -r 'echo json_decode(stream_get_contents(STDIN),true)["prompt_eval_count"].PHP_EOL;'
 ```
 
@@ -234,53 +237,56 @@ Cuidado ao mexer: `providerOptions` cai na chave `options` do corpo, mas `think`
 
 ## Provider e modelo
 
-**Dois providers, um trabalho cada**, e a linha entre eles é onde custa menos:
+**Um provider, os dois trabalhos**, cada um com o seu modelo:
 
 | | provider | modelo | env |
 |---|---|---|---|
-| Texto (os cinco agentes) | `gemini` | `gemini-3.6-flash` | `GEMINI_API_KEY`, `GEMINI_TEXT_MODEL` |
+| Texto (os cinco agentes) | `ollama` | `gpt-oss:20b` | `OLLAMA_URL`, `OLLAMA_TEXT_MODEL` |
 | Embeddings (o catálogo) | `ollama` | `nomic-embed-text`, 768 dim. | `OLLAMA_URL`, `OLLAMA_EMBEDDINGS_MODEL` |
 
-O texto saiu porque a latência era o problema: `POST /pecas/classificar` são quatro
-inferências em série com o navegador esperando, e a tabela de qualidade acima já dizia
-que o `qwen2.5:7b` não sustentava a redação dos fatos.
+O texto **voltou** para a máquina do escritório com o `gpt-oss:20b`, e o preço de volta é
+o que a ida ao Gemini tinha comprado: latência. `POST /pecas/classificar` são quatro
+inferências em série com o navegador esperando — a dívida que o `asController()` da rota
+documenta e que uma fila resolve. O que se compra de volta: nenhuma cota para pagar, e o
+relato do cliente nunca sai do escritório.
 
-Os embeddings **ficaram**, e de propósito. Não havia o que ganhar movendo-os: o catálogo
-são 615 linhas já vetorizadas com `nomic-embed-text`, e vetor de um modelo não se compara
-com vetor de outro — a mudança custaria uma reembutida inteira para comprar nada. Como
-efeito colateral, o relato bruto do cliente continua sendo vetorizado dentro do
-escritório.
+Os embeddings **nunca saíram**, e de propósito. Não havia o que ganhar movendo-os: o
+catálogo são 615 linhas já vetorizadas com `nomic-embed-text`, e vetor de um modelo não se
+compara com vetor de outro — a mudança custaria uma reembutida inteira para comprar nada.
 
-Isso significa que o Ollama **continua sendo dependência de desenvolvimento**, e que
-`docker compose up -d` não basta: sem o daemon de pé, `ProceduralClassRankingQuery`
-degrada em silêncio para a ordem do pivot (é o desenho dela) e as classificações pioram
-sem erro nenhum.
+Isso significa que o Ollama **é dependência de desenvolvimento inteira**, e que
+`docker compose up -d` não basta: sem o daemon de pé nenhum agente responde, e a
+degradação não é uniforme. O texto falha alto — a Action reporta e a chave volta `null`.
+O ranking falha **em silêncio**: `ProceduralClassRankingQuery` cai para a ordem do pivot
+(é o desenho dela) e as classificações pioram sem erro nenhum. Antes de começar,
+`ollama pull gpt-oss:20b` e `ollama pull nomic-embed-text`.
 
 **Nenhum agente carrega `#[Model]`.** O modelo é nomeado em um lugar só,
-`ai.providers.gemini.models.text` (env `GEMINI_TEXT_MODEL`), e sem o atributo o SDK
+`ai.providers.ollama.models.text` (env `OLLAMA_TEXT_MODEL`), e sem o atributo o SDK
 resolve cada agente por `defaultTextModel()`. Trocar de modelo é editar o `.env` e
 rodar `php artisan config:clear`.
 
-**Voltar tudo para local** são três gestos: `AI_PROVIDER=ollama` e `OLLAMA_TEXT_MODEL` no
-`.env`, trocar o `#[Provider('gemini')]` dos cinco agentes pela linha comentada logo
-acima de cada um, e `php artisan config:clear`. O bloco `ollama` do `config/ai.php` nunca
-saiu de lá: os modelos de texto seguem declarados, ociosos, à espera disso.
+**Mandar o texto para a nuvem** são três gestos: descomentar o bloco `gemini` do
+`config/ai.php`, pôr `AI_PROVIDER=gemini` e `GEMINI_API_KEY` no `.env`, e trocar o
+`#[Provider('ollama')]` dos cinco agentes pela linha comentada logo acima de cada um —
+mais `php artisan config:clear`. O bloco comentado ficou no arquivo, e não no histórico do
+git, porque o que custa a lembrar não é o driver: é a chave `models`, sem a qual o
+`GeminiProvider` cai num default que muda com a versão do pacote.
 
 ## Armadilhas
 
 1. **Nunca mande `think: false`.** O `gpt-oss:20b` respondia com `content` vazio, e a
    linha qwen3 também raciocina por padrão. Deixado em paz, o Ollama separa o raciocínio
    em `message.thinking` e o JSON chega limpo em `message.content`, que é o que a saída
-   estruturada consome. Dormente duas vezes hoje — o texto é do Gemini, e o SDK não tem
-   essa opção para ele —, o que não é motivo para acrescentar a chave: ela volta a morder
-   no dia em que os agentes voltarem para o Ollama.
-2. **A chave `models` no `config/ai.php` é obrigatória** para os dois providers. Sem ela
-   o `OllamaProvider` cai no default do pacote, `qwen3.5:4b`, que este projeto não baixa,
-   e o `GeminiProvider` cai num default que muda com a versão do pacote.
+   estruturada consome. **Esta armadilha está viva de novo**, e no pior arranjo possível:
+   o modelo configurado é exatamente aquele em que ela foi medida.
+2. **A chave `models` no `config/ai.php` é obrigatória**, e vale também para o bloco
+   comentado. Sem ela o `OllamaProvider` cai no default do pacote, `qwen3.5:4b`, que este
+   projeto não baixa, e o `GeminiProvider` cai num default que muda com a versão.
 3. **O modelo de texto precisa suportar saída estruturada.** No Ollama o `format` vira
    gramática e um modelo sem essa capacidade devolve JSON só por boa vontade — confira
-   com `ollama show <modelo>`. No Gemini o schema viaja como `response_json_schema` e é
-   imposto do lado do servidor.
+   com `ollama show <modelo>`. Num provedor de nuvem o schema viaja como
+   `response_json_schema` e é imposto do lado do servidor.
 4. **As dimensões do embedding são a largura da coluna.** `procedural_classes.embedding`
    é `vector(768)`; trocar o modelo de embeddings por um de outra largura exige migration,
    e trocar por um de mesma largura já exige
@@ -307,11 +313,13 @@ inclusive por que o documento markdown continua indo inteiro, em `app/Rag/README
 ## Saída estruturada
 
 Um agente que implementa `HasStructuredOutput` tem seu `schema()` imposto pelo provider:
-o Ollama o compila em gramática, o Gemini o recebe como `response_json_schema` e o aplica
-do lado dele. Mecanismos diferentes, mesma promessa — `enum()` é o que impede o modelo de
-inventar um valor, e é assim que a classificação de área garante devolver um dos 24 slugs
-do catálogo, e não uma área plausível que não existe.
+o Ollama o compila em gramática, um provedor de nuvem o recebe como
+`response_json_schema` e o aplica do lado dele. Mecanismos diferentes, mesma promessa —
+`enum()` é o que impede o modelo de inventar um valor, e é assim que a classificação de
+área garante devolver um dos 24 slugs do catálogo, e não uma área plausível que não
+existe. A promessa atravessou a ida ao Gemini e a volta sem rachar, nas duas direções.
 
 Vale para `enum` de inteiros também, que é o caso do código CNJ em
-`ProceduralClassSelectionAgent`: o gateway do Gemini manda o JSON Schema inteiro, não o
-subconjunto OpenAPI que só aceitaria enums de string.
+`ProceduralClassSelectionAgent`: a gramática do Ollama não distingue os dois casos, e o
+gateway do Gemini manda o JSON Schema inteiro em vez do subconjunto OpenAPI que só
+aceitaria enums de string.

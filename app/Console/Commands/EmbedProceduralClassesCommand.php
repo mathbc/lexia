@@ -61,7 +61,7 @@ final class EmbedProceduralClassesCommand extends Command
             $this->line("Provedor de embeddings: [{$provider}], modelo [{$model}].");
             $this->line($provider === 'ollama'
                 ? "Verifique se o Ollama está de pé e se o modelo foi baixado: ollama pull {$model}"
-                : 'Verifique a GEMINI_API_KEY e se o modelo aceita as dimensões configuradas.');
+                : 'Verifique a credencial do provedor e se o modelo aceita as dimensões configuradas.');
 
             return self::FAILURE;
         }

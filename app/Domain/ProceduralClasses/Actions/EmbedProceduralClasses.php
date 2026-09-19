@@ -22,12 +22,13 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * similaridade entre um relato leigo e uma definição jurídica fica
  * visivelmente pior.
  *
- * Ele segue `ai.default_for_embeddings` em vez de ser fixo porque o texto dos
- * agentes saiu para o Gemini e este lado não: enquanto o par continuar sendo
- * Ollama, nada muda aqui. Se um dia a vetorização também sair, o prefixo tem
- * de sair junto — o Gemini expressa a mesma ideia por `taskType`, que o SDK não
- * deixa passar daqui, e receberia o prefixo como texto literal no começo de
- * cada documento: ruído, não instrução. Que o prefixo entre no texto e o texto
+ * Ele segue `ai.default_for_embeddings` em vez de ser fixo porque esse par é o
+ * que pode divergir do texto dos agentes: já divergiu uma vez, quando o texto
+ * esteve no Gemini, e hoje os dois voltaram a ser Ollama. Se um dia a
+ * vetorização sair daqui, o prefixo tem de sair junto — um provedor de nuvem
+ * expressa a mesma ideia por `taskType`, que o SDK não deixa passar daqui, e
+ * receberia o prefixo como texto literal no começo de cada documento: ruído,
+ * não instrução. Que o prefixo entre no texto e o texto
  * no hash é o que faz essa mudança se cobrar sozinha, regenerando os vetores
  * que deixaram de bater.
  *

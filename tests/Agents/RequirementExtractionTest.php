@@ -91,11 +91,11 @@ final class RequirementExtractionTest extends TestCase
         //
         // 3. Urgência no relato: a tutela deveria aparecer, e antes dos pedidos de
         //    mérito, porque a ordem da lista é a ordem da numeração na peça.
-        //    É a resposta menos confiável do `qwen2.5:7b` de hoje — ele acerta
-        //    a baixa da negativação e o débito inexistente, e escreve a tutela
-        //    uma vez a cada tantas. Fica aqui como o caso a reconferir no dia
-        //    em que o `OLLAMA_TEXT_MODEL` mudar, e é por isso que nenhuma
-        //    asserção desta função depende dela.
+        //    Era a resposta menos confiável do `qwen2.5:7b` — ele acertava
+        //    a baixa da negativação e o débito inexistente, e escrevia a tutela
+        //    uma vez a cada tantas. O `OLLAMA_TEXT_MODEL` mudou desde então
+        //    (`gpt-oss:20b`), então este é o caso a reconferir; é por isso que
+        //    nenhuma asserção desta função depende dela.
         //
         // $facts = <<<'TXT'
         // Meu nome foi negativado pela operadora por uma linha que eu nunca contratei, no valor de
