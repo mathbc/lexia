@@ -47,6 +47,16 @@ use Laravel\Ai\Promptable;
  *    an omitted key would be indistinguishable from a figure the model never
  *    considered.
  *
+ * Which leaves the failure the instructions open the money section with: a
+ * sentence that spells a figure out beside a `null` field. It is not the model
+ * forgetting the field — it is the model merging two claims into one sentence,
+ * because a sentence carrying two figures has no single amount to give. It then
+ * either adds them or reaches for the one it composed for the moral damages,
+ * and `RequirementListData::fromAgent()` refuses that figure, so the request the
+ * client wrote a price for opens blank on the screen. Hence the rule stated
+ * before any other: one closed figure per request, and the field says what the
+ * sentence says.
+ *
  * The boilerplate a lawyer already has one click away — citação, provas,
  * honorários — is deliberately kept out. `SUGGESTED_REQUIREMENTS` in
  * `resources/js/lib/requirements.ts` writes those in canned form, and an agent
@@ -189,6 +199,26 @@ final class RequirementExtractionAgent implements Agent, HasProviderOptions, Has
 
         # O valor
 
+        **A frase e o campo dizem a mesma coisa.** Quando o relato já fixa quanto vale uma
+        pretensão — "no valor de R$ 1.340,00", "o sinal de R$ 15.000,00 que já paguei" —,
+        essa é uma cifra fechada: quantia certa, que o pedido exige de imediato e que não
+        depende de conta, de arbitramento nem de liquidação. Ela viaja nos dois lugares, por
+        extenso na frase e em `amount`. Antes de devolver, releia cada item: se a frase traz
+        uma cifra fechada, `amount` traz essa mesma cifra.
+
+        Frase gritando um número ao lado de `amount` nulo é o erro mais caro deste agente. A
+        tela desenha o campo vazio, e o advogado redigita à mão o valor que você já tinha
+        lido no relato.
+
+        - **Uma cifra fechada por pedido.** Se a frase que você escreveu traz duas, você
+          juntou duas pretensões num item só — separe-as, e cada pedido leva a sua. `amount`
+          não escolhe entre duas cifras nem as soma. O ressarcimento do que se pagou e a
+          indenização pelo abalo são dois itens da lista, nunca uma frase com dois valores:
+          é assim que a cifra se perde.
+        - **Todo número da frase é número do relato.** Multa diária, teto, piso, índice e
+          valor de indenização que o cliente não escreveu não entram nem na frase nem no
+          campo — uma cifra que você componha chega plausível e se lê exatamente como uma
+          cifra conferida.
         - `amount` existe quando o relato traz a cifra **daquele** pedido, escrita por
           inteiro, e é nulo em todos os outros casos. A maioria dos pedidos não tem cifra.
         - **Valor por período não é a cifra de um pedido.** Um valor por mês, por dia de
@@ -213,9 +243,9 @@ final class RequirementExtractionAgent implements Agent, HasProviderOptions, Has
           outro fica nulo.
         - O nulo é o nulo do JSON, e nunca "", "0", "R$ 0,00", "a apurar" ou "-".
 
-        Diferente dos outros campos, aqui a repetição é desejada: o valor aparece por
-        extenso na frase **e** em `amount`. A frase é o texto que vai para a peça e precisa
-        se ler inteira; o campo é o que a tela soma.
+        Diferente dos outros campos, aqui a repetição é desejada, e é ela que a primeira
+        regra desta seção cobra: a frase é o texto que vai para a peça e precisa se ler
+        inteira; o campo é o que a tela preenche e soma.
 
         # Quando não há pedido
 
@@ -223,7 +253,7 @@ final class RequirementExtractionAgent implements Agent, HasProviderOptions, Has
         que ninguém tenha dito o que quer. Inventar um pedido para não devolver nada é o
         pior erro possível aqui — ele entraria na peça com a aparência de ter sido escolhido.
 
-        # Exemplo
+        # Exemplos
 
         Relato: "No dia 4 de março um motorista avançou o sinal vermelho na Rua XV e pegou a
         lateral do meu carro. O conserto na oficina saiu R$ 8.750,00, que paguei do meu
@@ -243,6 +273,22 @@ final class RequirementExtractionAgent implements Agent, HasProviderOptions, Has
         prejuízo narrado e nasce do mesmo fato — e vem sem valor porque o relato não diz
         quanto custou. Não há pedido de dano moral porque **este** relato não fala de abalo
         nenhum, só de prejuízo material; num relato que falasse, ele entraria.
+
+        O segundo exemplo é um erro a não repetir. Para um relato que diz que o nome foi
+        negativado por um débito de R$ 1.340,00 que o autor nunca contratou, e que o abalo
+        veio dessa negativação, **não** responda assim:
+
+        {"description": "A condenação do Réu ao ressarcimento dos valores de R$ 1.340,00, referentes ao débito que o Autor nunca contratou, e à indenização por danos morais no valor de R$ 5.000,00, por abalo sofrido;", "amount": null}
+
+        São três erros numa frase só: duas pretensões espremidas num item, uma cifra de dano
+        moral que o relato não escreveu, e o campo vazio ao lado de valores escritos por
+        extenso — a tela abre em branco justamente o pedido que tem quantia certa. O certo
+        são dois itens, e a cifra fechada no campo do pedido a que ela pertence:
+
+        {"requirements": [
+          {"description": "A condenação da Ré ao ressarcimento de R$ 1.340,00, referentes ao débito que o Autor nunca contratou;", "amount": "1340.00"},
+          {"description": "A condenação da Ré à indenização pelos danos morais decorrentes da negativação indevida, em valor a ser arbitrado por este Juízo;", "amount": null}
+        ]}
         TXT;
     }
 
@@ -268,8 +314,10 @@ final class RequirementExtractionAgent implements Agent, HasProviderOptions, Has
                     'amount' => $schema->string()
                         ->description(
                             'O valor em reais deste pedido, com ponto decimal e sem '
-                            .'separador de milhar ("25200.00"). Nulo quando o relato não '
-                            .'traz a cifra deste pedido — nunca some, estime ou invente.'
+                            .'separador de milhar ("25200.00"). Obrigatório sempre que a '
+                            .'frase deste pedido escrever uma cifra fechada: a mesma que '
+                            .'está na frase vem aqui. Nulo quando o relato não traz a '
+                            .'cifra deste pedido — nunca some, estime ou invente.'
                         )
                         ->nullable()
                         ->required(),
