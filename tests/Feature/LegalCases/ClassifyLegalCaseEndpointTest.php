@@ -296,8 +296,19 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
     }
 
     /**
-     * O Ollama fora do ar é condição de operação, não defeito: a tela precisa
+     * Um agente fora do ar é condição de operação, não defeito: a tela precisa
      * de uma frase para mostrar, e de um status que não seja 200.
+     *
+     * A área é a única etapa obrigatória, e a queda dela é o 503 — mas o que
+     * este teste passou a afirmar é mais estreito do que já foi. As duas
+     * extrações são **irmãs** da área dentro do bloco concorrente, não etapas
+     * seguintes: elas correm mesmo quando o enquadramento cai, e o trabalho
+     * delas é descartado. É o desperdício que o paralelismo cobra, e está
+     * escrito no docblock da Action.
+     *
+     * O que continua valendo, e é o que importa aqui: a pesquisa **não** é
+     * acordada. Ela vive fora do bloco e é a etapa mais lenta e mais cara do
+     * projeto, então o 503 sai antes de ela custar um minuto.
      */
     #[Test]
     public function an_agent_that_fails_answers_with_a_message_the_screen_can_show(): void
@@ -308,10 +319,17 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->shouldReceive('handle')
             ->andThrow(new RuntimeException('Connection refused'));
 
-        // As três etapas seguintes vêm depois do enquadramento, e por isso não
-        // chegam a ser acordadas quando o primeiro agente cai.
-        $this->fakeAction(ExtractLegalCaseDefendant::class)->shouldNotReceive('handle');
-        $this->fakeAction(ExtractLegalCaseRequirements::class)->shouldNotReceive('handle');
+        // Pares da área, e não etapas depois dela: correm, e o que devolvem é
+        // jogado fora junto com o resto.
+        $this->fakeAction(ExtractLegalCaseDefendant::class)
+            ->shouldReceive('handle')
+            ->andReturn($this->defendant());
+
+        $this->fakeAction(ExtractLegalCaseRequirements::class)
+            ->shouldReceive('handle')
+            ->andReturn(new RequirementListData([]));
+
+        // Esta sim fica de fora: é a última, fora do bloco, e a mais cara.
         $this->fakeAction(ResearchLegalCaseTheses::class)->shouldNotReceive('handle');
 
         $this->actingAs($owner)
@@ -331,22 +349,29 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
     }
 
     /**
-     * A fila. As cinco etapas correm uma de cada vez, nesta ordem.
+     * A cadeia que sobrou: área, depois classe, depois pesquisa.
      *
-     * O que se verifica aqui não é o resultado, é a sequência: `globally()
-     * ->ordered()` reprova uma etapa que rode antes da anterior ter voltado, e
-     * é a única forma de este arranjo ser afirmado em teste. Ele existe para
-     * que a ordem continue sendo do desenho — cinco `statement` no `handle()`
-     * — e não da ordem de avaliação de argumentos do PHP, que é como já foi e
-     * corria igual sem estar dito em lugar nenhum.
+     * O que se verifica aqui não é o resultado, é a **dependência** — e ela é o
+     * que restou de afirmável depois que as quatro etapas básicas passaram a
+     * correr dentro de um `Concurrency::run`. `globally()->ordered()` reprova
+     * uma etapa que rode antes da anterior ter voltado, e as três que o
+     * carregam são as três que não podem se reordenar: as classes candidatas
+     * são as da área, e a pesquisa lê a peça que as outras descreveram.
      *
-     * A pesquisa é a última por necessidade e não por arrumação: ela lê a peça
-     * que as quatro anteriores descreveram — a área diz em que ramo procurar e
-     * os pedidos dizem o que a tese precisa sustentar —, e é também a mais
-     * lenta, o que faz dela a única cuja posição o advogado sente.
+     * As duas extrações entram com `once()` e **sem** `ordered()`, e a ausência
+     * é a afirmação: a posição delas deixou de ser contrato. Elas são pares da
+     * área, leem os mesmos fatos e não devem nada a ninguém — amarrá-las a uma
+     * ordem aqui seria escrever em teste um detalhe que o desenho acabou de
+     * abrir mão de garantir.
+     *
+     * O que este teste **não** prova é que o bloco é concorrente: ele roda no
+     * driver `sync` que o `phpunit.xml` fixa, onde as três tasks correm em
+     * série no mesmo processo para que os dublês valham. Quem exercita o driver
+     * de verdade é `tests/Agents/LegalCaseClassificationTest`, que é opt-in e
+     * gasta inferência.
      */
     #[Test]
-    public function the_five_steps_run_one_at_a_time_and_in_order(): void
+    public function the_dependencies_between_the_steps_stay_in_order(): void
     {
         [, $owner] = $this->accountWithOwner();
 
@@ -372,31 +397,15 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
                 justification: 'O pedido é indenizatório.',
             ));
 
+        // Sem `ordered()`: pares da área, e a posição delas não é contrato.
         $this->fakeAction(ExtractLegalCaseDefendant::class)
             ->shouldReceive('handle')
             ->once()
-            ->globally()
-            ->ordered()
-            ->andReturn(new DefendantData(
-                name: 'Joaquim Vizinho',
-                document: null,
-                email: null,
-                phone: null,
-                postalCode: null,
-                street: null,
-                number: null,
-                complement: null,
-                district: null,
-                city: null,
-                state: null,
-                notes: null,
-            ));
+            ->andReturn($this->defendant());
 
         $this->fakeAction(ExtractLegalCaseRequirements::class)
             ->shouldReceive('handle')
             ->once()
-            ->globally()
-            ->ordered()
             ->andReturn(new RequirementListData([]));
 
         $this->fakeAction(ResearchLegalCaseTheses::class)
@@ -567,6 +576,30 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         $this->fakeAction(ResearchLegalCaseTheses::class)
             ->shouldReceive('handle')
             ->andReturn($this->research());
+    }
+
+    /**
+     * O réu que um relato de vizinhança dá: um nome, e mais nada.
+     *
+     * Doze campos e onze nulos é a resposta legítima do agente, não uma falha —
+     * um réu é descrito, não cadastrado.
+     */
+    private function defendant(): DefendantData
+    {
+        return new DefendantData(
+            name: 'Joaquim Vizinho',
+            document: null,
+            email: null,
+            phone: null,
+            postalCode: null,
+            street: null,
+            number: null,
+            complement: null,
+            district: null,
+            city: null,
+            state: null,
+            notes: null,
+        );
     }
 
     /**

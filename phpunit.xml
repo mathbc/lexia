@@ -36,6 +36,12 @@
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
+        <!-- Um dublê registrado no container deste processo não cruza para um
+             processo filho, então `process` faria os mocks de `fakeAction()`
+             serem ignorados e as Actions de agente irem a um provedor pago.
+             `tests/Agents/LegalCaseClassificationTest` sobrescreve isto de
+             propósito: é o único lugar que exercita o bloco concorrente. -->
+        <env name="CONCURRENCY_DRIVER" value="sync"/>
         <env name="DB_CONNECTION" value="pgsql"/>
         <env name="DB_DATABASE" value="lexia_testing"/>
         <env name="DB_URL" value=""/>

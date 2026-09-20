@@ -180,10 +180,10 @@ de quatro dos sete agentes e os embeddings do catálogo —, `gpt-oss:20b` para 
 a pesquisa de teses e o transcritor que lê a ficha dela, que precisam de busca na web e
 por isso não têm como ser locais (ver "A pesquisa de teses", abaixo), e
 `PracticeAreaClassificationAgent`, que **tem** como ser local e ainda assim aponta para a
-nuvem — ali se troca latência por cota, já que a área é a primeira das **seis** inferências
-em série de `POST /pecas/classificar`. As duas últimas dessas seis são a pesquisa de teses,
-que também é do Gemini: a rota toca os dois providers, e uma cota esgotada a atinge em dois
-pontos. Anote o que vem junto: o relato do cliente agora
+nuvem — ali se troca latência por cota, já que a área abre a cadeia mais longa de
+`POST /pecas/classificar`. As duas últimas das seis inferências da rota são a pesquisa de
+teses, que também é do Gemini: a rota toca os dois providers, e uma cota esgotada a atinge
+em dois pontos — e agora em rajada, porque as quatro primeiras correm em paralelo. Anote o que vem junto: o relato do cliente agora
 sai do escritório no enquadramento também, e inteiro, sem o estreitamento que
 `LegalCaseDossier::forResearch()` faz na pesquisa. `AI_PROVIDER` continua `ollama`; quem
 aponta para a nuvem é o `#[Provider('gemini')]` desses três, e de mais nenhum — e devolver
@@ -272,13 +272,15 @@ formato de `DefendantData` — o objeto que `UpdateLegalCaseDefendant` recebe.
 o que o cliente pede ao juízo como `RequirementListData` — o objeto que
 `SaveLegalCaseRequirements` recebe. O que os pôs ali foi o chamador, porque o
 preenchimento inteligente é um gesto só e o advogado não deve esperar três vezes
-pelo mesmo relato. As Actions seguem chamáveis sozinhas, e é assim que a etapa 2
-ou a etapa 4 de uma peça já salva deve pedir a sugestão: uma inferência, e não
-cinco.
+pelo mesmo relato. E como não dependem de nada, eles não esperam a vez: as duas
+extrações e o enquadramento são as **três tasks** de um `Concurrency::run` dentro
+de `ClassifyLegalCase`, começando juntas. As Actions seguem chamáveis sozinhas, e
+é assim que a etapa 2 ou a etapa 4 de uma peça já salva deve pedir a sugestão:
+uma inferência, e não cinco.
 
-E uma quinta etapa fecha a fila, de natureza diferente das quatro: `ResearchLegalCaseTheses`
-— a dupla de agentes da seção "A pesquisa de teses" — **lê a peça, e não os fatos**. É por
-isso que ela é a última e não poderia ser outra coisa: o enquadramento diz em que ramo
+E uma quinta etapa fecha a cadeia, de natureza diferente das quatro: `ResearchLegalCaseTheses`
+— a dupla de agentes da seção "A pesquisa de teses" — **lê a peça, e não os fatos**. É a
+única que não podia ter entrado no bloco concorrente, e é por isso que ela é a última: o enquadramento diz em que ramo
 procurar e os pedidos dizem o que a tese precisa sustentar, e nenhum dos dois existe antes
 de o agente correspondente responder. `ClassifyLegalCase::pleading()` monta um `LegalCase`
 **não salvo** com as três relações que `LegalCaseDossier::forResearch()` consulta — área,
@@ -310,12 +312,24 @@ vazia é o relato que não pede nada.
 
 `POST /pecas/classificar` é a única rota das Actions de agente: ela aponta para
 `ClassifyLegalCase`, e as demais não têm `asController()` enquanto nada apontar para elas.
-O preço da rota é a latência de **seis** `Timeout(180)` em série, com o navegador
-esperando — dívida conhecida, documentada no `asController()`, e o lugar de trocá-la por
-uma fila. Ela dobrou quando a pesquisa entrou, e é a pesquisa que a domina: é a inferência
-mais lenta do projeto, porque o provider abre as páginas antes de responder. Quem sente
-isso primeiro é `tests/Agents/LegalCaseClassificationTest`, que passou a custar minutos,
-cota do Gemini e rede — e pode ficar vermelho porque um portal caiu.
+O preço da rota continua sendo latência, com o navegador esperando, mas deixou de ser a
+soma: as seis chamadas a `Timeout(180)` não correm mais todas em série. As quatro etapas
+básicas estão num `Concurrency::run` — três tasks, porque área e classe são uma cadeia —,
+então a espera é a mais longa delas, e não o total. **A dívida da fila continua de pé**, e
+por um motivo que o paralelismo não alcança: quem domina o tempo é a pesquisa, que ficou
+fora do bloco porque lê a peça que as outras descreveram, e que é a inferência mais lenta
+do projeto porque o provider abre as páginas antes de responder.
+
+Duas consequências operacionais. O driver vive em `CONCURRENCY_DRIVER`
+(`config/concurrency.php`): em `process` — o default, e o único que serve a um request web,
+já que o `fork` recusa rodar fora do console — cada task é um `artisan` novo, com o retorno
+atravessando `serialize()`; `sync` devolve o comportamento em série sem tocar em código, e é
+a saída se a cota do provedor reclamar das requisições simultâneas. E a suíte padrão **tem**
+de rodar em `sync`, fixado no `phpunit.xml`: um dublê registrado no container do processo de
+teste não cruza para um processo filho, então em `process` os mocks seriam ignorados e os
+testes iriam ao Gemini de verdade. `tests/Agents/LegalCaseClassificationTest` sobrescreve
+isso de propósito — é o único lugar que exercita o bloco como produção o roda, e custa
+minutos, cota do Gemini e rede, podendo ficar vermelho porque um portal caiu.
 
 Um agente continua fora da cadeia e não é chamado por ela. `FactsRefinementAgent`,
 exposto por `RefineLegalCaseFacts`, reescreve o relato do cliente como a narrativa de
@@ -442,8 +456,9 @@ em duas listas e cunha o uuid em PHP é `ForensicReviewData::fromAgent()`, que �
 
 `ClassifyLegalCase` aponta para `ResearchLegalCaseTheses` como última etapa, e a ressalva
 que esta seção fazia continua valendo — ela devia ser fila e é request. A dívida só mudou de
-dono: são dois `Timeout(180)` em série dentro de uma rota que já tinha quatro, e o primeiro
-deles é a inferência mais lenta do projeto. A tela que consome isso é a etapa 6 do
+dono: são dois `Timeout(180)` em série depois de um bloco concorrente que encurtou as
+quatro primeiras e não toca nestas duas — o primeiro deles é a inferência mais lenta do
+projeto, e hoje domina a espera da rota sozinho. A tela que consome isso é a etapa 6 do
 assistente (`ForensicReviewFields`), e **nada persiste ainda**: as teses viajam pelo
 `sessionStorage` com o resto da entrega, e recarregar a página as descarta.
 

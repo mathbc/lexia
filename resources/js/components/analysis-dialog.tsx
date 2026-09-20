@@ -14,7 +14,7 @@ interface AnalysisDialogProps {
     title: string
     /** O que a espera custa e o que o usuário deve (ou não deve) fazer durante ela. */
     hint: string
-    /** As etapas do trabalho, na ordem em que acontecem. */
+    /** As etapas do trabalho, na ordem em que se leem. */
     messages: readonly string[]
     /** Quanto tempo cada mensagem fica na tela, em milissegundos. */
     interval?: number
@@ -39,9 +39,10 @@ const DEFAULT_INTERVAL = 4000
  *
  * ## As mensagens
  *
- * Elas descrevem as etapas reais do trabalho, na ordem, mas **circulam** em vez
- * de parar na última. É uma escolha, e a alternativa é pior: não há progresso
- * para relatar — é uma requisição só, e o servidor não conta por onde anda —,
+ * Elas descrevem as etapas reais do trabalho, mas **circulam** em vez de parar
+ * na última. É uma escolha, e a alternativa é pior: não há progresso para
+ * relatar — é uma requisição só, o servidor não conta por onde anda, e as etapas
+ * que ele corre em paralelo não têm sequer uma ordem a relatar —,
  * então uma sequência que terminasse deixaria a tela parada numa frase falsa
  * pelo resto da espera, que é exatamente a aparência de travado. Circulando,
  * cada frase continua verdadeira sobre o que o sistema faz, e o movimento

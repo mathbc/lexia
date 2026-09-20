@@ -45,11 +45,42 @@ use Tests\TestCase;
  * — naming the suite alone finds nothing, since phpunit.xml excludes the group.
  *
  *   composer test:agents
+ *
+ * ## The one place the real concurrency driver runs
+ *
+ * `setUp()` puts the driver back to `process`, against the `sync` that
+ * phpunit.xml pins. Everywhere else `sync` is the only safe answer — a double
+ * registered in this process's container does not cross into a child, so the
+ * feature suite would silently reach a paid provider — but here there are no
+ * doubles to lose, and this is consequently the only test that exercises
+ * `ClassifyLegalCase`'s block as production runs it: three `artisan`
+ * subprocesses, the return values crossing back through `serialize()`.
+ *
+ * It costs nothing extra. The same six inferences happen either way; they
+ * merely overlap. What it buys is that a regression in what a task may capture,
+ * or in what may cross the process boundary, fails here instead of in a
+ * request.
+ *
+ * Two consequences of a child process worth knowing when reading a red build.
+ * A child sees only **committed** data — fine here, because the catalogue comes
+ * from migrations, which RefreshDatabase commits before it opens the
+ * transaction, and because this test calls the Action directly and needs no
+ * account rows. And the vectors that `EmbedProceduralClasses` self-heals inside
+ * the child are written **outside** the test transaction, so they stay in
+ * `lexia_testing`: harmless, idempotent, and the same thing a prepared
+ * environment does on purpose.
  */
 #[Group('agents')]
 final class LegalCaseClassificationTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config(['concurrency.default' => 'process']);
+    }
 
     #[Test]
     public function it_classifies_a_narrative_of_facts_into_an_area_and_a_procedural_class(): void

@@ -19,15 +19,16 @@ import { stashHandoff } from "@/lib/legal-case-handoff";
 import type { LegalCaseClassification, Option } from "@/types";
 
 /**
- * O que as cinco etapas fazem, na ordem em que `ClassifyLegalCase` as chama —
- * ler os fatos, decidir a área, escolher entre as classes de ajuizamento
- * vinculadas a ela, procurar no mesmo relato quem é o réu, depois o que o
- * cliente está pedindo e, por fim, pesquisar nos portais oficiais as teses que
- * a peça pode sustentar.
+ * O que as cinco etapas fazem — ler os fatos, decidir a área, escolher entre as
+ * classes de ajuizamento vinculadas a ela, procurar no mesmo relato quem é o
+ * réu, o que o cliente está pedindo e, por fim, pesquisar nos portais oficiais
+ * as teses que a peça pode sustentar.
  *
- * São frases sobre o trabalho, não sobre o andamento: a chamada é uma só e o
- * servidor não relata por onde anda, então nenhuma delas afirma que uma etapa
- * terminou.
+ * São frases sobre o trabalho, não sobre o andamento, e a distinção ficou mais
+ * importante: as quatro primeiras etapas correm **em paralelo** no servidor, e a
+ * ordem em que estão escritas aqui é a de quem lê, não a de quem executa. A
+ * chamada é uma só e o servidor não relata por onde anda, então nenhuma delas
+ * afirma que uma etapa terminou.
  */
 const ANALYSIS_STEPS = [
     "Lendo o relato e separando o que tem peso jurídico.",
@@ -72,8 +73,10 @@ interface Props {
  * `?area=` é o que faz o servidor mandar as classes daquela área; o resto viaja
  * pelo `sessionStorage`, e `@/lib/legal-case-handoff` explica por quê.
  *
- * A espera é pelas cinco etapas, que são seis inferências em série — a pesquisa
- * de teses são duas —, e leva minutos, não o instante de um `submit`. Por isso
+ * A espera é pelas cinco etapas, que são seis inferências — a pesquisa de teses
+ * são duas. As quatro primeiras correm em paralelo e a pesquisa vem depois
+ * delas, o que encurtou a conta sem mudar a natureza dela: continua levando
+ * minutos, e não o instante de um `submit`. Por isso
  * ela é um diálogo modal e não um punhado de campos desabilitados: congelar os
  * controles deste formulário deixaria de fora tudo o que está em volta dele — a
  * barra lateral, o cabeçalho, o menu do usuário —, e sair da tela joga fora a
@@ -81,9 +84,10 @@ interface Props {
  * página, conta o que está acontecendo e não se deixa fechar.
  *
  * A última etapa é a que mais pesa nessa conta, e é a única que sai da máquina:
- * a pesquisa abre os portais oficiais antes de responder. A espera cresceu com
- * ela, e é a partir daqui que trocar esta requisição por uma fila deixa de ser
- * um luxo — ver `ClassifyLegalCase`.
+ * a pesquisa abre os portais oficiais antes de responder. Ela ficou de fora do
+ * paralelismo por necessidade — lê a peça que as outras descreveram —, então
+ * hoje ela domina a espera sozinha, e é por isso que trocar esta requisição por
+ * uma fila continua sendo o próximo passo — ver `ClassifyLegalCase`.
  */
 export default function LegalCaseAssistedForm({
     customers,
