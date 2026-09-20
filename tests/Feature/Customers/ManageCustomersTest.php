@@ -6,6 +6,7 @@ namespace Tests\Feature\Customers;
 
 use App\Domain\Customers\Actions\CreateCustomer;
 use App\Domain\Customers\Enums\CustomerType;
+use App\Domain\Customers\Enums\MaritalStatus;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\Shared\Tenancy\TenantContext;
 use App\Domain\Users\Models\User;
@@ -28,6 +29,9 @@ final class ManageCustomersTest extends TestCase
             'name' => 'Joana Pereira',
             'type' => CustomerType::Individual->value,
             'cpf' => BrazilianDocuments::cpf(),
+            'marital_status' => MaritalStatus::Married->value,
+            'occupation' => 'Comerciante',
+            'birth_date' => '1985-03-12',
             'email' => 'joana@cliente.test',
             'phone' => '11988887777',
             'postal_code' => '01310-100',
@@ -64,6 +68,88 @@ final class ManageCustomersTest extends TestCase
         $this->assertNull($customer->cnpj);
         $this->assertSame('11988887777', $customer->phone);
         $this->assertSame('01310100', $customer->postal_code);
+
+        // The qualification a petição inicial copies into its opening.
+        $this->assertSame(MaritalStatus::Married, $customer->marital_status);
+        $this->assertSame('Comerciante', $customer->occupation);
+        $this->assertSame('1985-03-12', $customer->birth_date->toDateString());
+    }
+
+    /**
+     * Os três campos da qualificação são opcionais, e de propósito.
+     *
+     * A minuta escreve `[estado civil]` no lugar do que ninguém informou, o que
+     * é melhor do que travar o cadastro de um cliente que acabou de ligar. O
+     * que se grava então é `null` — "ninguém informou" —, e não string vazia.
+     */
+    #[Test]
+    public function the_qualification_is_optional(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+
+        $this->actingAs($owner)
+            ->post('/clientes', $this->payload([
+                'marital_status' => '',
+                'occupation' => '',
+                'birth_date' => '',
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $customer = Customer::acrossAllAccounts()->where('email', 'joana@cliente.test')->sole();
+
+        $this->assertNull($customer->marital_status);
+        $this->assertNull($customer->occupation);
+        $this->assertNull($customer->birth_date);
+    }
+
+    #[Test]
+    public function the_qualification_refuses_what_it_cannot_mean(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+
+        $this->actingAs($owner)
+            ->post('/clientes', $this->payload([
+                'marital_status' => 'enrolado',
+                // Nascer amanhã não é um estado de coisas.
+                'birth_date' => now()->addDay()->toDateString(),
+            ]))
+            ->assertSessionHasErrors(['marital_status', 'birth_date']);
+    }
+
+    /**
+     * Uma pessoa jurídica não tem estado civil, e mandá-lo não a dá um.
+     *
+     * O `exclude_if` tira os três campos do payload validado antes que a
+     * CustomerData os veja — é o que impede uma qualificação de sobreviver à
+     * promoção de um cliente a Pessoa Jurídica.
+     */
+    #[Test]
+    public function a_company_has_no_qualification_even_when_one_is_posted(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        $customer = Customer::factory()->forAccount($account)->qualified()->create();
+
+        $this->assertNotNull($customer->marital_status);
+
+        $this->actingAs($owner)
+            ->put("/clientes/{$customer->id}", $this->payload([
+                'name' => 'Padaria do Zé',
+                'type' => CustomerType::Company->value,
+                'legal_name' => 'Padaria do Zé Ltda.',
+                'cnpj' => BrazilianDocuments::cnpj(),
+                'cpf' => null,
+                'marital_status' => MaritalStatus::Single->value,
+                'occupation' => 'Padeiro',
+                'birth_date' => '1985-03-12',
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $customer->refresh();
+
+        $this->assertNull($customer->marital_status);
+        $this->assertNull($customer->occupation);
+        $this->assertNull($customer->birth_date);
     }
 
     #[Test]

@@ -6,6 +6,7 @@ namespace App\Domain\Customers\Actions;
 
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Customers\Enums\CustomerType;
+use App\Domain\Customers\Enums\MaritalStatus;
 use App\Domain\Customers\Models\Customer;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -28,6 +29,7 @@ final class ShowCustomerForm
     {
         return Inertia::render('customers/create', [
             'customerTypes' => CustomerType::options(),
+            'maritalStatuses' => MaritalStatus::options(),
             'states' => BrazilianState::options(),
         ]);
     }

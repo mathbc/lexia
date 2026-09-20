@@ -29,10 +29,11 @@ use Laravel\Ai\Promptable;
  *
  * Its sibling rewrites a narrative, so everything it needs is in front of it.
  * This one writes a *document*, and a petição inicial has a fixed opening that
- * demands facts the database does not hold. The qualification of the Autor
- * states marital status and occupation; `customers` has a column for neither.
- * The endereçamento names a comarca; `court_addressing` is nullable and often
- * empty. A pleading distributed by dependency cites the case number of the
+ * demands facts the database often does not hold. The qualification of the Autor
+ * states marital status and occupation; `customers` asks for both and requires
+ * neither, so the dossier carries them when somebody filled them in and stays
+ * silent when nobody did. The endereçamento names a comarca; `court_addressing`
+ * is nullable and often empty. A pleading distributed by dependency cites the case number of the
  * proceeding it hangs off; nothing here knows it.
  *
  * A model asked to write that paragraph will write it. "Brasileiro, casado,
@@ -121,8 +122,9 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
 
         E a petição inicial **exige** dados que muitas vezes não estão em nenhum dos
         dois. O estado civil e a profissão do autor são os casos mais comuns: a
-        qualificação da parte os pede, e quase nunca estão registrados. A comarca, o
-        número do processo de origem, o endereço de quem não foi identificado — o mesmo.
+        qualificação da parte os pede, e o cadastro nem sempre os traz — quando o
+        dossiê os trouxer, escreva-os como estão ali. A comarca, o número do processo
+        de origem, o endereço de quem não foi identificado — o mesmo.
 
         Quando faltar um dado, escreva um **marcador entre colchetes** no lugar dele,
         dizendo o que falta, e siga em frente:

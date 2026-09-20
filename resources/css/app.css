@@ -219,3 +219,79 @@
         font-variant-numeric: tabular-nums;
     }
 }
+
+/* ---------------------------------------------------------------------------
+   A página ABNT — a minuta, e nada além dela.
+
+   Times New Roman 12pt, entrelinhas 1,5, margens de 3 cm (superior e esquerda)
+   por 2 cm (inferior e direita) e citação longa recuada em 4 cm. É a única
+   superfície do sistema que não fala a tipografia do painel: o resto continua
+   em IBM Plex Sans, pelos tokens de sempre, porque lá o texto é interface.
+   Aqui ele é o documento que vai ser protocolado, e o advogado precisa
+   reconhecer na tela a página que sai na impressora.
+
+   A fonte é a do sistema operacional, e não uma embarcada como a IBM Plex: o
+   padrão nomeia *esta* fonte, ela está instalada no Windows e no macOS, e as
+   substitutas da pilha (Liberation Serif, Tinos) são metricamente compatíveis
+   — mesma largura por caractere, mesma quebra de linha. Embarcar uma Times
+   custaria um pacote novo para comprar o que já está na máquina de quem usa
+   isto, e a régua da ABNT é a métrica, não o desenho da letra.
+
+   Nenhuma cor mora aqui: o papel é o `bg-card` do cartão que envolve a página
+   e a tinta é o `text-foreground`, de modo que o tema escuro continua valendo.
+   O que a norma fixa é a geometria e a tipografia, não o branco do papel.
+   --------------------------------------------------------------------------- */
+@layer components {
+    .abnt-page {
+        /* As margens da norma, nomeadas: elas reaparecem no recuo da citação e
+           numa tela estreita, e um 3cm solto no meio do arquivo não se lê. */
+        --abnt-page-width: 21cm; /* A4 */
+        --abnt-margin-top: 3cm;
+        --abnt-margin-right: 2cm;
+        --abnt-margin-bottom: 2cm;
+        --abnt-margin-left: 3cm;
+        --abnt-citation-indent: 4cm;
+
+        width: 100%;
+        max-width: var(--abnt-page-width);
+        margin-inline: auto;
+        padding: var(--abnt-margin-top) var(--abnt-margin-right)
+            var(--abnt-margin-bottom) var(--abnt-margin-left);
+
+        font-family: 'Times New Roman', Times, 'Liberation Serif', Tinos, serif;
+        font-size: 12pt;
+        line-height: 1.5;
+
+        /* A minuta é texto puro, e as quebras dela significam: os pedidos
+           numerados vêm um por linha e a assinatura é um bloco de três. É o
+           mesmo comportamento que o textarea tem por natureza, e é o que faz
+           ler e editar quebrarem a linha no mesmo lugar. */
+        white-space: pre-wrap;
+    }
+
+    /* Uma linha em branco entre parágrafos, que é como o texto vem escrito:
+       1,5em a 12pt é exatamente uma linha da entrelinha. */
+    .abnt-page > p + p {
+        margin-top: 1.5em;
+    }
+
+    /* NBR 10520: a citação com mais de três linhas sai do corpo e é recuada em
+       4 cm da margem esquerda. O recuo é do bloco inteiro, e não da primeira
+       linha — daí `margin-left` e não `text-indent`. */
+    .abnt-page > .abnt-citation {
+        margin-left: var(--abnt-citation-indent);
+    }
+
+    /* Abaixo de 40rem, 3 cm de margem esquerda não deixariam coluna de texto
+       nenhuma — a tela inteira de um celular tem pouco mais de 9 cm. A
+       fidelidade cede ao que é legível; a página impressa não muda por isso. */
+    @media (width < 40rem) {
+        .abnt-page {
+            padding: 1.5rem;
+        }
+
+        .abnt-page > .abnt-citation {
+            margin-left: 2rem;
+        }
+    }
+}

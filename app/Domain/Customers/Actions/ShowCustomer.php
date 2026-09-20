@@ -6,6 +6,7 @@ namespace App\Domain\Customers\Actions;
 
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Customers\Enums\CustomerType;
+use App\Domain\Customers\Enums\MaritalStatus;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\Customers\Support\CustomerPageProps;
 use Inertia\Inertia;
@@ -34,6 +35,7 @@ final class ShowCustomer
             'customer' => $customer,
             'can' => CustomerPageProps::abilities($request->user(), $customer),
             'customerTypes' => CustomerType::options(),
+            'maritalStatuses' => MaritalStatus::options(),
             'states' => BrazilianState::options(),
         ]);
     }

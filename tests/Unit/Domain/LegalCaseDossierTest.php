@@ -6,6 +6,7 @@ namespace Tests\Unit\Domain;
 
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Customers\Enums\CustomerType;
+use App\Domain\Customers\Enums\MaritalStatus;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\Documents\Models\Document;
 use App\Domain\LegalCases\Models\LegalCase;
@@ -105,6 +106,39 @@ final class LegalCaseDossierTest extends TestCase
     }
 
     /**
+     * A qualificação vai quando existe, e some quando não existe.
+     *
+     * Estado civil e profissão eram, até o cadastro passar a pedi-los, o
+     * exemplo canônico do que o agente marca entre colchetes em vez de chutar.
+     * A regra não mudou — mudou a chance: `written()` continua descartando a
+     * linha vazia, e é essa ausência que manda escrever `[estado civil]`.
+     *
+     * A data de nascimento fica de fora de propósito: a qualificação padrão não
+     * a declara, e um campo no dossiê é um convite a escrevê-lo.
+     */
+    #[Test]
+    public function the_drafting_dossier_qualifies_the_plaintiff_only_as_far_as_the_registration_does(): void
+    {
+        $qualified = LegalCaseDossier::forDrafting($this->fullPleading(customerAttributes: [
+            'marital_status' => MaritalStatus::Married,
+            'occupation' => 'Marceneiro',
+            'birth_date' => '1979-04-02',
+        ]));
+
+        $this->assertStringContainsString('- Estado civil: Casado(a)', $qualified);
+        $this->assertStringContainsString('- Profissão: Marceneiro', $qualified);
+        $this->assertStringNotContainsString('1979', $qualified);
+
+        // O cliente que ninguém qualificou: as duas linhas somem inteiras, em
+        // vez de chegarem como "não informado" — que é o que ensina um modelo
+        // pequeno a escrever "não informado" dentro da petição.
+        $unqualified = LegalCaseDossier::forDrafting($this->fullPleading());
+
+        $this->assertStringNotContainsString('Estado civil', $unqualified);
+        $this->assertStringNotContainsString('Profissão', $unqualified);
+    }
+
+    /**
      * As teses entram; os precedentes, não.
      *
      * É uma decisão do produto e não um esquecimento: a seção de jurisprudência
@@ -150,8 +184,9 @@ final class LegalCaseDossierTest extends TestCase
      * Uma peça inteira, ainda em memória.
      *
      * @param  list<Document>|null  $documents
+     * @param  array<string, mixed>  $customerAttributes
      */
-    private function fullPleading(?array $documents = null): LegalCase
+    private function fullPleading(?array $documents = null, array $customerAttributes = []): LegalCase
     {
         $pleading = $this->pleading(
             new ProceduralClass(['code' => 7, 'name' => 'Procedimento Comum Cível']),
@@ -167,6 +202,7 @@ final class LegalCaseDossierTest extends TestCase
             'district' => 'Centro',
             'city' => 'Itajaí',
             'state' => BrazilianState::SC,
+            ...$customerAttributes,
         ]));
 
         $pleading->fill([

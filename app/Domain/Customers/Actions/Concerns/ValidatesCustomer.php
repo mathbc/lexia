@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Customers\Actions\Concerns;
 
 use App\Domain\Customers\Enums\CustomerType;
+use App\Domain\Customers\Enums\MaritalStatus;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\Shared\Concerns\ValidatesAddress;
 use App\Domain\Shared\Rules\Cnpj;
@@ -18,6 +19,11 @@ use Illuminate\Validation\Rules\Unique;
  * The document fields are conditionally required: a person must supply a CPF,
  * a company a CNPJ and a corporate name. `required_if` keeps that in one place
  * instead of branching in two Actions.
+ *
+ * The qualification fields are the other way round — never required, but never
+ * accepted from a company either. `exclude_if` is what says so: sent for a
+ * Pessoa Jurídica they leave the validated payload entirely, so a stale marital
+ * status cannot ride a type change into the row.
  */
 trait ValidatesCustomer
 {
@@ -51,6 +57,12 @@ trait ValidatesCustomer
                 $this->uniqueDocument('cnpj', $accountId, $ignoring),
             ],
 
+            // Optional even for a person: the pleading writes a bracket for
+            // what nobody informed, which beats refusing the registration.
+            'marital_status' => ["exclude_if:type,{$company}", 'nullable', Rule::enum(MaritalStatus::class)],
+            'occupation' => ["exclude_if:type,{$company}", 'nullable', 'string', 'max:120'],
+            'birth_date' => ["exclude_if:type,{$company}", 'nullable', 'date', 'before:today'],
+
             'email' => ['required', 'email:rfc', 'max:255'],
             'phone' => ['required', 'string', 'max:20'],
 
@@ -83,6 +95,9 @@ trait ValidatesCustomer
             'type' => 'tipo',
             'cpf' => 'CPF',
             'cnpj' => 'CNPJ',
+            'marital_status' => 'estado civil',
+            'occupation' => 'profissão',
+            'birth_date' => 'data de nascimento',
             'email' => 'e-mail',
             'phone' => 'telefone',
             ...$this->addressAttributes(),

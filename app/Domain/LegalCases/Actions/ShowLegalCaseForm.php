@@ -7,6 +7,7 @@ namespace App\Domain\LegalCases\Actions;
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Customers\Actions\CreateCustomer;
 use App\Domain\Customers\Enums\CustomerType;
+use App\Domain\Customers\Enums\MaritalStatus;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Models\LegalCase;
@@ -43,8 +44,8 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * already chosen — otherwise reopening a draft would show an empty class list
  * under a class that is plainly selected.
  *
- * The client select also registers one: `customerTypes` and `states` feed the
- * dialog it opens, and `createdCustomer` is how the client that was just saved
+ * The client select also registers one: `customerTypes`, `maritalStatuses` and
+ * `states` feed the dialog it opens, and `createdCustomer` is how the client that was just saved
  * finds its way back — CreateCustomer flashes it and redirects here, so the
  * select can show it chosen without a second round trip.
  *
@@ -90,6 +91,7 @@ final class ShowLegalCaseForm
             'thesisTypes' => LegalThesisType::options(),
             'precedentTypes' => LegalPrecedentType::options(),
             'customerTypes' => CustomerType::options(),
+            'maritalStatuses' => MaritalStatus::options(),
             'states' => BrazilianState::options(),
             'can' => [
                 'create_customer' => $request->user()->can('create', Customer::class),

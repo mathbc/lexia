@@ -7,6 +7,7 @@ namespace Database\Factories;
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Accounts\Models\Account;
 use App\Domain\Customers\Enums\CustomerType;
+use App\Domain\Customers\Enums\MaritalStatus;
 use App\Domain\Customers\Models\Customer;
 use Database\Factories\Support\BrazilianDocuments;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -20,6 +21,12 @@ class CustomerFactory extends Factory
 
     /** @var list<string> */
     private const array COMPLEMENTS = ['Apto 42', 'Sala 12', 'Conj. 501', 'Bloco B', '3º andar'];
+
+    /** @var list<string> */
+    private const array OCCUPATIONS = [
+        'Comerciante', 'Professora', 'Motorista', 'Enfermeiro', 'Autônoma',
+        'Aposentado', 'Engenheira civil', 'Vendedor', 'Costureira', 'Pedreiro',
+    ];
 
     /** @var list<string> */
     private const array DISTRICTS = [
@@ -41,6 +48,12 @@ class CustomerFactory extends Factory
             'type' => CustomerType::Individual,
             'cpf' => BrazilianDocuments::cpf(),
             'cnpj' => null,
+            // Optional in the registration, so optional here: a row without a
+            // civil status is the ordinary case the draft writes a bracket for,
+            // and a factory that always filled it would hide that path.
+            'marital_status' => fake()->optional()->randomElement(MaritalStatus::cases()),
+            'occupation' => fake()->optional()->randomElement(self::OCCUPATIONS),
+            'birth_date' => fake()->optional()->dateTimeBetween('-70 years', '-18 years'),
             'email' => fake()->unique()->safeEmail(),
             'phone' => fake()->numerify('###########'),
             'postal_code' => fake()->numerify('########'),
@@ -64,6 +77,27 @@ class CustomerFactory extends Factory
             'type' => CustomerType::Company,
             'cpf' => null,
             'cnpj' => BrazilianDocuments::cnpj(),
+            // A company has no civil status: the same clearing CustomerData
+            // does when a client changes type.
+            'marital_status' => null,
+            'occupation' => null,
+            'birth_date' => null,
+        ]);
+    }
+
+    /**
+     * A natural person whose qualification is complete.
+     *
+     * For whoever needs the opening paragraph of a pleading written without a
+     * single bracket in it — the factory's own defaults leave the three fields
+     * to chance, because in production they are optional.
+     */
+    public function qualified(): static
+    {
+        return $this->state(fn (): array => [
+            'marital_status' => fake()->randomElement(MaritalStatus::cases()),
+            'occupation' => fake()->randomElement(self::OCCUPATIONS),
+            'birth_date' => fake()->dateTimeBetween('-70 years', '-18 years'),
         ]);
     }
 

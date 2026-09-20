@@ -20,11 +20,13 @@ use App\Domain\Requirements\Data\RequirementData;
  * ## The gaps, which are the expected answer
  *
  * `placeholders` is not a guard at all: it is a **report of the agent doing its
- * job**. A petição inicial qualifies the parties, and the qualification asks for
- * marital status and occupation that `customers` has no column for. The agent is
- * instructed to write `[estado civil]` rather than guess, so a healthy draft
- * arrives with several brackets in it, and an empty list is the surprising
- * result rather than the good one.
+ * job**. A petição inicial qualifies the parties and names a comarca, and asks
+ * for a case number the moment it is distributed by dependency — data the
+ * registration either never had or was never obliged to fill in. The agent is
+ * instructed to write `[estado civil]` rather than guess, so a draft arrives
+ * with brackets in it wherever the dossier was silent. An empty list is not a
+ * failure of this reading; it is the pleading whose every field happened to be
+ * filled in, which is the rarer of the two.
  *
  * What the screen does with it is say "7 lacunas a preencher", which turns an
  * obligatory paragraph the lawyer would otherwise have to audit word by word

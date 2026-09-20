@@ -10,16 +10,21 @@ interface Props {
     customer: Customer
     can: CustomerAbilities
     customerTypes: Option[]
+    maritalStatuses: Option[]
     states: Option[]
 }
 
-export default function CustomerShow({ customer, can, customerTypes, states }: Props) {
+export default function CustomerShow({ customer, can, customerTypes, maritalStatuses, states }: Props) {
     const form = useForm<CustomerFormValues>({
         name: customer.name,
         legal_name: customer.legal_name ?? '',
         type: customer.type,
         cpf: customer.cpf ?? '',
         cnpj: customer.cnpj ?? '',
+        marital_status: customer.marital_status ?? '',
+        occupation: customer.occupation ?? '',
+        // O cast `date` serializa em ISO; o <input type="date"> só lê a data.
+        birth_date: customer.birth_date?.slice(0, 10) ?? '',
         email: customer.email,
         phone: customer.phone,
         postal_code: customer.postal_code,
@@ -57,6 +62,7 @@ export default function CustomerShow({ customer, can, customerTypes, states }: P
                     errors={form.errors}
                     set={(patch) => form.setData((current) => ({ ...current, ...patch }))}
                     customerTypes={customerTypes}
+                    maritalStatuses={maritalStatuses}
                     states={states}
                     disabled={!can.update}
                 />

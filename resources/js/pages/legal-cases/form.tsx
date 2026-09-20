@@ -159,6 +159,7 @@ interface Props {
     precedentTypes: Option[];
     /** Para o cadastro de cliente que acontece aqui mesmo, sem trocar de tela. */
     customerTypes: Option[];
+    maritalStatuses: Option[];
     states: Option[];
     can: { create_customer: boolean };
 }
@@ -214,6 +215,7 @@ export default function LegalCaseForm({
     thesisTypes,
     precedentTypes,
     customerTypes,
+    maritalStatuses,
     states,
     can,
 }: Props) {
@@ -482,6 +484,9 @@ export default function LegalCaseForm({
                                                 <CustomerCreateDialog
                                                     customerTypes={
                                                         customerTypes
+                                                    }
+                                                    maritalStatuses={
+                                                        maritalStatuses
                                                     }
                                                     states={states}
                                                     onCreated={(customer) =>

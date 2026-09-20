@@ -7,16 +7,20 @@ import type { Option } from '@/types'
 
 interface Props {
     customerTypes: Option[]
+    maritalStatuses: Option[]
     states: Option[]
 }
 
-export default function CustomerCreate({ customerTypes, states }: Props) {
+export default function CustomerCreate({ customerTypes, maritalStatuses, states }: Props) {
     const form = useForm<CustomerFormValues>({
         name: '',
         legal_name: '',
         type: '',
         cpf: '',
         cnpj: '',
+        marital_status: '',
+        occupation: '',
+        birth_date: '',
         email: '',
         phone: '',
         postal_code: '',
@@ -43,6 +47,7 @@ export default function CustomerCreate({ customerTypes, states }: Props) {
                     errors={form.errors}
                     set={(patch) => form.setData((current) => ({ ...current, ...patch }))}
                     customerTypes={customerTypes}
+                    maritalStatuses={maritalStatuses}
                     states={states}
                 />
 

@@ -20,6 +20,9 @@ const EMPTY: CustomerFormValues = {
     type: '',
     cpf: '',
     cnpj: '',
+    marital_status: '',
+    occupation: '',
+    birth_date: '',
     email: '',
     phone: '',
     postal_code: '',
@@ -33,6 +36,7 @@ const EMPTY: CustomerFormValues = {
 
 interface Props {
     customerTypes: Option[]
+    maritalStatuses: Option[]
     states: Option[]
     /** O cliente recém-criado, para quem chamou já deixá-lo escolhido. */
     onCreated: (customer: Option) => void
@@ -51,7 +55,7 @@ interface Props {
  * Daí o `preserveState`: o formulário da peça — o passo, a área, a classe —
  * continua de pé enquanto o cadastro acontece por cima dele.
  */
-export function CustomerCreateDialog({ customerTypes, states, onCreated }: Props) {
+export function CustomerCreateDialog({ customerTypes, maritalStatuses, states, onCreated }: Props) {
     const [open, setOpen] = useState(false)
     const form = useForm<CustomerFormValues>({ ...EMPTY })
 
@@ -119,6 +123,7 @@ export function CustomerCreateDialog({ customerTypes, states, onCreated }: Props
                             errors={form.errors}
                             set={(patch) => form.setData((current) => ({ ...current, ...patch }))}
                             customerTypes={customerTypes}
+                            maritalStatuses={maritalStatuses}
                             states={states}
                             disabled={form.processing}
                         />

@@ -7,6 +7,7 @@ namespace App\Domain\LegalCases\Actions;
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Customers\Actions\CreateCustomer;
 use App\Domain\Customers\Enums\CustomerType;
+use App\Domain\Customers\Enums\MaritalStatus;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalCases\Support\LegalCaseOptions;
@@ -47,6 +48,7 @@ final class ShowAssistedLegalCaseForm
         return Inertia::render('legal-cases/assisted-form', [
             'customers' => LegalCaseOptions::customers($request->user()->account_id),
             'customerTypes' => CustomerType::options(),
+            'maritalStatuses' => MaritalStatus::options(),
             'states' => BrazilianState::options(),
             'can' => [
                 'create_customer' => $request->user()->can('create', Customer::class),

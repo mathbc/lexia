@@ -221,11 +221,20 @@ final class LegalCaseDossier
     /**
      * The client as the opening paragraph has to qualify them.
      *
-     * Note what is **not** here and cannot be: marital status and occupation.
-     * A petição inicial states both, and `customers` has columns for neither —
-     * so they are the gap the agent is instructed to mark rather than guess.
-     * Saying so is the point of this comment: the absence is the schema's, not
-     * an omission of this method.
+     * Marital status and occupation are here, and the comment that used to say
+     * they could not be is worth remembering: `customers` had no column for
+     * either, and the two were the standing example of what the agent marks
+     * with a bracket rather than guesses. The registration now asks for them,
+     * so when they are filled in the qualification is written and not marked.
+     *
+     * What did not change is the rule — only the odds. Both are optional for a
+     * natural person and meaningless for a company, so `written()` still drops
+     * the line when the field is empty, and an absent line is still exactly
+     * what tells the agent to write `[estado civil]`. The gap moved from the
+     * schema to the registration, where somebody can close it.
+     *
+     * The date of birth stays out on purpose: the standard qualification does
+     * not state it, and a field in the dossier is an invitation to write it.
      *
      * @return list<string>
      */
@@ -234,6 +243,8 @@ final class LegalCaseDossier
         return self::written([
             'Nome' => $customer->displayName(),
             'Tipo' => $customer->type->label(),
+            'Estado civil' => $customer->marital_status?->label(),
+            'Profissão' => $customer->occupation,
             'Documento' => self::documentAs($customer->identifier()),
             'Endereço' => self::address(
                 $customer->street,

@@ -87,8 +87,8 @@ final class PleadingDraftingTest extends TestCase
         $this->assertMatchesRegularExpression('/DOS PEDIDOS/u', $draft->content);
         $this->assertStringContainsString('Nestes termos, pede deferimento', $draft->content);
 
-        // A lacuna é a resposta certa: nem o estado civil nem a profissão existem
-        // no cadastro, e a qualificação os exige.
+        // A lacuna é a resposta certa: este cliente não tem estado civil nem
+        // profissão registrados, e a qualificação os exige.
         $this->assertNotEmpty($draft->placeholders);
 
         // Nenhuma cifra que o relato e os pedidos não escrevam.
@@ -224,8 +224,10 @@ final class PleadingDraftingTest extends TestCase
      *
      * As sete relações são penduradas à mão, o que mantém este teste fora do
      * banco: o `loadMissing()` da Action encontra todas presentes e não consulta
-     * nada. Note que o estado civil e a profissão do cliente não estão aqui
-     * porque **não existem** em `customers` — é essa ausência que o teste mede.
+     * nada. O estado civil e a profissão do cliente ficam **deliberadamente em
+     * branco**: `customers` tem as colunas desde que o cadastro passou a pedi-las,
+     * mas as duas são opcionais, e é o cliente não qualificado que este teste
+     * mede — é dele que sai a lacuna entre colchetes.
      *
      * @param  list<Requirement>|null  $requirements
      */

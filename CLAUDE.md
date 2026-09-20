@@ -505,12 +505,22 @@ numeração um fato. **Editar não chama agente nenhum**: corrigir um parágrafo
 inferência, e regenerar em volta jogaria a correção fora.
 
 A guarda central do agente não é a cifra, é a **lacuna**. A qualificação das partes
-exige estado civil e profissão, que `customers` não guarda; um modelo escreve
-"brasileiro, casado, comerciante" porque é gramaticalmente obrigatório, banal e errado
-sobre uma pessoa real. Então tudo o que o dossiê não traz vira marcador entre colchetes
-— `[estado civil]`, `[CIDADE/UF]` — e `PleadingDraftData` os conta para a tela dizer
-"7 lacunas a preencher". A guarda de cifra é a mesma de `RefinedFactsData`, com a fonte
-alargada: um valor que o advogado já escreveu num pedido autoriza tanto quanto o relato.
+exige estado civil e profissão; um modelo escreve "brasileiro, casado, comerciante"
+porque é gramaticalmente obrigatório, banal e errado sobre uma pessoa real. Então tudo
+o que o dossiê não traz vira marcador entre colchetes — `[estado civil]`, `[CIDADE/UF]`
+— e `PleadingDraftData` os conta para a tela dizer "7 lacunas a preencher". A guarda de
+cifra é a mesma de `RefinedFactsData`, com a fonte alargada: um valor que o advogado já
+escreveu num pedido autoriza tanto quanto o relato.
+
+A regra não mudou quando o cadastro passou a guardar a qualificação — mudou a chance de
+a lacuna aparecer. `customers` tem `marital_status` (o enum `MaritalStatus`), `occupation`
+e `birth_date`, os três **opcionais e exclusivos de pessoa física**: o `exclude_if` de
+`ValidatesCustomer` descarta o que vier de uma pessoa jurídica, e `QualificationData`
+é o objeto que os carrega, irmão de `AddressData` pelo mesmo motivo — "qualificação" é
+uma parte do documento, não três colunas soltas. Um cadastro sem eles continua válido,
+`written()` continua descartando a linha vazia do dossiê, e é essa ausência que manda
+escrever `[estado civil]`. A data de nascimento fica **fora** de `forDrafting()`: a
+qualificação padrão não a declara, e um campo no dossiê é um convite a escrevê-lo.
 
 `LegalCaseDossier::forDrafting()` é a terceira projeção, e a mais larga: qualifica as
 duas partes com endereço inteiro, mascara o documento (vai copiado para um parágrafo

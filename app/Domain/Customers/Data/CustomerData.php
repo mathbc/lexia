@@ -14,6 +14,12 @@ use App\Domain\Customers\Enums\CustomerType;
  * so the database only ever stores one representation. Only the document the
  * type calls for survives: switching a client from company to person clears
  * the CNPJ instead of leaving a stale one behind.
+ *
+ * The qualification follows that same rule from the other side. It describes a
+ * natural person — civil status, occupation, date of birth — so promoting a
+ * client to Pessoa Jurídica clears it rather than leaving a marital status
+ * hanging off a company. Unlike the CPF it is optional even for a person, and
+ * QualificationData says why.
  */
 final readonly class CustomerData
 {
@@ -23,6 +29,7 @@ final readonly class CustomerData
         public CustomerType $type,
         public ?string $cpf,
         public ?string $cnpj,
+        public QualificationData $qualification,
         public string $email,
         public string $phone,
         public AddressData $address,
@@ -41,6 +48,9 @@ final readonly class CustomerData
             type: $type,
             cpf: $type->requiresCpf() ? self::digitsOnly((string) $validated['cpf']) : null,
             cnpj: $type->requiresCnpj() ? self::digitsOnly((string) $validated['cnpj']) : null,
+            qualification: $type->requiresCpf()
+                ? QualificationData::fromArray($validated)
+                : QualificationData::unknown(),
             email: strtolower(trim((string) $validated['email'])),
             phone: self::digitsOnly((string) $validated['phone']),
             address: AddressData::fromArray($validated),
@@ -58,6 +68,7 @@ final readonly class CustomerData
             'type' => $this->type,
             'cpf' => $this->cpf,
             'cnpj' => $this->cnpj,
+            ...$this->qualification->toArray(),
             'email' => $this->email,
             'phone' => $this->phone,
             ...$this->address->toArray(),

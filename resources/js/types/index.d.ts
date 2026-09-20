@@ -97,6 +97,11 @@ export interface Customer {
     type: string;
     cpf: string | null;
     cnpj: string | null;
+    /** Valor do enum MaritalStatus; só pessoa física tem um. */
+    marital_status: string | null;
+    occupation: string | null;
+    /** ISO completo, como o cast `date` serializa — a tela corta em 10. */
+    birth_date: string | null;
     email: string;
     phone: string;
     postal_code: string;

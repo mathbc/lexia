@@ -1,12 +1,12 @@
 import { Head, router, useForm } from '@inertiajs/react'
-import { CircleAlert, FileText, Scale, Sparkles } from 'lucide-react'
+import { CircleAlert, Eye, FileText, Pencil, Scale, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import { AnalysisDialog } from '@/components/analysis-dialog'
 import { LegalCaseTabs } from '@/components/legal-case-tabs'
+import { PleadingDocument } from '@/components/pleading-document'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Textarea } from '@/components/ui/textarea'
 import { AppLayout } from '@/layouts/app-layout'
 import { formatDate, formatPhone, formatPostalCode } from '@/lib/format'
 import type { LegalPleading, PleadingLetterhead } from '@/types'
@@ -55,13 +55,29 @@ interface Props {
  *   existindo ao lado do texto que o advogado decidiu.
  *
  * As lacunas entre colchetes são contadas em cima e não são erro: a qualificação
- * das partes pede estado civil e profissão, que o cadastro de cliente não guarda,
- * e o agente é instruído a marcá-las em vez de inventá-las. O aviso existe para
- * que ninguém protocole `[estado civil]` sem ver.
+ * das partes pede estado civil e profissão, que o cadastro de cliente pede mas não
+ * exige, e o agente é instruído a marcar o que falta em vez de inventá-lo — como
+ * faz com a comarca e com o número do processo de origem. Preencher a qualificação
+ * em `/clientes` é o que apaga essas duas; o aviso existe para que ninguém
+ * protocole `[estado civil]` sem ver.
+ *
+ * ## Por que a tela tem dois modos
+ *
+ * O documento é o que a aba abre: a página ABNT — Times New Roman 12pt,
+ * entrelinhas 1,5, margens de 3 x 2 cm — desenhada como sai na impressora, com
+ * a citação longa recuada em 4 cm. É a formatação da minuta e de nada mais no
+ * sistema; o painel inteiro continua em IBM Plex Sans.
+ *
+ * Editar é o segundo modo porque o recuo da citação **é por parágrafo**, e um
+ * `textarea` só sabe pintar o campo todo com a mesma régua. A geometria e a
+ * tipografia valem nos dois — o que se digita já quebra a linha onde vai
+ * quebrar no documento —, e o recuo é o que só a leitura mostra. Gravar volta
+ * para o documento: a versão nova é para ser lida.
  */
 export default function LegalCasePleading({ legalCase, pleading, letterhead, can }: Props) {
     const form = useForm({ content: pleading?.content ?? '' })
     const [generating, setGenerating] = useState(false)
+    const [editing, setEditing] = useState(false)
 
     const changed = form.data.content !== (pleading?.content ?? '')
     const gaps = pleading?.placeholders.length ?? 0
@@ -158,34 +174,70 @@ export default function LegalCasePleading({ legalCase, pleading, letterhead, can
                             </p>
                         </header>
 
-                        <Textarea
-                            aria-label="Conteúdo da minuta"
-                            value={form.data.content}
-                            onChange={(e) => form.setData('content', e.target.value)}
-                            disabled={!can.update || form.processing}
-                            spellCheck
-                            className="min-h-[60vh] resize-none rounded-none border-0 px-6 py-6 leading-relaxed shadow-none focus-visible:ring-0"
-                        />
+                        {/* O campo não é o `Textarea` do shadcn: ele traz borda,
+                            anel, padding e tamanho de fonte de formulário, e
+                            aqui os quatro seriam desfeitos um a um para que a
+                            régua da ABNT valesse. O que sobra do componente
+                            seria o elemento. */}
+                        {editing ? (
+                            <textarea
+                                aria-label="Conteúdo da minuta"
+                                value={form.data.content}
+                                onChange={(e) => form.setData('content', e.target.value)}
+                                disabled={form.processing}
+                                spellCheck
+                                autoFocus
+                                className="abnt-page field-sizing-content block min-h-[60vh] resize-none bg-transparent outline-none disabled:opacity-50"
+                            />
+                        ) : (
+                            <PleadingDocument
+                                content={form.data.content}
+                                className="min-h-[60vh]"
+                            />
+                        )}
 
                         <footer className="flex flex-wrap items-center justify-between gap-3 border-t bg-muted/30 px-6 py-3">
-                            <p className="text-xs text-muted-foreground">
-                                Versão {pleading.version} · gerada em{' '}
-                                {formatDate(pleading.created_at)}
-                                {changed && ' · alterações não salvas'}
-                            </p>
+                            <div className="space-y-0.5">
+                                <p className="text-xs text-muted-foreground">
+                                    Versão {pleading.version} · gerada em{' '}
+                                    {formatDate(pleading.created_at)}
+                                    {changed && ' · alterações não salvas'}
+                                </p>
+
+                                {editing && (
+                                    <p className="text-xs text-muted-foreground">
+                                        Um parágrafo com {'>'} no início de cada linha sai
+                                        recuado em 4 cm no documento, como a citação longa
+                                        da ABNT.
+                                    </p>
+                                )}
+                            </div>
 
                             {can.update && (
-                                <Button
-                                    type="button"
-                                    disabled={!changed || form.processing}
-                                    onClick={() =>
-                                        form.put(`/pecas/${legalCase.id}/minuta`, {
-                                            preserveScroll: true,
-                                        })
-                                    }
-                                >
-                                    {form.processing ? 'Salvando…' : 'Salvar nova versão'}
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={form.processing}
+                                        onClick={() => setEditing((on) => !on)}
+                                    >
+                                        {editing ? <Eye /> : <Pencil />}
+                                        {editing ? 'Ver documento' : 'Editar texto'}
+                                    </Button>
+
+                                    <Button
+                                        type="button"
+                                        disabled={!changed || form.processing}
+                                        onClick={() =>
+                                            form.put(`/pecas/${legalCase.id}/minuta`, {
+                                                preserveScroll: true,
+                                                onSuccess: () => setEditing(false),
+                                            })
+                                        }
+                                    >
+                                        {form.processing ? 'Salvando…' : 'Salvar nova versão'}
+                                    </Button>
+                                </div>
                             )}
                         </footer>
                     </Card>

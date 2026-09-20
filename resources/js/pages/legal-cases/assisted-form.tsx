@@ -51,6 +51,7 @@ const ANALYSIS_STEPS = [
 interface Props {
     customers: Option[];
     customerTypes: Option[];
+    maritalStatuses: Option[];
     states: Option[];
     can: { create_customer: boolean };
 }
@@ -92,6 +93,7 @@ interface Props {
 export default function LegalCaseAssistedForm({
     customers,
     customerTypes,
+    maritalStatuses,
     states,
     can,
 }: Props) {
@@ -187,6 +189,9 @@ export default function LegalCaseAssistedForm({
                                 can.create_customer && (
                                     <CustomerCreateDialog
                                         customerTypes={customerTypes}
+                                        maritalStatuses={
+                                            maritalStatuses
+                                        }
                                         states={states}
                                         onCreated={(customer) =>
                                             setCustomerId(customer.value)

@@ -7,6 +7,7 @@ namespace App\Domain\Customers\Models;
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Accounts\Models\Account;
 use App\Domain\Customers\Enums\CustomerType;
+use App\Domain\Customers\Enums\MaritalStatus;
 use App\Domain\Customers\Policies\CustomerPolicy;
 use App\Domain\Shared\Concerns\BelongsToAccount;
 use Carbon\CarbonImmutable;
@@ -32,6 +33,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property CustomerType $type
  * @property string|null $cpf
  * @property string|null $cnpj
+ * @property MaritalStatus|null $marital_status
+ * @property string|null $occupation
+ * @property CarbonImmutable|null $birth_date
  * @property string $email
  * @property string $phone
  * @property string $postal_code
@@ -65,6 +69,8 @@ class Customer extends Model
     {
         return [
             'type' => CustomerType::class,
+            'marital_status' => MaritalStatus::class,
+            'birth_date' => 'date',
             'state' => BrazilianState::class,
         ];
     }
