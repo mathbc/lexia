@@ -6,6 +6,8 @@ namespace App\Domain\LegalCases\Support;
 
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\LegalCases\Models\LegalCase;
+use App\Domain\LegalPrecedents\Models\LegalPrecedent;
+use App\Domain\LegalTheses\Models\LegalThesis;
 use App\Domain\Requirements\Models\Requirement;
 
 /**
@@ -41,6 +43,8 @@ final class LegalCaseFormProps
             'defendant' => self::defendant($legalCase),
             'facts' => self::facts($legalCase),
             'requirements' => self::requirements($legalCase),
+            'theses' => self::theses($legalCase),
+            'precedents' => self::precedents($legalCase),
         ];
     }
 
@@ -106,6 +110,60 @@ final class LegalCaseFormProps
                 'id' => $requirement->id,
                 'description' => $requirement->description,
                 'amount' => self::mask($requirement->amount),
+            ])
+            ->all();
+    }
+
+    /**
+     * The forensic review as the sixth step draws it, with the real ids.
+     *
+     * Until a pleading could be concluded there was nothing to send: the theses
+     * arrived from the research, lived in `sessionStorage` and died with the
+     * tab. Now they are rows, and without this the step would open empty on a
+     * pleading that plainly has theses — telling the lawyer there was no
+     * research in this session about work that is sitting in the database.
+     *
+     * The shape is the **flat** one the screen already speaks: two lists, with
+     * the precedent naming its thesis by `legal_thesis_id`. That is what
+     * `LegalResearchData` publishes and what `SaveLegalCaseForensicReview`
+     * accepts, so a saved review and a fresh one hydrate through exactly the
+     * same code — `toThesisDrafts()` in `@/lib/forensic-review` re-nests both.
+     *
+     * The ids are the persisted ones and not minted here, which is what makes
+     * re-saving update the rows instead of replacing them — the same reason
+     * `requirements()` sends them.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function theses(LegalCase $legalCase): array
+    {
+        return $legalCase->theses
+            ->map(static fn (LegalThesis $thesis): array => [
+                'id' => $thesis->id,
+                'name' => $thesis->name,
+                'type' => $thesis->type?->value,
+                'description' => $thesis->description,
+                'impact' => $thesis->impact,
+                'legal_bases' => $thesis->legal_bases ?? [],
+            ])
+            ->all();
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private static function precedents(LegalCase $legalCase): array
+    {
+        return $legalCase->precedents
+            ->map(static fn (LegalPrecedent $precedent): array => [
+                'id' => $precedent->id,
+                'legal_thesis_id' => $precedent->legal_thesis_id,
+                'name' => $precedent->name,
+                'type' => $precedent->type?->value,
+                'description' => $precedent->description,
+                'citation' => $precedent->citation,
+                'grounding' => $precedent->grounding,
+                'adherence' => $precedent->adherence,
             ])
             ->all();
     }

@@ -11,6 +11,7 @@ use App\Domain\Customers\Models\Customer;
 use App\Domain\Documents\Models\Document;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Policies\LegalCasePolicy;
+use App\Domain\LegalPleadings\Models\LegalPleading;
 use App\Domain\LegalPrecedents\Models\LegalPrecedent;
 use App\Domain\LegalTheses\Models\LegalThesis;
 use App\Domain\PracticeAreas\Models\PracticeArea;
@@ -105,6 +106,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property-read Collection<int, Requirement> $requirements
  * @property-read Collection<int, LegalThesis> $theses
  * @property-read Collection<int, LegalPrecedent> $precedents
+ * @property-read Collection<int, LegalPleading> $pleadings
  */
 #[UsePolicy(LegalCasePolicy::class)]
 #[UseFactory(LegalCaseFactory::class)]
@@ -209,6 +211,22 @@ class LegalCase extends Model
     public function precedents(): HasMany
     {
         return $this->hasMany(LegalPrecedent::class)->oldest();
+    }
+
+    /**
+     * The drafted document, newest version first.
+     *
+     * The one relation here that is not `->oldest()`, and the exception is the
+     * point: the requests and the theses are read as a list in the order they
+     * were written, while of the drafts only the last one is ever shown. Editing
+     * never overwrites — a save writes the next version — so "newest first" is
+     * what the screen asks for and `pleadings->first()` is the current text.
+     *
+     * @return HasMany<LegalPleading, $this>
+     */
+    public function pleadings(): HasMany
+    {
+        return $this->hasMany(LegalPleading::class)->orderByDesc('version');
     }
 
     /**

@@ -1,6 +1,8 @@
 import { Head, Link, router, useForm } from "@inertiajs/react";
+import { Sparkles } from "lucide-react";
 import { useState } from "react";
 import { AppLayout } from "@/layouts/app-layout";
+import { AnalysisDialog } from "@/components/analysis-dialog";
 import { CustomerCreateDialog } from "@/components/customer-create-dialog";
 import {
     DefendantFormFields,
@@ -13,6 +15,7 @@ import {
 } from "@/components/facts-form-fields";
 import { ForensicReviewFields } from "@/components/forensic-review-fields";
 import { LegalCaseSteps, type StepItem } from "@/components/legal-case-steps";
+import { LegalCaseTabs } from "@/components/legal-case-tabs";
 import { PracticeAreaPicker } from "@/components/practice-area-picker";
 import { ProceduralClassPicker } from "@/components/procedural-class-picker";
 import { RequirementFormFields } from "@/components/requirement-form-fields";
@@ -26,7 +29,11 @@ import {
 } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/field";
 import { toDocumentDrafts, type DocumentDraft } from "@/lib/documents";
-import { toThesisDrafts, type ThesisDraft } from "@/lib/forensic-review";
+import {
+    toForensicReviewPayload,
+    toThesisDrafts,
+    type ThesisDraft,
+} from "@/lib/forensic-review";
 import { readHandoff } from "@/lib/legal-case-handoff";
 import {
     newRequirement,
@@ -39,6 +46,8 @@ import type {
     LegalCaseStepValue,
     Option,
     ProceduralClassOption,
+    ResearchedPrecedent,
+    ResearchedThesis,
 } from "@/types";
 
 /**
@@ -68,6 +77,20 @@ const STEP_DESCRIPTIONS: Record<LegalCaseStepValue, string> = {
     documents: "Os anexos que instruem a peça",
     review: "As teses que a peça sustenta e os julgados que as fundamentam",
 };
+
+/**
+ * O que acontece ao concluir a etapa 6, para a espera dizer alguma coisa.
+ *
+ * Concluir é a única etapa que custa uma inferência: grava as teses, registra a
+ * peça e manda o agente redigir a minuta inteira. Ver `FinalizeLegalCase`.
+ */
+const FINALISING_STEPS = [
+    "Gravando as teses e os precedentes…",
+    "Registrando a peça…",
+    "Redigindo a qualificação das partes…",
+    "Escrevendo a narrativa dos fatos…",
+    "Ordenando os fundamentos e numerando os pedidos…",
+] as const;
 
 /** Nada do réu é obrigatório — ver `DefendantFormFields`. */
 const EMPTY_DEFENDANT: DefendantFormValues = {
@@ -243,19 +266,39 @@ export default function LegalCaseForm({
     const [documents, setDocuments] = useState<DocumentDraft[]>([]);
 
     /**
-     * A revisão forense, em estado local pelo mesmo motivo dos documentos: nada
-     * a grava ainda.
+     * A revisão forense, em estado local — mas não mais sem rede embaixo.
      *
-     * A diferença é de onde ela vem — não do advogado, mas da pesquisa que
-     * `ClassifyLegalCase` fez como última etapa —, e é isso que a torna
-     * frágil de um jeito que os documentos não são: ela só existe enquanto esta
-     * aba estiver de pé. Um reload em `/pecas/{id}` descarta a entrega, como
-     * sempre descartou, e a etapa 6 abre vazia. Quem fecha esse buraco é a
-     * Action que grava as teses, que ainda não existe.
+     * Ela tem duas origens, e a ordem entre elas é a regra: **o que está gravado
+     * manda**. Uma peça já concluída volta com as teses do banco, com os ids
+     * reais, e é isso que a etapa 6 mostra ao reabrir; uma peça nova as recebe da
+     * pesquisa que `ClassifyLegalCase` fez, pelo `sessionStorage`, e essas só
+     * viram linha quando o advogado clicar em Concluir.
+     *
+     * Era aqui que ficava a única etapa em que recarregar a página custava
+     * trabalho já feito. Não é mais: `LegalCaseFormProps::draft()` projeta as
+     * duas listas, e `toThesisDrafts` as lê sem saber de onde vieram.
      */
     const [theses, setTheses] = useState<ThesisDraft[]>(() =>
-        toThesisDrafts(handoff?.research),
+        toThesisDrafts(
+            legalCase && legalCase.theses.length > 0
+                ? {
+                      theses: legalCase.theses,
+                      precedents: legalCase.precedents,
+                  }
+                : handoff?.research,
+        ),
     );
+
+    /**
+     * A conclusão é um `useForm` como as quatro etapas que gravam, e não um
+     * `router.post` solto: é ele que dá o `processing` que tranca o botão, e é
+     * ele que aceita as duas listas sem que cada tese precise de uma assinatura
+     * de índice para satisfazer o tipo de payload do Inertia.
+     */
+    const review = useForm<{
+        theses: ResearchedThesis[];
+        precedents: ResearchedPrecedent[];
+    }>({ theses: [], precedents: [] });
 
     const trail: StepItem[] = steps.map((option) => ({
         label: option.label,
@@ -355,8 +398,7 @@ export default function LegalCaseForm({
             return requirements.put(`/pecas/${id}/pedidos`, openSavedStep);
         }
 
-        // Documentos e revisão não persistem nada: só dizem até onde a peça
-        // chegou.
+        // Os documentos não persistem nada: só dizem até onde a peça chegou.
         return router.patch(
             `/pecas/${id}/etapa`,
             { step: STEP_ORDER[step + 1] ?? "review" },
@@ -364,10 +406,44 @@ export default function LegalCaseForm({
         );
     };
 
+    /**
+     * O fim do assistente.
+     *
+     * Um gesto só, e três efeitos: grava as teses que sobreviveram à revisão,
+     * tira a peça do rascunho e manda o agente redigir a minuta. O servidor
+     * redireciona para a aba do documento, e por isso aqui não há `openSavedStep`
+     * — não há próxima etapa para abrir.
+     *
+     * A espera é de verdade: é uma inferência de minutos, e a falha dela não
+     * desfaz a gravação — ver `FinalizeLegalCase`. Se o agente cair, a peça
+     * chega registrada na aba da minuta, que oferece tentar de novo.
+     */
+    const finalise = () => {
+        // As teses vivem em estado local, então o payload é montado na hora do
+        // envio — `transform` é o mesmo mecanismo que leva o relato junto da
+        // criação na etapa 1.
+        review.transform(() => toForensicReviewPayload(theses));
+
+        review.post(`/pecas/${id}/concluir`);
+    };
+
     const title = legalCase ? "Editar peça" : "Nova peça";
 
     return (
-        <AppLayout title={title}>
+        <AppLayout
+            title={title}
+            tabs={
+                id ? (
+                    <LegalCaseTabs
+                        legalCaseId={id}
+                        // A aba da minuta só existe depois de a peça ser
+                        // registrada: antes disso não há documento nenhum.
+                        available={legalCase !== null && !legalCase.is_draft}
+                        current="form"
+                    />
+                ) : undefined
+            }
+        >
             <Head title={title} />
 
             <div className="grid gap-6 pb-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
@@ -641,7 +717,7 @@ export default function LegalCaseForm({
                             </Button>
                         )}
 
-                        {step < STEP_ORDER.length - 1 && (
+                        {step < STEP_ORDER.length - 1 ? (
                             <Button
                                 type="button"
                                 disabled={!complete || saving}
@@ -649,10 +725,31 @@ export default function LegalCaseForm({
                             >
                                 {saving ? "Salvando…" : "Continuar"}
                             </Button>
+                        ) : (
+                            /* A etapa 6 era um beco sem saída: desenhava as teses
+                               e não tinha botão nenhum. É aqui que a peça acaba —
+                               e o rótulo diz as duas coisas que vão acontecer. */
+                            <Button
+                                type="button"
+                                disabled={!complete || review.processing}
+                                onClick={finalise}
+                            >
+                                <Sparkles />
+                                {review.processing
+                                    ? "Concluindo…"
+                                    : "Concluir e gerar minuta"}
+                            </Button>
                         )}
                     </div>
                 </div>
             </div>
+
+            <AnalysisDialog
+                open={review.processing}
+                title="Concluindo a peça"
+                hint="A redação da minuta pode levar alguns minutos. Mantenha esta aba aberta: ao terminar, o documento abre na aba Minuta."
+                messages={FINALISING_STEPS}
+            />
         </AppLayout>
     );
 }

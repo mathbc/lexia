@@ -235,6 +235,45 @@ final class SaveLegalCaseForensicReviewTest extends TestCase
         $this->assertSame(LegalCaseStep::Review, $case->refresh()->current_step);
     }
 
+    /**
+     * A revisão gravada volta para a etapa 6 ao reabrir a peça.
+     *
+     * Era a única etapa do assistente em que recarregar a página custava
+     * trabalho já feito: as teses vinham da pesquisa, viviam no `sessionStorage`
+     * e morriam com a aba, de modo que a etapa 6 de uma peça que tinha teses
+     * gravadas abria dizendo que não havia pesquisa nesta sessão.
+     *
+     * Os ids são os persistidos, que é o que faz a próxima gravação atualizar as
+     * linhas em vez de trocá-las — a mesma razão de `requirements()` mandá-los.
+     */
+    #[Test]
+    public function the_saved_review_hydrates_the_step_when_the_pleading_is_reopened(): void
+    {
+        [, $owner, $case] = $this->pleading();
+
+        $this->save($owner, $case, [
+            ['id' => self::UUID_A, 'name' => 'Da Prescrição Intercorrente', 'type' => 'principal_merits', 'description' => 'Transcorrido o prazo, opera-se a prescrição.', 'impact' => 'Extingue a execução.', 'legal_bases' => [
+                ['type' => 'article', 'reference' => 'Art. 40 da LEF', 'source' => 'LEF'],
+            ]],
+        ], [
+            ['id' => null, 'legal_thesis_id' => self::UUID_A, 'name' => 'STJ — REsp 1.340.553/RS', 'type' => 'repetitive_appeal', 'description' => 'Fixa o termo inicial.', 'citation' => null, 'grounding' => null, 'adherence' => '90'],
+        ]);
+
+        $thesis = $case->theses()->sole();
+
+        $this->actingAs($owner)
+            ->get(route('legal-cases.edit', $case))
+            ->assertInertia(fn ($page) => $page
+                ->component('legal-cases/form')
+                ->where('legalCase.theses.0.id', $thesis->id)
+                ->where('legalCase.theses.0.name', 'Da Prescrição Intercorrente')
+                ->where('legalCase.theses.0.type', 'principal_merits')
+                ->where('legalCase.theses.0.legal_bases.0.reference', 'Art. 40 da LEF')
+                // O vínculo viaja achatado, que é a forma que a tela já lê.
+                ->where('legalCase.precedents.0.legal_thesis_id', $thesis->id)
+                ->where('legalCase.precedents.0.adherence', '90.00'));
+    }
+
     #[Test]
     public function a_pleading_of_another_account_is_refused(): void
     {

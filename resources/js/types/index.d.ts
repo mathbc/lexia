@@ -259,6 +259,62 @@ export interface LegalCaseDraft {
     };
     /** Com os ids reais do servidor, e não os do crypto.randomUUID(). */
     requirements: { id: string; description: string; amount: string }[];
+    /**
+     * A revisão forense já gravada, achatada como a pesquisa a publica.
+     *
+     * As duas listas têm a mesma forma de `LegalResearch`, de propósito: a etapa
+     * 6 hidrata por `toThesisDrafts()` sem saber se as teses vieram do banco ou
+     * da pesquisa desta sessão. Vazias numa peça que ainda não concluiu a etapa.
+     */
+    theses: ResearchedThesis[];
+    precedents: ResearchedPrecedent[];
+}
+
+/**
+ * Uma versão da minuta — espelha o que `ShowLegalPleading` publica.
+ *
+ * `content` é só o corpo do documento: o timbre do escritório é moldura da tela,
+ * desenhada a partir de `PleadingLetterhead`, e nunca passou por modelo nenhum.
+ *
+ * `placeholders` são as lacunas entre colchetes que o agente deixou — `[estado
+ * civil]`, `[CIDADE/UF]` — e são a resposta esperada, não falha: a qualificação
+ * das partes pede dados que o cadastro de cliente não guarda. O servidor as lê
+ * do próprio texto, então a contagem é sempre sobre o que está na tela.
+ */
+export interface LegalPleading {
+    id: string;
+    content: string;
+    version: number;
+    created_at: string | null;
+    placeholders: string[];
+}
+
+/** O endereço do escritório, cru como as colunas o guardam. */
+export interface LetterheadAddress {
+    postal_code: string | null;
+    street: string | null;
+    number: string | null;
+    complement: string | null;
+    district: string | null;
+    city: string | null;
+    state: string | null;
+}
+
+/**
+ * O timbre, como `PleadingLetterhead::for()` o projeta.
+ *
+ * Tudo é anulável porque tudo pode faltar: um advogado que ainda não preencheu a
+ * própria OAB tem `oab` nulo, e a linha simplesmente não é desenhada. As máscaras
+ * são aplicadas aqui na tela, com `formatPhone` e `formatPostalCode`, porque é
+ * onde elas já existem.
+ */
+export interface PleadingLetterhead {
+    firm: string | null;
+    lawyer: string | null;
+    oab: string | null;
+    email: string | null;
+    phone: string | null;
+    address: LetterheadAddress | null;
 }
 
 /**

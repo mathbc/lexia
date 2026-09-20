@@ -174,9 +174,16 @@ sessão. O `/register` do Fortify está desligado: o cadastro público é
 
 ## Os agentes
 
-`laravel/ai` com **dois providers**. O Ollama da máquina faz dois trabalhos — o texto
-de quatro dos sete agentes e os embeddings do catálogo —, `gpt-oss:20b` para a prosa e
-`nomic-embed-text` (768 dimensões) para os vetores. O **Gemini** responde por três:
+`laravel/ai` com **dois providers**. Atenção: o que esta seção descreve abaixo é o
+arranjo em que as medições foram feitas, e **não é o arranjo de hoje** — os oito agentes
+estão todos com `#[Provider('gemini')]`, com a linha do Ollama comentada acima de cada
+um. O Ollama continua servindo os embeddings do catálogo com `nomic-embed-text` (768
+dimensões), e é só isso que ele ainda faz. O oitavo agente é `PleadingDraftingAgent`,
+que redige a minuta — ver "A minuta", abaixo.
+
+O desenho original, que as medições registram: o Ollama fazia o texto
+de quatro dos sete agentes e os embeddings do catálogo, `gpt-oss:20b` para a prosa e
+`nomic-embed-text` para os vetores. O **Gemini** responde por três:
 a pesquisa de teses e o transcritor que lê a ficha dela, que precisam de busca na web e
 por isso não têm como ser locais (ver "A pesquisa de teses", abaixo), e
 `PracticeAreaClassificationAgent`, que **tem** como ser local e ainda assim aponta para a
@@ -411,7 +418,9 @@ vazia, a segunda sobrescreve a primeira no mapa, e a primeira é apagada pelo
 As Actions de cadastro por linha (`CreateLegalThesis`, `UpdateLegalPrecedent`,
 `DeleteLegalThesis`…) existem para a edição por linha que virá, e não têm
 `asController()` enquanto nada apontar para elas — o agente de revisão forense
-já chegou, e escreve a etapa inteira de uma vez pela dupla da pesquisa. As de precedente recebem a
+já chegou, e escreve a etapa inteira de uma vez pela dupla da pesquisa. A gravação
+também chegou: quem a dispara é o "Concluir e gerar minuta" da etapa 6, por
+`FinalizeLegalCase` — ver "A minuta", no fim deste arquivo. As de precedente recebem a
 tese como **model e não como id**, que é a mesma regra noutra forma: um id
 postado seria um buraco que nenhum teste da classe enxergaria.
 
@@ -459,18 +468,57 @@ que esta seção fazia continua valendo — ela devia ser fila e é request. A d
 dono: são dois `Timeout(180)` em série depois de um bloco concorrente que encurtou as
 quatro primeiras e não toca nestas duas — o primeiro deles é a inferência mais lenta do
 projeto, e hoje domina a espera da rota sozinho. A tela que consome isso é a etapa 6 do
-assistente (`ForensicReviewFields`), e **nada persiste ainda**: as teses viajam pelo
-`sessionStorage` com o resto da entrega, e recarregar a página as descarta.
+assistente (`ForensicReviewFields`). As teses ainda viajam pelo `sessionStorage` com o
+resto da entrega, mas **deixaram de morrer com a aba**: o "Concluir" da etapa as grava, e
+`LegalCaseFormProps::draft()` as projeta de volta com os ids reais, de modo que reabrir a
+peça mostra o que está no banco em vez de dizer que não há pesquisa nesta sessão.
+
+## A minuta
+
+A sétima etapa que não é etapa. Concluir a revisão forense é o **primeiro gesto do
+projeto que termina uma peça**: `FinalizeLegalCase` grava as teses pela Action irmã,
+vira `is_draft` para `false` — até aqui nada escrevia essa coluna, e a
+`LegalCasePolicy` documentava a ausência — e manda `PleadingDraftingAgent` redigir a
+petição inteira.
+
+A fronteira entre esses três efeitos é o desenho. Os dois primeiros são **uma
+transação**, porque são uma afirmação só sobre a peça: são estes os argumentos, e ela
+está pronta. A redação fica **fora**, com `try/catch` e `report()` — é a única parte
+que sai da máquina e a única que uma cota esgotada pode levar embora. Falhando, a peça
+continua registrada e a aba Minuta abre vazia oferecendo o botão de gerar, que é a
+única porta para o agente depois da etapa 6 e fecha assim que existe uma versão.
+
+A peça passa a ter **duas abas**, URLs de verdade como as da conta: `/pecas/{id}/editar`
+e `/pecas/{id}/minuta`. A segunda é um cabeçalho fixo com o timbre do escritório e um
+textarea embaixo. **O timbre é moldura, não conteúdo**: nome, OAB, endereço e telefone
+vêm da conta e do usuário logado por `PleadingLetterhead` e nunca passam por modelo —
+um número de OAB inventado num documento protocolado não tem contrapartida. Pelo mesmo
+motivo a assinatura é composta em PHP (`PleadingSignature`, com tabela de meses própria
+em vez de `locale()`), e o agente para em "Nestes termos, pede deferimento."
+
+`legal_pleadings` é 1-N e **append-only**: editar nunca sobrescreve, grava a versão
+seguinte, e por isso é a única filha de `LegalCase` sem `softDeletes`. Texto idêntico
+não grava nada — senão abrir e clicar em Salvar encheria o histórico de versões que
+diferem só no timestamp. `StoreLegalPleadingVersion` é o único lugar que cunha uma
+versão, com `lockForUpdate()`, e o `unique(legal_case_id, version)` é o que torna a
+numeração um fato. **Editar não chama agente nenhum**: corrigir um parágrafo não custa
+inferência, e regenerar em volta jogaria a correção fora.
+
+A guarda central do agente não é a cifra, é a **lacuna**. A qualificação das partes
+exige estado civil e profissão, que `customers` não guarda; um modelo escreve
+"brasileiro, casado, comerciante" porque é gramaticalmente obrigatório, banal e errado
+sobre uma pessoa real. Então tudo o que o dossiê não traz vira marcador entre colchetes
+— `[estado civil]`, `[CIDADE/UF]` — e `PleadingDraftData` os conta para a tela dizer
+"7 lacunas a preencher". A guarda de cifra é a mesma de `RefinedFactsData`, com a fonte
+alargada: um valor que o advogado já escreveu num pedido autoriza tanto quanto o relato.
+
+`LegalCaseDossier::forDrafting()` é a terceira projeção, e a mais larga: qualifica as
+duas partes com endereço inteiro, mascara o documento (vai copiado para um parágrafo
+que um juiz lê) e leva as teses. **Não leva os precedentes**, de propósito — a seção de
+jurisprudência é trabalho de outro momento, e é essa ausência que torna verificável a
+instrução negativa do prompt. `LegalCaseDossierTest` fixa as duas coisas.
 
 ## Ainda não implementado
-
-**A gravação da revisão forense.** A etapa 6 do assistente já desenha as teses e os
-precedentes que a pesquisa devolveu e já deixa o advogado desmarcar o que não vai para a
-peça, mas nada disso é salvo: a entrega vive no `sessionStorage` e morre com a aba. O que
-falta é ligar a tela a `SaveLegalCaseForensicReview`, que existe e sabe gravar as duas
-listas com o mapa de ids — hoje nenhuma rota aponta para ela. É a única etapa do assistente
-em que recarregar a página custa trabalho já feito, e o motivo pelo qual a tela vazia diz
-"não há pesquisa nesta sessão" em vez de afirmar que a pesquisa falhou.
 
 O módulo de Jurisprudência: ingestão, chunking e busca vetorial sobre o corpus.
 O pgvector já está de pé e em uso no catálogo de classes, então o que falta é a

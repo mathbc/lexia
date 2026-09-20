@@ -82,10 +82,37 @@ class User extends Authenticatable implements MustVerifyEmail
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'birth_date' => 'date',
+            // O docblock acima promete o enum desde sempre; o cast faltava, e
+            // quem escrevesse `$user->oab_state->value` — como o timbre da
+            // minuta escreve — recebia uma string e quebrava. `Account` já o tem.
+            'oab_state' => BrazilianState::class,
             'role' => UserRole::class,
             'type' => UserType::class,
             'enabled' => 'boolean',
         ];
+    }
+
+    /**
+     * OAB enrolment as practitioners write it, e.g. "OAB/SP 123456".
+     *
+     * The twin of `Account::oabRegistration()`, and both are kept rather than
+     * shared because they answer different questions: the account's is the firm
+     * or the sole practitioner the tenant *is*, and this one is the lawyer who
+     * signs. For an `individual` account they are usually the same person, and
+     * on a pleading it is this one that goes under the signature.
+     *
+     * Null when either half is missing, which is a real state: the number and
+     * the seccional are nullable, a judge legitimately has neither, and a lawyer
+     * who has not filled them in yet gets a gap in the letterhead rather than a
+     * half-written enrolment.
+     */
+    public function oabRegistration(): ?string
+    {
+        if ($this->oab_number === null || $this->oab_state === null) {
+            return null;
+        }
+
+        return "OAB/{$this->oab_state->value} {$this->oab_number}";
     }
 
     /**

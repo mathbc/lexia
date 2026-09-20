@@ -20,14 +20,18 @@ use App\Domain\Customers\Actions\UpdateCustomer;
 use App\Domain\LegalCases\Actions\AdvanceLegalCaseStep;
 use App\Domain\LegalCases\Actions\ClassifyLegalCase;
 use App\Domain\LegalCases\Actions\CreateLegalCase;
+use App\Domain\LegalCases\Actions\FinalizeLegalCase;
 use App\Domain\LegalCases\Actions\ListLegalCases;
 use App\Domain\LegalCases\Actions\SaveLegalCaseForensicReview;
 use App\Domain\LegalCases\Actions\SaveLegalCaseRequirements;
 use App\Domain\LegalCases\Actions\ShowAssistedLegalCaseForm;
 use App\Domain\LegalCases\Actions\ShowLegalCaseForm;
+use App\Domain\LegalCases\Actions\ShowLegalPleading;
 use App\Domain\LegalCases\Actions\UpdateLegalCaseBasics;
 use App\Domain\LegalCases\Actions\UpdateLegalCaseDefendant;
 use App\Domain\LegalCases\Actions\UpdateLegalCaseFacts;
+use App\Domain\LegalPleadings\Actions\GenerateLegalPleading;
+use App\Domain\LegalPleadings\Actions\SaveLegalPleadingContent;
 use App\Domain\Users\Actions\CreateUser;
 use App\Domain\Users\Actions\ListUsers;
 use App\Domain\Users\Actions\ShowUserForm;
@@ -120,5 +124,17 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         // Os documentos ainda não persistem, mas o Continuar deles diz uma
         // verdade sobre a peça: ela chegou até ali.
         Route::patch('/etapa', AdvanceLegalCaseStep::class)->name('legal-cases.step');
+
+        // O fim do assistente, e a única rota que fecha uma peça: grava a
+        // revisão forense, tira do rascunho e manda o agente redigir a minuta.
+        Route::post('/concluir', FinalizeLegalCase::class)->name('legal-cases.finalize');
+
+        // A segunda aba da peça. A minuta é uma URL de verdade como as abas da
+        // conta, para que uma peça aberta no documento sobreviva a um reload.
+        Route::get('/minuta', ShowLegalPleading::class)->name('legal-cases.pleading');
+        Route::put('/minuta', SaveLegalPleadingContent::class)->name('legal-cases.pleading.save');
+
+        // Só a recuperação de falha: a Action recusa quando já existe versão.
+        Route::post('/minuta/gerar', GenerateLegalPleading::class)->name('legal-cases.pleading.generate');
     });
 });

@@ -29,6 +29,18 @@ export interface ThesisDraft {
 }
 
 /**
+ * As duas listas, e só elas — o que `toThesisDrafts` de fato lê.
+ *
+ * Mais estreito do que `LegalResearch` de propósito: as teses chegam de duas
+ * origens agora. Da pesquisa desta sessão, que traz também a questão, as fontes
+ * e o que ficou pendente; e do banco, numa peça já concluída, onde nada disso
+ * foi gravado — `LegalCaseFormProps::draft()` projeta as duas listas e mais
+ * nada. Pedir o objeto inteiro obrigaria a inventar campos vazios para
+ * satisfazer um tipo que esta função nunca consulta.
+ */
+export type ResearchedReview = Pick<LegalResearch, 'theses' | 'precedents'>
+
+/**
  * A pesquisa como a tela a desenha: cada tese com os seus julgados de volta
  * embaixo dela.
  *
@@ -49,7 +61,9 @@ export interface ThesisDraft {
  * não ache a sua tese fica de fora, que é o que o achatamento do servidor já
  * promete nunca produzir.
  */
-export const toThesisDrafts = (research: LegalResearch | null | undefined): ThesisDraft[] =>
+export const toThesisDrafts = (
+    research: ResearchedReview | null | undefined,
+): ThesisDraft[] =>
     (research?.theses ?? [])
         .filter((thesis) => thesis.name.trim() !== '' && thesis.id !== null)
         .map((thesis) => ({
@@ -60,6 +74,43 @@ export const toThesisDrafts = (research: LegalResearch | null | undefined): Thes
             ),
             keep: true,
         }))
+
+/**
+ * As teses mantidas e os seus julgados, na forma que o servidor grava.
+ *
+ * O caminho de volta de `toThesisDrafts`. A tela aninha para ler — uma tese sem
+ * os julgados dela embaixo não é leitura nenhuma — e o servidor grava achatado,
+ * porque o precedente aponta para a tese por `legal_thesis_id`. Esta função
+ * desfaz o aninhamento.
+ *
+ * O `id` que viaja é o de correlação, cunhado no PHP quando a pesquisa achatou a
+ * resposta do agente, ou o id real quando a tese já é linha no banco. Os dois
+ * servem: `SaveLegalCaseForensicReview` trata o id postado como **palpite**, e
+ * quem decide se ele é chave é a pertinência da linha à peça, não o payload. É
+ * por isso que uma tese nova e uma tese salva podem viajar na mesma lista sem
+ * que nada aqui precise distinguir as duas.
+ *
+ * Os precedentes de uma tese desmarcada não vão junto: o que não entra na peça
+ * não traz o que o fundamentaria.
+ */
+export const toForensicReviewPayload = (
+    drafts: ThesisDraft[],
+): {
+    theses: ResearchedThesis[]
+    precedents: ResearchedPrecedent[]
+} => {
+    const kept = keptTheses(drafts)
+
+    return {
+        theses: kept.map((draft) => ({ ...draft.thesis, id: draft.id })),
+        precedents: kept.flatMap((draft) =>
+            draft.precedents.map((precedent) => ({
+                ...precedent,
+                legal_thesis_id: draft.id,
+            })),
+        ),
+    }
+}
 
 /** As teses que o advogado decidiu levar para a peça. */
 export const keptTheses = (drafts: ThesisDraft[]): ThesisDraft[] =>
