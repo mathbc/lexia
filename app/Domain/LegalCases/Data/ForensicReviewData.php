@@ -6,6 +6,7 @@ namespace App\Domain\LegalCases\Data;
 
 use App\Domain\LegalPrecedents\Data\LegalPrecedentData;
 use App\Domain\LegalTheses\Data\LegalThesisData;
+use Illuminate\Support\Str;
 
 /**
  * The whole forensic review of a pleading, as one value.
@@ -22,21 +23,25 @@ use App\Domain\LegalTheses\Data\LegalThesisData;
  * with `writtenRequirements()`. Both empty lists are meaningful: that is how a
  * lawyer clears the step.
  *
- * There is no `fromAgent()` yet, and that is deliberate rather than pending.
- * `DefendantData` has none because its agent's schema spells the keys as the
- * columns; `RequirementListData` has one only because money arrives in two
- * dialects and needed a guard no prompt could hold. Neither trigger has fired
- * here, and writing the constructor before the agent exists would be guessing at
- * a schema nobody has written.
+ * `fromAgent()` exists now, and it does what this docblock used to predict it
+ * would have to. The agent's schema is **nested** — each thesis carrying its own
+ * precedents — because a model cannot mint correlating uuids reliably: one
+ * repeated uuid silently reassigns a ruling to the wrong argument, and a
+ * dangling one points at nothing. Nesting makes the link structural, so the
+ * grammar cannot emit a broken reference in the first place. Flattening it back
+ * into these two lists is this class's job, and the correlation uuid is minted
+ * here in PHP, playing exactly the part `crypto.randomUUID()` plays in the
+ * browser.
  *
- * What that constructor will have to do, written down here so whoever builds the
- * agent does not rediscover it: a model cannot mint correlating uuids reliably,
- * so the agent's schema should be **nested** — each thesis carrying its own
- * precedents — which makes the link structural and leaves the grammar unable to
- * emit a dangling reference. `fromAgent()` then flattens that into these two
- * lists, minting one correlation uuid per thesis, playing exactly the part
- * `crypto.randomUUID()` plays in the browser. Nothing below needs to change for
- * that: the correlation key is a hint, and anything may mint one.
+ * Nothing else had to change for that, which was the prediction worth keeping:
+ * the correlation key is a hint, and anything may mint one.
+ *
+ * Note what `fromAgent()` deliberately does **not** do: it neither checks that a
+ * citation came from an official portal nor drops the ones that did not. That
+ * belongs to LegalResearchData, which runs first and hands this method theses it
+ * has already cleaned. Keeping the two apart is what lets the guard report what
+ * it removed — a list this value has nowhere to carry, because it is the shape
+ * the *form* posts too.
  */
 final readonly class ForensicReviewData
 {
@@ -58,6 +63,98 @@ final readonly class ForensicReviewData
             theses: self::theses($validated['theses'] ?? null),
             precedents: self::precedents($validated['precedents'] ?? null),
         );
+    }
+
+    /**
+     * The research agents' answer, flattened.
+     *
+     * Takes the nested shape — theses, each carrying its own precedents — and
+     * produces the two parallel lists SaveLegalCaseForensicReview knows how to
+     * write. The uuid minted per thesis is the correlation key that the
+     * precedents quote, and it is thrown away the moment the save resolves it
+     * against the rows it actually wrote: `HasUuids` mints the real one, and the
+     * map in that Action is what connects them.
+     *
+     * A thesis with no name is dropped, exactly as a blank row from the form is,
+     * and **its precedents go with it** — a ruling whose thesis does not exist
+     * would arrive with a correlation key nothing resolves, which is the
+     * dangling reference the nesting was chosen to prevent. That the save would
+     * land it in `null` anyway is not a reason to send it: a precedent grounding
+     * nothing, created by a machine, is a row a lawyer has to notice and delete.
+     *
+     * @param  list<array<string, mixed>>  $theses  already cleaned by LegalResearchData
+     */
+    public static function fromAgent(array $theses): self
+    {
+        /** @var list<LegalThesisData> $written */
+        $written = [];
+
+        /** @var list<LegalPrecedentData> $precedents */
+        $precedents = [];
+
+        foreach ($theses as $row) {
+            $thesis = LegalThesisData::fromArray($row);
+
+            if (! $thesis->isWritten()) {
+                continue;
+            }
+
+            $id = (string) Str::uuid();
+
+            $written[] = new LegalThesisData(
+                id: $id,
+                name: $thesis->name,
+                type: $thesis->type,
+                description: $thesis->description,
+                impact: $thesis->impact,
+                legalBases: $thesis->legalBases,
+            );
+
+            foreach (self::precedentsOf($row, $id) as $precedent) {
+                $precedents[] = $precedent;
+            }
+        }
+
+        return new self(theses: $written, precedents: $precedents);
+    }
+
+    /**
+     * The rulings nested under one thesis, each pointing back at it.
+     *
+     * `thesisId` is the correlation key and not a foreign key — the same hint
+     * the browser posts. LegalPrecedentData carries it precisely so that
+     * SaveLegalCaseForensicReview can refuse to trust it, which is why that
+     * class's `toArray()` takes the resolved id as an argument.
+     *
+     * @param  array<string, mixed>  $row
+     * @return list<LegalPrecedentData>
+     */
+    private static function precedentsOf(array $row, string $thesisId): array
+    {
+        $rows = is_array($row['precedents'] ?? null) ? array_values($row['precedents']) : [];
+
+        $precedents = array_map(
+            static function (mixed $precedent) use ($thesisId): LegalPrecedentData {
+                $data = LegalPrecedentData::fromArray(is_array($precedent) ? $precedent : []);
+
+                return new LegalPrecedentData(
+                    id: null,
+                    thesisId: $thesisId,
+                    name: $data->name,
+                    type: $data->type,
+                    description: $data->description,
+                    citation: $data->citation,
+                    grounding: $data->grounding,
+                    adherence: $data->adherence,
+                );
+            },
+            $rows,
+        );
+
+        return array_values(array_filter(
+            $precedents,
+            static fn (LegalPrecedentData $precedent): bool => $precedent->isWritten(),
+        ));
     }
 
     /**

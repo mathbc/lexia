@@ -174,9 +174,12 @@ sessão. O `/register` do Fortify está desligado: o cadastro público é
 
 ## Os agentes
 
-`laravel/ai` com **um provider local e dois trabalhos**: o texto dos cinco agentes
-e os embeddings do catálogo saem do mesmo **Ollama** da máquina — `gpt-oss:20b`
-para a prosa, `nomic-embed-text` (768 dimensões) para os vetores. O texto já esteve
+`laravel/ai` com **dois providers**. O Ollama da máquina faz dois trabalhos — o texto
+de cinco dos sete agentes e os embeddings do catálogo —, `gpt-oss:20b` para a prosa e
+`nomic-embed-text` (768 dimensões) para os vetores. O **Gemini** faz um só: a pesquisa
+de teses, que precisa de busca na web e por isso não tem como ser local (ver "A pesquisa
+de teses", abaixo). `AI_PROVIDER` continua `ollama`; quem aponta para a nuvem é o
+`#[Provider('gemini')]` de dois agentes, e de mais nenhum. O texto já esteve
 no Gemini e voltou; o preço da volta é a latência, já que `POST /pecas/classificar`
 são quatro inferências em série com o navegador esperando. O que se compra de volta
 é não ter cota para pagar e o relato do cliente nunca sair do escritório. Os
@@ -190,12 +193,11 @@ daemon de pé nada infere, e a degradação não é uniforme: o texto falha alto
 `ProceduralClassRankingQuery` degrada em **silêncio** para a ordem do pivot, com as
 classificações piorando sem erro nenhum.
 
-Mandar o texto para a nuvem são três gestos: descomentar o bloco `gemini` do
-`config/ai.php`, pôr `AI_PROVIDER=gemini` e `GEMINI_API_KEY` no `.env`, e trocar o
-`#[Provider('ollama')]` dos cinco agentes pela linha comentada logo acima de cada
-um — mais `config:clear`. O bloco ficou comentado no arquivo, e não no histórico do
-git, porque o que custa a lembrar não é o driver: é a chave `models`, sem a qual o
-`GeminiProvider` cai num default que muda com a versão do pacote.
+O bloco `gemini` do `config/ai.php` já está ativo — a pesquisa de teses depende dele —,
+então mandar **todo** o texto para a nuvem são dois gestos: pôr `AI_PROVIDER=gemini` no
+`.env` e trocar o `#[Provider('ollama')]` dos cinco agentes locais pela linha comentada
+logo acima de cada um, mais `config:clear`. A chave `models` no bloco não é enfeite: sem
+ela o `GeminiProvider` cai num default que muda com a versão do pacote.
 
 Nem o modelo nem o tamanho do contexto pertencem a um agente. Nenhum deles carrega
 `#[Model]` — o nome do modelo vive em `OLLAMA_TEXT_MODEL` e o SDK resolve cada
@@ -321,9 +323,14 @@ medido contra essa tabela, e é por isso que a saída deste agente é uma minuta
 advogado aceitar, nunca um campo que se preenche sozinho.
 
 Testes de agente ficam em `tests/Agents`, no grupo `agents`, **fora** do
-`php artisan test` padrão porque gastam inferência de verdade: hoje isso é o Ollama
-de pé com `gpt-oss:20b` e `nomic-embed-text` baixados — a conta é o tempo da máquina,
-não uma cota. O grupo é o que os habilita — `--testsuite=Agents` sozinho não
+`php artisan test` padrão porque gastam inferência de verdade. Para cinco deles a conta
+é o tempo da máquina — Ollama de pé com `gpt-oss:20b` e `nomic-embed-text` baixados.
+`LegalThesisResearchTest` é a exceção e custa **cota do Gemini** mais rede: ele pesquisa
+nos portais de verdade, leva minutos e pode ficar vermelho porque o STJ está fora do ar,
+e não porque o prompt regrediu. Tudo o que nele não depende do modelo — a guarda de
+domínio, os tetos, os ids de correlação e o achatamento — está repetido de forma
+determinística e sem rede em `tests/Unit/Domain/LegalResearchDataTest`, que roda na
+suíte padrão e é o arquivo em que confiar quando o outro estiver vermelho por fora. O grupo é o que os habilita — `--testsuite=Agents` sozinho não
 encontra nada, porque a exclusão do grupo continua valendo:
 
 ```bash
@@ -373,6 +380,49 @@ As Actions de cadastro por linha (`CreateLegalThesis`, `UpdateLegalPrecedent`,
 têm `asController()` enquanto nada apontar para elas. As de precedente recebem a
 tese como **model e não como id**, que é a mesma regra noutra forma: um id
 postado seria um buraco que nenhum teste da classe enxergaria.
+
+## A pesquisa de teses
+
+A segunda metade da etapa 6, e o único lugar do projeto que **sai da máquina**. Um agente
+de pesquisa que não consegue abrir o `stj.jus.br` é um modelo recitando súmula de memória,
+que é exatamente o que o prompt inteiro existe para impedir — e buscar e ler página são
+ferramentas do lado do provedor, que o `OllamaProvider` recusa antes de montar requisição.
+O que viaja é estreitado para compensar: `LegalCaseDossier::forResearch()` corta o cliente
+e o réu inteiros. O relato vai, porque não se pesquisa tese sem os fatos que a levantam;
+os nomes não vão.
+
+São **dois** agentes, e não um, porque no Gemini schema e busca não cabem no mesmo pedido.
+Pedir `response_json_schema` desliga o grounding **em silêncio**: volta 200, o JSON é bem
+formado, e o modelo não pesquisou nada — na primeira rodada sob schema o agente acertou a
+Súmula 430 e citou a capa do STJ como onde a leu, porque não leu nada. Então
+`LegalThesisResearchAgent` busca sem schema, onde comprovadamente funciona, e devolve uma
+**ficha rotulada**; `ForensicReviewTranscriptionAgent` só transcreve a ficha para a
+estrutura aninhada. `ResearchLegalCaseTheses` chama os dois em série. O custo é o inverso
+do usual: o que a ficha não escrever, o transcritor não inventa — e também não recupera.
+
+Três armadilhas medidas, todas do Gemini e todas silenciosas:
+
+1. **O `->allow([...])` das ferramentas de web é descartado.**
+   `GeminiProvider::webSearchToolOptions()` é um `return []` literal, e não há escape
+   hatch. A lista de portais oficiais não é imposta pela rede — quem a impõe é
+   `OfficialLegalSources::covers()`, na volta, dentro de `LegalResearchData`. Citação sem
+   fonte oficial é **removida e relatada**, nunca apagada em silêncio: um advogado diante
+   de uma tese sem fundamentação precisa distinguir "não achou nada" de "a guarda recusou".
+2. **`maxItems` empilhado estoura o schema.** Teto em `theses` mais teto numa lista
+   aninhada dentro dela devolve 400 antes de gerar um token. Só o externo fica na
+   gramática; os outros dois tetos vivem em `LegalResearchData`.
+3. **`#[MaxSteps]` não compra pesquisa.** Ferramenta de provedor roda dentro de um pedido
+   só; subir o teto reenvia o pedido inteiro. Uma chamada direta devolve a ficha em ~43s,
+   e a mesma sob `#[MaxSteps(16)]` passou de 1000s e morreu em timeout.
+
+O schema é **aninhado** — cada tese carrega seus precedentes — porque modelo não cunha uuid
+de correlação de forma confiável, e o aninhamento torna o vínculo estrutural. Quem achata
+em duas listas e cunha o uuid em PHP é `ForensicReviewData::fromAgent()`, que é o par de
+`crypto.randomUUID()` no navegador.
+
+Nada aponta para `ResearchLegalCaseTheses` ainda, e o dia em que algo apontar ela é fila e
+não request: são dois `Timeout(180)` em série, e o primeiro é a inferência mais lenta do
+projeto.
 
 ## Ainda não implementado
 

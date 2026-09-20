@@ -52,6 +52,29 @@ final class LegalCaseDossier
     }
 
     /**
+     * The same pleading, minus everybody's name.
+     *
+     * What the thesis research agent gets, and the difference from `of()` is
+     * the point rather than an economy: research is about the law, so the
+     * client and the defendant are dropped whole. The framing says which body
+     * of law to search and the requests say what has to be sustained, and
+     * neither needs to know who the parties are.
+     *
+     * It matters more here than it would elsewhere, because this is the one
+     * agent that runs on a cloud provider — see LegalThesisResearchAgent. The
+     * narrative still travels, since a thesis cannot be researched without the
+     * facts that raise it; the parties' qualification does not have to, so it
+     * does not.
+     */
+    public static function forResearch(LegalCase $legalCase): string
+    {
+        return implode(PHP_EOL.PHP_EOL, [
+            self::section('O enquadramento', self::pleading($legalCase)),
+            self::section('Os pedidos já registrados', self::requirements($legalCase)),
+        ]);
+    }
+
+    /**
      * @return list<string>
      */
     private static function pleading(LegalCase $legalCase): array

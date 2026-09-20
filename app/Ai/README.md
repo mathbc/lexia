@@ -13,6 +13,8 @@ geram em `app/Ai/Agents` e `app/Ai/Tools`. O conhecimento que os agentes leem fi
 | `DefendantExtractionAgent` | Lê a descrição dos fatos e devolve os dados do réu nos doze campos `defendant_*` de `legal_cases` |
 | `RequirementExtractionAgent` | Lê a descrição dos fatos e devolve a lista do que o cliente pede ao juízo, cada pedido com a frase e o valor |
 | `FactsRefinementAgent` | Reescreve o relato do cliente como a narrativa de fatos de uma inicial: registro formal, terceira pessoa, ordem cronológica — e o peso que uma perda irreparável tem |
+| `LegalThesisResearchAgent` | Pesquisa nos portais oficiais as teses que a peça pode sustentar, com as normas e os julgados que as sustentam, e devolve uma ficha rotulada |
+| `ForensicReviewTranscriptionAgent` | Transcreve a ficha da pesquisa para a estrutura aninhada de teses e precedentes |
 
 Um agente não é chamado direto da tela: quem o expõe é uma Action do domínio
 (`ClassifyPracticeArea`, `SelectProceduralClass`, `ExtractLegalCaseDefendant`,
@@ -21,7 +23,76 @@ a resposta em modelo e é o ponto por onde o caso de uso entra. `ClassifyLegalCa
 os quatro primeiros — encadeia os dois iniciais e acrescenta os outros dois, que é coisa
 diferente de encadear; a seção abaixo diz por quê. O quinto fica de fora dela de
 propósito: ele reescreve um relato que já está na tela, e não lê um relato para preencher
-uma.
+uma. Os dois últimos são a etapa 6 e formam um par indivisível: quem os expõe é
+`ResearchLegalCaseTheses`, que chama os dois em série — a seção abaixo diz por que não
+podem ser um só.
+
+## O único agente que sai da máquina
+
+Os cinco primeiros rodam no Ollama. `LegalThesisResearchAgent` roda no **Gemini**, e não
+por preferência: um agente de pesquisa que não consegue abrir o `stj.jus.br` é um modelo
+recitando súmula de memória, que é exatamente a falha que o prompt inteiro existe para
+impedir. Buscar e ler página são ferramentas do lado do provedor neste SDK, e o
+`OllamaProvider` não implementa nenhuma das duas — `Gateway/Ollama/Concerns/MapsTools.php`
+lança antes de montar requisição.
+
+O que viaja é estreitado para compensar: `LegalCaseDossier::forResearch()` corta o cliente
+e o réu inteiros. O relato vai, porque não se pesquisa uma tese sem os fatos que a
+levantam; os nomes não vão.
+
+## Por que a pesquisa são dois agentes
+
+Porque no Gemini **schema e busca não cabem no mesmo pedido**. Medido por bisseção contra
+o `gemini-3.6-flash`:
+
+| pedido | o grounding dispara? |
+|---|---|
+| `google_search` sozinho | sim — chunks e buscas visíveis |
+| `google_search` + `response_json_schema` | **nunca** — zero chunks, zero buscas |
+| `url_context` + `response_json_schema` | dispara, mas o Planalto responde `URL_RETRIEVAL_STATUS_ERROR` |
+| as duas ferramentas + schema | nenhuma dispara |
+
+Pedir JSON desliga a busca **em silêncio**: volta 200, o JSON é bem formado, e o modelo não
+pesquisou nada. Na primeira rodada deste agente sob schema ele acertou a Súmula 430 e citou
+`https://www.stj.jus.br` — a capa do tribunal — como onde a tinha lido, porque não leu nada.
+
+Então a busca roda sem schema, onde comprovadamente funciona, e a estrutura é imposta
+depois por um agente que só transcreve. É a mesma troca da área e da classe, nas mesmas
+palavras: uma inferência a mais compra a garantia.
+
+O custo, e é o inverso do usual: o que a ficha não escrever, o transcritor não inventa —
+e também não recupera. Daí a ficha ser rotulada, e não prosa.
+
+## Duas armadilhas do Gemini que custaram caro
+
+**`maxItems` empilhado estoura o schema.** `->max()` vira `maxItems`, e o provider o conta
+num orçamento de complexidade do `response_json_schema`: com teto em `theses` *e* teto numa
+lista aninhada dentro de uma tese, volta 400 antes de gerar um token. Teto só no externo
+passa, só nos internos passa, nenhum passa — é o empilhamento que quebra, e os mesmos dois
+tetos passam num schema de brinquedo, então o orçamento é a soma e não o formato. Por isso
+só `theses` tem `max()`; os outros dois tetos vivem em `LegalResearchData`.
+
+**`#[MaxSteps]` não compra pesquisa nenhuma.** Ferramenta de provedor é executada pelo
+próprio Gemini dentro de um pedido — não existe laço de ferramenta do lado do cliente para
+orçar. Subir o teto não pesquisa mais: reenvia o pedido inteiro. Uma chamada direta devolve
+a ficha pronta em ~43s; o mesmo trabalho sob `#[MaxSteps(16)]` passou de 1000s e morreu em
+timeout de conexão.
+
+## A allowlist de domínios não é imposta pelo Gemini
+
+`WebSearch::allow()` e `WebFetch::allow()` dizem exatamente o que o prompt diz. Na Anthropic
+chegam ao fio como `allowed_domains`. No Gemini são **descartados**:
+`GeminiProvider::webSearchToolOptions()` é um `return []` literal, o `providerOptions()` da
+própria ferramenta nunca é lido, e as provider options do request caem em `generationConfig`,
+que não alcança `tools`. As chamadas ficam porque são a intenção declarada e voltam a valer
+no dia em que o provedor mudar.
+
+Quem impõe a lista é `OfficialLegalSources::covers()`, aplicado na volta por
+`LegalResearchData` a toda url que o agente devolve. É o mesmo movimento da cifra em
+`RequirementListData`: regra que o prompt não segura desce para o código. A citação sem
+fonte oficial é **removida e relatada** — não apagada em silêncio —, porque um advogado
+diante de uma tese sem fundamentação precisa distinguir "a pesquisa não achou nada" de "a
+guarda recusou o que achou", que são situações opostas com a mesma aparência.
 
 ## Por que dois agentes, e não um com ferramenta
 

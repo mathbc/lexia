@@ -25,10 +25,18 @@ return [
     | was declared with — and the width the Jurisprudência corpus will be
     | declared with.
     |
-    | The Gemini block below is kept, commented out, so the move back to the
-    | cloud is three gestures: uncomment it, put `AI_PROVIDER=gemini` in the
-    | `.env`, and swap the `#[Provider('ollama')]` of the five agents for the
-    | line commented above each one.
+    | The Gemini block below is no longer commented out, and that is not the
+    | move back to the cloud: `AI_PROVIDER` still says `ollama`, so it remains
+    | the default for everything that does not ask otherwise. Exactly one agent
+    | asks — LegalThesisResearchAgent, which searches the official portals and
+    | therefore needs provider-side web tools that Ollama refuses outright.
+    | Two providers are configured and each has a job, which is the same shape
+    | the embeddings already had.
+    |
+    | Moving the *text* back to the cloud wholesale is still the same two
+    | gestures it always was: put `AI_PROVIDER=gemini` in the `.env` and swap
+    | the `#[Provider('ollama')]` of the five local agents for the line
+    | commented above each one.
     |
     | The keys for images, audio, transcription and reranking are deliberately
     | absent — the published default points each of them at a provider that
@@ -145,31 +153,42 @@ return [
     'providers' => [
 
         /*
-        | Comentado enquanto o texto for local. Descomentar este bloco é o
-        | primeiro dos três gestos que devolvem a inferência ao Gemini — os
-        | outros dois são `AI_PROVIDER=gemini` no `.env` e o `#[Provider]` dos
-        | cinco agentes. Fica aqui, e não no histórico do git, porque o que
-        | custa a lembrar não é o driver: é que sem a chave `models` o
-        | GeminiProvider acha um padrão que muda com a versão do pacote, e que
-        | não há `embeddings` de propósito — quem embute é o Ollama abaixo. Se
-        | uma entrada de embeddings voltar, `dimensions` chega ao Gemini como
+        | Ativo, e por um agente só. `AI_PROVIDER` continua `ollama`: os cinco
+        | agentes que leem o relato do cliente seguem na máquina, e quem aponta
+        | para cá é o `#[Provider('gemini')]` do LegalThesisResearchAgent —
+        | porque ele precisa de uma coisa que o Ollama não tem, que é buscar e
+        | ler página na web. No pacote isso são ferramentas do lado do
+        | provedor, e `OllamaProvider` recusa todas elas.
+        |
+        | A chave `models` não é enfeite: sem ela o GeminiProvider cai num
+        | padrão que muda com a versão do pacote. Não há `embeddings` de
+        | propósito — quem embute é o Ollama abaixo. Se uma entrada de
+        | embeddings voltar, `dimensions` chega ao Gemini como
         | `outputDimensionality` e precisa valer 768, ou a coluna vetorial
         | precisa de migration no mesmo fôlego.
         |
-        | 'gemini' => [
-        |     'driver' => 'gemini',
-        |     'key' => env('GEMINI_API_KEY'),
-        |     'url' => env('GEMINI_URL', 'https://generativelanguage.googleapis.com/v1beta/'),
-        |
-        |     'models' => [
-        |         'text' => [
-        |             'default' => env('GEMINI_TEXT_MODEL', 'gemini-3.6-flash'),
-        |             'cheapest' => env('GEMINI_TEXT_MODEL', 'gemini-3.6-flash'),
-        |             'smartest' => env('GEMINI_TEXT_MODEL', 'gemini-3.6-flash'),
-        |         ],
-        |     ],
-        | ],
+        | A armadilha desta escolha, medida no código do pacote e registrada
+        | por extenso no agente: `GeminiProvider::webSearchToolOptions()` e
+        | `webFetchToolOptions()` devolvem `[]`, então o `->allow([...])` que
+        | restringe a busca aos portais oficiais é descartado antes de virar
+        | requisição — e não há escape hatch, porque este provider também não
+        | lê o `providerOptions()` da ferramenta. A lista de domínios não é
+        | imposta aqui. Quem a impõe é LegalResearchData, na volta.
         */
+
+        'gemini' => [
+            'driver' => 'gemini',
+            'key' => env('GEMINI_API_KEY'),
+            'url' => env('GEMINI_URL', 'https://generativelanguage.googleapis.com/v1beta/'),
+
+            'models' => [
+                'text' => [
+                    'default' => env('GEMINI_TEXT_MODEL', 'gemini-3.6-flash'),
+                    'cheapest' => env('GEMINI_TEXT_MODEL', 'gemini-3.6-flash'),
+                    'smartest' => env('GEMINI_TEXT_MODEL', 'gemini-3.6-flash'),
+                ],
+            ],
+        ],
 
         'ollama' => [
             'driver' => 'ollama',
