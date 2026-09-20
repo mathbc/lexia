@@ -115,7 +115,7 @@ export function AppSidebar({ user, currentPath }: { user: AuthUser; currentPath:
                                     <Scale className="size-4" />
                                 </div>
                                 <div className="grid flex-1 text-left leading-tight">
-                                    <span className="truncate font-serif text-base font-semibold">LexIA</span>
+                                    <span className="truncate text-base font-semibold">LexIA</span>
                                     <span className="truncate text-xs text-muted-foreground" title={user.account.name}>
                                         {user.account.name}
                                     </span>

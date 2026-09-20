@@ -46,7 +46,7 @@ export function ServicesSection() {
                             <span className="mb-4 flex size-10 items-center justify-center rounded-lg bg-muted text-foreground">
                                 <service.icon className="size-5" />
                             </span>
-                            <CardTitle className="font-serif text-lg leading-snug">{service.title}</CardTitle>
+                            <CardTitle className="text-lg leading-snug">{service.title}</CardTitle>
                             <CardDescription className="mt-2">{service.description}</CardDescription>
                         </CardHeader>
                     </Card>

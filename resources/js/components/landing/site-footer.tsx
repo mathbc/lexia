@@ -7,7 +7,7 @@ export function SiteFooter() {
             <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-6 sm:flex-row sm:justify-between">
                 <div className="flex items-center gap-2 text-foreground">
                     <Scale className="size-4" />
-                    <span className="font-serif font-semibold">LexIA</span>
+                    <span className="font-semibold">LexIA</span>
                 </div>
 
                 <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">

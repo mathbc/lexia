@@ -3,8 +3,7 @@
 
 /* Self-hosted rather than a CDN: a Brazilian legal product should not leak a
    user's IP to a third party on every pageview (LGPD). */
-@import '@fontsource-variable/source-serif-4';
-@import '@fontsource-variable/archivo';
+@import '@fontsource-variable/ibm-plex-sans';
 
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';
@@ -15,11 +14,13 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-    /* Source Serif 4 as specified. Acumin Pro is Adobe-only and cannot be
-       self-hosted, so Archivo stands in: a neo-grotesque with the same broad
-       weight range and similar proportions. */
-    --font-serif: 'Source Serif 4 Variable', ui-serif, Georgia, serif;
-    --font-sans: 'Archivo Variable', ui-sans-serif, system-ui, sans-serif;
+    /* Uma família só, do título ao rodapé: IBM Plex Sans. A serifada saiu do
+       sistema, e com ela a distinção entre fonte de display e fonte de corpo
+       — o peso é que hierarquiza. `--font-serif` continua declarada porque o
+       Tailwind a expõe como utilitário; aponta para a mesma pilha, de modo
+       que um `font-serif` esquecido em algum lugar não ressuscita a serifa. */
+    --font-sans: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
+    --font-serif: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
 }
 
 /* ---------------------------------------------------------------------------
@@ -210,10 +211,6 @@
 
     body {
         @apply bg-background text-foreground font-sans antialiased;
-    }
-
-    h1, h2, h3 {
-        @apply font-serif;
     }
 
     /* Numbers in tables must line up column-wise; the OAB number, CNPJ and

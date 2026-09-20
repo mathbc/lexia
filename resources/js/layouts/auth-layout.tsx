@@ -26,7 +26,7 @@ export function AuthLayout({
                 <div className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                     <Scale className="size-5" />
                 </div>
-                <span className="font-serif text-2xl font-semibold text-foreground">LexIA</span>
+                <span className="text-2xl font-semibold text-foreground">LexIA</span>
             </div>
 
             <Card className="w-full max-w-sm">

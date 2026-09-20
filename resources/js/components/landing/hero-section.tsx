@@ -28,7 +28,7 @@ export function HeroSection() {
                 {/* O anel é do tamanho da caixa, e a caixa é quem recebe o
                     mouse: o hover pega o círculo inteiro, e não só a marca. */}
                 <DottedRing className="size-64 sm:size-80">
-                    <h1 className="font-serif text-5xl font-semibold text-foreground sm:text-6xl">
+                    <h1 className="text-5xl font-semibold text-foreground sm:text-6xl">
                         LexIA
                     </h1>
                 </DottedRing>

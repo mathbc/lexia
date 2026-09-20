@@ -55,7 +55,7 @@ export function LandingNav() {
                     <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                         <Scale className="size-4" />
                     </span>
-                    <span className="font-serif text-lg font-semibold">LexIA</span>
+                    <span className="text-lg font-semibold">LexIA</span>
                 </a>
 
                 <ul className="hidden items-center gap-1 md:flex">

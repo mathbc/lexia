@@ -76,7 +76,7 @@ export default function Register({ accountTypes, states, userTypes }: Props) {
         <div className="mx-auto max-w-3xl px-6 py-12">
             <Head title="Criar conta" />
 
-            <h1 className="text-center font-serif text-3xl font-semibold text-foreground">Criar conta</h1>
+            <h1 className="text-center text-3xl font-semibold text-foreground">Criar conta</h1>
             <p className="mt-2 mb-8 text-center text-sm text-muted-foreground">
                 Já tem conta?{' '}
                 <Link href="/login" className="font-medium text-foreground underline-offset-4 hover:underline">

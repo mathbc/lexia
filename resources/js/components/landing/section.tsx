@@ -23,7 +23,7 @@ export function Section({
     return (
         <section id={id} className={cn('scroll-mt-16 border-t border-border px-6 py-24', className)}>
             <div className="mx-auto flex w-full max-w-5xl flex-col items-center text-center">
-                <h2 className="font-serif text-3xl font-semibold text-foreground sm:text-4xl">{title}</h2>
+                <h2 className="text-3xl font-semibold text-foreground sm:text-4xl">{title}</h2>
 
                 {description && <p className="mt-4 max-w-xl text-muted-foreground">{description}</p>}
 

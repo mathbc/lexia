@@ -13,7 +13,7 @@ export default function Dashboard() {
 
             <Card className="max-w-2xl">
                 <CardHeader>
-                    <CardTitle className="font-serif text-xl">Bem-vindo, {user?.name}.</CardTitle>
+                    <CardTitle className="text-xl">Bem-vindo, {user?.name}.</CardTitle>
                     <CardDescription>
                         {user?.account.type_label} · {user?.role_label}
                     </CardDescription>
