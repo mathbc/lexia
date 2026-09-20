@@ -61,11 +61,25 @@ use RuntimeException;
  * because it costs nothing and because a provider that returns real urls — as
  * Anthropic does — makes it immediately worth having.
  *
- * No `asController()`, exactly as its siblings: nothing routes here yet. When
- * something does, this is a queue and not a request — two `Timeout(180)` in
- * series with a browser waiting is the debt `ClassifyLegalCase` already
- * documents, and the first of the two is the slowest inference in the project,
- * because the provider runs the searches before it answers.
+ * ## Who calls it, and what that costs
+ *
+ * No `asController()` of its own, and there will not be one: nothing routes
+ * *here*. What reaches it is `ClassifyLegalCase`, as the last of its five
+ * steps, so this pair now runs inside `POST /pecas/classificar` with a browser
+ * waiting on it.
+ *
+ * That is exactly the request this docblock used to say should be a queue, and
+ * saying so was right — what changed is only where the debt is recorded. It
+ * belongs to `ClassifyLegalCase` now, which already owed four serial
+ * `Timeout(180)` and owes six with these two; the first of the two is the
+ * slowest inference in the project, because the provider runs the searches
+ * before it answers. When that Action returns an identifier instead of a
+ * result, this Action does not change a line.
+ *
+ * The pleading it receives need not be saved. `LegalCaseDossier::forResearch()`
+ * only ever touches the model it is handed, so the three relations set by hand
+ * are the whole of the contract — `ClassifyLegalCase::pleading()` builds one
+ * that way, and so does `tests/Agents/LegalThesisResearchTest`.
  */
 final class ResearchLegalCaseTheses
 {

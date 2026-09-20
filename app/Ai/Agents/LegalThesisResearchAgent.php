@@ -101,8 +101,15 @@ use Laravel\Ai\Providers\Tools\WebSearch;
  * model is named in `config/ai.php` and nowhere else.
  *
  * Reached through ResearchLegalCaseTheses, which calls this one and then the
- * transcriber. Deliberately absent from ClassifyLegalCase — that chain runs
- * before a pleading exists, and this one reads a pleading already written.
+ * transcriber — and, since the forensic review was wired in, also through
+ * ClassifyLegalCase, as the last of its five steps. That is not a reversal of
+ * what this docblock used to say: the objection was that this agent reads a
+ * pleading while that chain runs before one exists. What answered it is that
+ * the chain now **writes** the pleading before asking — the area, the class and
+ * the requests are decided by the four steps ahead of it, and
+ * `ClassifyLegalCase::pleading()` hands over an unsaved LegalCase carrying
+ * exactly those three. A pleading not yet in the database is still a pleading;
+ * what this agent needs is the framing, not a primary key.
  */
 #[Provider('gemini')]
 #[Timeout(180)]

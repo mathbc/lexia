@@ -175,14 +175,19 @@ sessão. O `/register` do Fortify está desligado: o cadastro público é
 ## Os agentes
 
 `laravel/ai` com **dois providers**. O Ollama da máquina faz dois trabalhos — o texto
-de cinco dos sete agentes e os embeddings do catálogo —, `gpt-oss:20b` para a prosa e
-`nomic-embed-text` (768 dimensões) para os vetores. O **Gemini** faz um só: a pesquisa
-de teses, que precisa de busca na web e por isso não tem como ser local (ver "A pesquisa
-de teses", abaixo). `AI_PROVIDER` continua `ollama`; quem aponta para a nuvem é o
-`#[Provider('gemini')]` de dois agentes, e de mais nenhum. O texto já esteve
-no Gemini e voltou; o preço da volta é a latência, já que `POST /pecas/classificar`
-são quatro inferências em série com o navegador esperando. O que se compra de volta
-é não ter cota para pagar e o relato do cliente nunca sair do escritório. Os
+de quatro dos sete agentes e os embeddings do catálogo —, `gpt-oss:20b` para a prosa e
+`nomic-embed-text` (768 dimensões) para os vetores. O **Gemini** responde por três:
+a pesquisa de teses e o transcritor que lê a ficha dela, que precisam de busca na web e
+por isso não têm como ser locais (ver "A pesquisa de teses", abaixo), e
+`PracticeAreaClassificationAgent`, que **tem** como ser local e ainda assim aponta para a
+nuvem — ali se troca latência por cota, já que a área é a primeira das **seis** inferências
+em série de `POST /pecas/classificar`. As duas últimas dessas seis são a pesquisa de teses,
+que também é do Gemini: a rota toca os dois providers, e uma cota esgotada a atinge em dois
+pontos. Anote o que vem junto: o relato do cliente agora
+sai do escritório no enquadramento também, e inteiro, sem o estreitamento que
+`LegalCaseDossier::forResearch()` faz na pesquisa. `AI_PROVIDER` continua `ollama`; quem
+aponta para a nuvem é o `#[Provider('gemini')]` desses três, e de mais nenhum — e devolver
+qualquer um deles à máquina é trocar o atributo pela linha comentada logo acima. Os
 embeddings nunca saíram: as 615 classes já estão vetorizadas com o nomic, vetor de
 um modelo não se compara com vetor de outro, e mover custaria uma reembutida
 inteira para comprar nada.
@@ -195,8 +200,8 @@ classificações piorando sem erro nenhum.
 
 O bloco `gemini` do `config/ai.php` já está ativo — a pesquisa de teses depende dele —,
 então mandar **todo** o texto para a nuvem são dois gestos: pôr `AI_PROVIDER=gemini` no
-`.env` e trocar o `#[Provider('ollama')]` dos cinco agentes locais pela linha comentada
-logo acima de cada um, mais `config:clear`. A chave `models` no bloco não é enfeite: sem
+`.env` e trocar o `#[Provider('ollama')]` dos quatro agentes ainda locais pela linha
+comentada logo acima de cada um, mais `config:clear`. A chave `models` no bloco não é enfeite: sem
 ela o `GeminiProvider` cai num default que muda com a versão do pacote.
 
 Nem o modelo nem o tamanho do contexto pertencem a um agente. Nenhum deles carrega
@@ -269,7 +274,16 @@ o que o cliente pede ao juízo como `RequirementListData` — o objeto que
 preenchimento inteligente é um gesto só e o advogado não deve esperar três vezes
 pelo mesmo relato. As Actions seguem chamáveis sozinhas, e é assim que a etapa 2
 ou a etapa 4 de uma peça já salva deve pedir a sugestão: uma inferência, e não
-quatro.
+cinco.
+
+E uma quinta etapa fecha a fila, de natureza diferente das quatro: `ResearchLegalCaseTheses`
+— a dupla de agentes da seção "A pesquisa de teses" — **lê a peça, e não os fatos**. É por
+isso que ela é a última e não poderia ser outra coisa: o enquadramento diz em que ramo
+procurar e os pedidos dizem o que a tese precisa sustentar, e nenhum dos dois existe antes
+de o agente correspondente responder. `ClassifyLegalCase::pleading()` monta um `LegalCase`
+**não salvo** com as três relações que `LegalCaseDossier::forResearch()` consulta — área,
+classe e pedidos — e entrega. Uma peça que ainda não está no banco continua sendo uma peça;
+o que a pesquisa precisa é do enquadramento, não de uma chave primária.
 
 A diferença de natureza. Os dois primeiros **escolhem** uma linha de catálogo; o
 do réu **copia**, então os doze campos são `required()` e `nullable()` ao mesmo
@@ -294,13 +308,16 @@ que custou minutos — sobrevive. No payload, `null` é a extração que falhou;
 campos nulos dentro do objeto são o relato que não identifica ninguém, e a lista
 vazia é o relato que não pede nada.
 
-`POST /pecas/classificar` é a única rota das quatro Actions de agente: ela aponta
-para `ClassifyLegalCase`, e as outras três não têm `asController()` enquanto
-nada apontar para elas. O preço da rota é a latência de **quatro** `Timeout(180)`
-em série, com o navegador esperando — dívida conhecida, documentada no
-`asController()`, e o lugar de trocá-la por uma fila.
+`POST /pecas/classificar` é a única rota das Actions de agente: ela aponta para
+`ClassifyLegalCase`, e as demais não têm `asController()` enquanto nada apontar para elas.
+O preço da rota é a latência de **seis** `Timeout(180)` em série, com o navegador
+esperando — dívida conhecida, documentada no `asController()`, e o lugar de trocá-la por
+uma fila. Ela dobrou quando a pesquisa entrou, e é a pesquisa que a domina: é a inferência
+mais lenta do projeto, porque o provider abre as páginas antes de responder. Quem sente
+isso primeiro é `tests/Agents/LegalCaseClassificationTest`, que passou a custar minutos,
+cota do Gemini e rede — e pode ficar vermelho porque um portal caiu.
 
-O quinto agente não está na cadeia e não é chamado por ela. `FactsRefinementAgent`,
+Um agente continua fora da cadeia e não é chamado por ela. `FactsRefinementAgent`,
 exposto por `RefineLegalCaseFacts`, reescreve o relato do cliente como a narrativa de
 fatos de uma inicial: registro formal, terceira pessoa, ordem cronológica — e, quando o
 relato narra uma perda que não se repõe (morte na família, o animal da casa, o bem de
@@ -323,9 +340,11 @@ medido contra essa tabela, e é por isso que a saída deste agente é uma minuta
 advogado aceitar, nunca um campo que se preenche sozinho.
 
 Testes de agente ficam em `tests/Agents`, no grupo `agents`, **fora** do
-`php artisan test` padrão porque gastam inferência de verdade. Para cinco deles a conta
-é o tempo da máquina — Ollama de pé com `gpt-oss:20b` e `nomic-embed-text` baixados.
-`LegalThesisResearchTest` é a exceção e custa **cota do Gemini** mais rede: ele pesquisa
+`php artisan test` padrão porque gastam inferência de verdade. Para três deles a conta
+é só o tempo da máquina — Ollama de pé com `gpt-oss:20b` e `nomic-embed-text` baixados.
+`LegalCaseClassificationTest` passou a custar as duas coisas, porque a área responde do
+Gemini e a classe, do daemon.
+`LegalThesisResearchTest` é o extremo e custa **cota do Gemini** mais rede: ele pesquisa
 nos portais de verdade, leva minutos e pode ficar vermelho porque o STJ está fora do ar,
 e não porque o prompt regrediu. Tudo o que nele não depende do modelo — a guarda de
 domínio, os tetos, os ids de correlação e o achatamento — está repetido de forma
@@ -376,8 +395,9 @@ vazia, a segunda sobrescreve a primeira no mapa, e a primeira é apagada pelo
 `whereNotIn` microssegundos depois de criada.
 
 As Actions de cadastro por linha (`CreateLegalThesis`, `UpdateLegalPrecedent`,
-`DeleteLegalThesis`…) existem para o agente de revisão forense que virá, e não
-têm `asController()` enquanto nada apontar para elas. As de precedente recebem a
+`DeleteLegalThesis`…) existem para a edição por linha que virá, e não têm
+`asController()` enquanto nada apontar para elas — o agente de revisão forense
+já chegou, e escreve a etapa inteira de uma vez pela dupla da pesquisa. As de precedente recebem a
 tese como **model e não como id**, que é a mesma regra noutra forma: um id
 postado seria um buraco que nenhum teste da classe enxergaria.
 
@@ -420,11 +440,22 @@ de correlação de forma confiável, e o aninhamento torna o vínculo estrutural
 em duas listas e cunha o uuid em PHP é `ForensicReviewData::fromAgent()`, que é o par de
 `crypto.randomUUID()` no navegador.
 
-Nada aponta para `ResearchLegalCaseTheses` ainda, e o dia em que algo apontar ela é fila e
-não request: são dois `Timeout(180)` em série, e o primeiro é a inferência mais lenta do
-projeto.
+`ClassifyLegalCase` aponta para `ResearchLegalCaseTheses` como última etapa, e a ressalva
+que esta seção fazia continua valendo — ela devia ser fila e é request. A dívida só mudou de
+dono: são dois `Timeout(180)` em série dentro de uma rota que já tinha quatro, e o primeiro
+deles é a inferência mais lenta do projeto. A tela que consome isso é a etapa 6 do
+assistente (`ForensicReviewFields`), e **nada persiste ainda**: as teses viajam pelo
+`sessionStorage` com o resto da entrega, e recarregar a página as descarta.
 
 ## Ainda não implementado
+
+**A gravação da revisão forense.** A etapa 6 do assistente já desenha as teses e os
+precedentes que a pesquisa devolveu e já deixa o advogado desmarcar o que não vai para a
+peça, mas nada disso é salvo: a entrega vive no `sessionStorage` e morre com a aba. O que
+falta é ligar a tela a `SaveLegalCaseForensicReview`, que existe e sabe gravar as duas
+listas com o mapa de ids — hoje nenhuma rota aponta para ela. É a única etapa do assistente
+em que recarregar a página custa trabalho já feito, e o motivo pelo qual a tela vazia diz
+"não há pesquisa nesta sessão" em vez de afirmar que a pesquisa falhou.
 
 O módulo de Jurisprudência: ingestão, chunking e busca vetorial sobre o corpus.
 O pgvector já está de pé e em uso no catálogo de classes, então o que falta é a

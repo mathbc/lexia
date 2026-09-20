@@ -11,6 +11,7 @@ import {
     FactsFormFields,
     type FactsFormValues,
 } from "@/components/facts-form-fields";
+import { ForensicReviewFields } from "@/components/forensic-review-fields";
 import { LegalCaseSteps, type StepItem } from "@/components/legal-case-steps";
 import { PracticeAreaPicker } from "@/components/practice-area-picker";
 import { ProceduralClassPicker } from "@/components/procedural-class-picker";
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/field";
 import { toDocumentDrafts, type DocumentDraft } from "@/lib/documents";
+import { toThesisDrafts, type ThesisDraft } from "@/lib/forensic-review";
 import { readHandoff } from "@/lib/legal-case-handoff";
 import {
     newRequirement,
@@ -64,7 +66,7 @@ const STEP_DESCRIPTIONS: Record<LegalCaseStepValue, string> = {
     requirements:
         "O que se pede ao juízo, e quanto vale cada pedido que tem cifra",
     documents: "Os anexos que instruem a peça",
-    review: "Conferência final antes do protocolo",
+    review: "As teses que a peça sustenta e os julgados que as fundamentam",
 };
 
 /** Nada do réu é obrigatório — ver `DefendantFormFields`. */
@@ -128,6 +130,10 @@ interface Props {
     selectedArea: string;
     branches: Option[];
     degrees: Option[];
+    /** `LegalThesisType::options()` e `LegalPrecedentType::options()`: o
+        português dos rótulos da revisão forense vem do enum. */
+    thesisTypes: Option[];
+    precedentTypes: Option[];
     /** Para o cadastro de cliente que acontece aqui mesmo, sem trocar de tela. */
     customerTypes: Option[];
     states: Option[];
@@ -150,20 +156,27 @@ interface Props {
  * da página, então os quatro enxergam todos os erros. É inofensivo aqui porque
  * nenhuma etapa compartilha nome de campo com outra.
  *
- * Os documentos são a exceção que continua em estado local: o rascunho carrega
- * o próprio `File`, que não sobrevive a um reload, e não há onde guardá-lo
- * ainda. O "Continuar" deles não salva nada — só avança a etapa, que é
- * informação verdadeira sobre a peça.
+ * Os documentos e a revisão forense são as duas exceções que continuam em
+ * estado local, e pelo mesmo motivo: nada as grava ainda. O rascunho de um
+ * documento carrega o próprio `File`, que não sobrevive a um reload; a revisão
+ * forense veio da pesquisa e não tem tabela preenchida. O "Continuar" dos
+ * documentos não salva nada — só avança a etapa, que é informação verdadeira
+ * sobre a peça — e a etapa 6, sendo a última, nem botão de avançar tem.
  *
  * Uma peça nova pode chegar aqui preenchida: quem vem do preenchimento
- * inteligente traz o cliente, a classe, o relato, os dados do réu e os pedidos
- * numa entrega guardada pelo browser, e a área na própria URL — ver
- * `@/lib/legal-case-handoff`. Nada disso está salvo, e cada etapa grava o que é
- * dela quando o advogado clica em "Continuar": a primeira grava o enquadramento
- * junto com o relato, a segunda grava o réu se ele for aceito, a quarta grava
- * os pedidos que sobreviverem à revisão. O advogado vê as sugestões antes de
- * aceitá-las, que é o ponto de devolvê-las ao assistente em vez de abrir a
- * minuta direto.
+ * inteligente traz o cliente, a classe, o relato, os dados do réu, os pedidos e
+ * a revisão forense numa entrega guardada pelo browser, e a área na própria URL
+ * — ver `@/lib/legal-case-handoff`. Nada disso está salvo, e cada etapa grava o
+ * que é dela quando o advogado clica em "Continuar": a primeira grava o
+ * enquadramento junto com o relato, a segunda grava o réu se ele for aceito, a
+ * quarta grava os pedidos que sobreviverem à revisão. O advogado vê as
+ * sugestões antes de aceitá-las, que é o ponto de devolvê-las ao assistente em
+ * vez de abrir a minuta direto.
+ *
+ * A etapa 6 é a que ainda não tem a sua metade: as teses chegam, são lidas e
+ * são marcadas ou desmarcadas, e a decisão morre com a aba. É deliberado — a
+ * tela vem antes da gravação —, mas é a única etapa do assistente em que
+ * recarregar a página custa trabalho já feito.
  */
 export default function LegalCaseForm({
     legalCase,
@@ -175,6 +188,8 @@ export default function LegalCaseForm({
     selectedArea,
     branches,
     degrees,
+    thesisTypes,
+    precedentTypes,
     customerTypes,
     states,
     can,
@@ -226,6 +241,21 @@ export default function LegalCaseForm({
     });
 
     const [documents, setDocuments] = useState<DocumentDraft[]>([]);
+
+    /**
+     * A revisão forense, em estado local pelo mesmo motivo dos documentos: nada
+     * a grava ainda.
+     *
+     * A diferença é de onde ela vem — não do advogado, mas da pesquisa que
+     * `ClassifyLegalCase` fez como última etapa —, e é isso que a torna
+     * frágil de um jeito que os documentos não são: ela só existe enquanto esta
+     * aba estiver de pé. Um reload em `/pecas/{id}` descarta a entrega, como
+     * sempre descartou, e a etapa 6 abre vazia. Quem fecha esse buraco é a
+     * Action que grava as teses, que ainda não existe.
+     */
+    const [theses, setTheses] = useState<ThesisDraft[]>(() =>
+        toThesisDrafts(handoff?.research),
+    );
 
     const trail: StepItem[] = steps.map((option) => ({
         label: option.label,
@@ -575,20 +605,22 @@ export default function LegalCaseForm({
                         />
                     )}
 
-                    {step > 4 && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>{trail[step]?.label}</CardTitle>
-                                <CardDescription>
-                                    {trail[step]?.description}
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="rounded-lg border border-dashed px-4 py-12 text-center text-sm text-muted-foreground">
-                                    Esta etapa ainda não foi implementada.
-                                </p>
-                            </CardContent>
-                        </Card>
+                    {step === 5 && (
+                        <ForensicReviewFields
+                            research={handoff?.research ?? null}
+                            theses={theses}
+                            onToggle={(thesisId, keep) =>
+                                setTheses((current) =>
+                                    current.map((draft) =>
+                                        draft.id === thesisId
+                                            ? { ...draft, keep }
+                                            : draft,
+                                    ),
+                                )
+                            }
+                            thesisTypes={thesisTypes}
+                            precedentTypes={precedentTypes}
+                        />
                     )}
 
                     {/* Cancelar só no primeiro passo, onde ainda não se andou

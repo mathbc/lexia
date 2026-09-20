@@ -27,15 +27,17 @@ return [
     |
     | The Gemini block below is no longer commented out, and that is not the
     | move back to the cloud: `AI_PROVIDER` still says `ollama`, so it remains
-    | the default for everything that does not ask otherwise. Exactly one agent
-    | asks — LegalThesisResearchAgent, which searches the official portals and
-    | therefore needs provider-side web tools that Ollama refuses outright.
-    | Two providers are configured and each has a job, which is the same shape
-    | the embeddings already had.
+    | the default for everything that does not ask otherwise. Three agents ask,
+    | and the attribute is stated one by one rather than flipped wholesale:
+    | LegalThesisResearchAgent, which searches the official portals and
+    | therefore needs provider-side web tools that Ollama refuses outright, the
+    | transcriber that reads its sheet, and PracticeAreaClassificationAgent,
+    | which asks for nothing Ollama lacks — it is simply the step of the chain
+    | whose latency is being paid in quota instead of in seconds.
     |
     | Moving the *text* back to the cloud wholesale is still the same two
     | gestures it always was: put `AI_PROVIDER=gemini` in the `.env` and swap
-    | the `#[Provider('ollama')]` of the five local agents for the line
+    | the `#[Provider('ollama')]` of the four agents still local for the line
     | commented above each one.
     |
     | The keys for images, audio, transcription and reranking are deliberately
@@ -153,12 +155,17 @@ return [
     'providers' => [
 
         /*
-        | Ativo, e por um agente só. `AI_PROVIDER` continua `ollama`: os cinco
-        | agentes que leem o relato do cliente seguem na máquina, e quem aponta
-        | para cá é o `#[Provider('gemini')]` do LegalThesisResearchAgent —
-        | porque ele precisa de uma coisa que o Ollama não tem, que é buscar e
-        | ler página na web. No pacote isso são ferramentas do lado do
-        | provedor, e `OllamaProvider` recusa todas elas.
+        | Ativo, e por três agentes. `AI_PROVIDER` continua `ollama`: quatro
+        | dos sete seguem na máquina, e quem aponta para cá é o
+        | `#[Provider('gemini')]` de LegalThesisResearchAgent, do transcritor
+        | que lê a ficha dele e de PracticeAreaClassificationAgent.
+        |
+        | Os dois primeiros não têm escolha: pesquisar exige buscar e ler
+        | página na web, que no pacote são ferramentas do lado do provedor, e
+        | `OllamaProvider` recusa todas elas. O terceiro tem — é a primeira
+        | inferência da cadeia de classificação, e está aqui por latência.
+        | Note a consequência: o relato do cliente passa a sair do escritório
+        | também no enquadramento, e não só na pesquisa de teses.
         |
         | A chave `models` não é enfeite: sem ela o GeminiProvider cai num
         | padrão que muda com a versão do pacote. Não há `embeddings` de
@@ -197,7 +204,7 @@ return [
 
             'models' => [
                 /*
-                | Em uso pelos cinco agentes. O `gpt-oss:20b` raciocina, e é
+                | Em uso pelos quatro agentes locais. O `gpt-oss:20b` raciocina, e é
                 | exatamente o modelo que respondia com conteúdo vazio quando
                 | lhe mandavam `think: false` — a armadilha que o
                 | `providerOptions()` dos agentes não deve reintroduzir. Com o

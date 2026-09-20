@@ -24,20 +24,25 @@ use Laravel\Ai\Promptable;
  * is worth more than the round trip it costs, and it is why the caller resolves
  * the slug against the same collection it passed in.
  *
- * It has been kept through a round trip to Gemini and back, which is the one
- * thing that had to survive the move in either direction. Ollama compiles the
- * schema into a grammar; a cloud provider receives it as `response_json_schema`
- * and enforces it server-side. Different mechanism, same promise — and the
- * caller is written so that it would fail loudly rather than quietly if the
- * promise ever broke.
+ * It has now been through the move in both directions, which is the one thing
+ * that had to survive either one. Ollama compiles the schema into a grammar;
+ * Gemini — answering today — receives it as `response_json_schema` and enforces
+ * it server-side. Different mechanism, same promise — and the caller is written
+ * so that it would fail loudly rather than quietly if the promise ever broke.
+ *
+ * The Gemini trap that voids that promise is not reachable from here: a schema
+ * silently switches *grounding* off, and this agent asks for no tools. The one
+ * that does — LegalThesisResearchAgent — is why the schema and the search are
+ * split across two inferences there and not here.
  *
  * Two things learned the hard way, both easy to undo by accident:
  *
- * 1. Never send `think: false` to a thinking model. `gpt-oss:20b`, which is
- *    exactly the model answering today, came back with empty content when told
- *    to skip it, and the qwen3 line reasons by default too. Live again now that
- *    the provider is Ollama: the default is thinking on, the daemon separates
- *    the reasoning into `message.thinking`, and the JSON arrives clean.
+ * 1. Never send `think: false` to a thinking model. `gpt-oss:20b` came back
+ *    with empty content when told to skip it, and the qwen3 line reasons by
+ *    default too. Dormant for this agent while Gemini answers — the option is
+ *    Ollama's spelling and never reaches the wire — and live again the day the
+ *    attribute below points back at the daemon, which is also the model that
+ *    measured it.
  * 2. The justification needs its `description()`. Without one the model
  *    answers with a slug-shaped fragment instead of a sentence. True under
  *    either provider — both read per-property descriptions out of the schema.
@@ -55,10 +60,12 @@ use Laravel\Ai\Promptable;
  * here. It cannot be one call: the classes it chooses between are the ones this
  * answer selects.
  */
-// Trocar as duas linhas de lugar manda a inferência para o Gemini — e o bloco
-// `gemini` do config/ai.php precisa ser descomentado junto.
-// #[Provider('gemini')]
-#[Provider('ollama')]
+// Aponta para a nuvem. O bloco `gemini` do config/ai.php já estava ativo pela
+// pesquisa de teses, e `AI_PROVIDER` continua `ollama` — quem pede outra coisa
+// é esta linha, agente por agente. Trocar as duas de lugar devolve a inferência
+// para a máquina.
+// #[Provider('ollama')]
+#[Provider('gemini')]
 #[Timeout(180)]
 #[Temperature(0.2)]
 final class PracticeAreaClassificationAgent implements Agent, HasProviderOptions, HasStructuredOutput

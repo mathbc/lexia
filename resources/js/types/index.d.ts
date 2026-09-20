@@ -302,6 +302,92 @@ export interface ExtractedRequirement {
 }
 
 /**
+ * Uma das autoridades em que uma tese se apoia, como `LegalBasisData::toArray()`
+ * a publica.
+ *
+ * `reference` é a citação **completa e pronta para ler** — "Súmula 430 do STJ",
+ * "Art. 135, III, do CTN" —, e é ela que o chip desenha. `source` repete a sigla
+ * de propósito: montar o chip a partir das três partes exigiria o gênero
+ * gramatical de cada sigla do direito brasileiro ("do CPC", mas "da CF/88"), e
+ * escreveria português ruim até essa tabela existir.
+ *
+ * `type` chega como o valor do enum (`article`, `sumula`, `theme`…) e nunca
+ * traduzido: o rótulo em português mora no `LegalBasisType` do servidor.
+ */
+export interface LegalBasis {
+    type: string | null;
+    reference: string;
+    source: string | null;
+}
+
+/**
+ * Uma linha de argumento que a pesquisa encontrou — espelha o que
+ * `LegalResearchData::toArray()` publica sob `theses`.
+ *
+ * O `id` é a chave de correlação cunhada em PHP, e não a chave de uma linha do
+ * banco: nada foi gravado. É por ele que os precedentes acham a tese que
+ * sustentam, e é ele que a tela usa de `key`.
+ *
+ * `type` é o valor de `LegalThesisType` e pode faltar — uma tese cuja espécie o
+ * modelo não soube classificar continua sendo uma tese.
+ */
+export interface ResearchedThesis {
+    id: string | null;
+    name: string;
+    type: string | null;
+    description: string;
+    impact: string | null;
+    legal_bases: LegalBasis[];
+}
+
+/**
+ * Um julgado encontrado para sustentar uma tese, como `LegalResearchData` o
+ * publica sob `precedents`.
+ *
+ * Chega numa lista **à parte** e não aninhado dentro da tese: é a forma que
+ * `SaveLegalCaseForensicReview` aceita, e o vínculo viaja no `legal_thesis_id`.
+ * O aninhamento existiu só na gramática do agente, para que o modelo não
+ * precisasse cunhar uuid de correlação — ver `ForensicReviewData::fromAgent()`.
+ * Quem torna a aninhar, para desenhar, é `@/lib/forensic-review`.
+ *
+ * `id` é sempre nulo aqui: a chave de um precedente novo é cunhada pelo banco.
+ * `adherence` vem em decimal ("95.00") e nulo quer dizer não medido — que não é
+ * zero, a mesma distinção que `amount` faz num pedido.
+ */
+export interface ResearchedPrecedent {
+    id: string | null;
+    legal_thesis_id: string | null;
+    name: string;
+    type: string | null;
+    description: string;
+    citation: string | null;
+    grounding: string | null;
+    adherence: string | null;
+}
+
+/**
+ * O que uma rodada de pesquisa encontrou, e o que ela teve de recusar —
+ * espelha `LegalResearchData::toArray()`.
+ *
+ * Duas camadas, e a separação é o ponto. `theses` e `precedents` são a parte que
+ * um dia vira linha no banco; o resto é o **relato da pesquisa**: a questão que
+ * foi perguntada, os portais oficiais que foram abertos, o que ficou em aberto e
+ * as citações que a guarda removeu por não terem fonte oficial.
+ *
+ * `unverified_citations` merece a tela que tem. Uma tese sem fundamentação
+ * nenhuma tem duas causas opostas — a pesquisa não achou nada, ou a guarda
+ * recusou o que ela achou — e as duas produzem exatamente a mesma lista vazia.
+ */
+export interface LegalResearch {
+    legal_question: string | null;
+    theses: ResearchedThesis[];
+    precedents: ResearchedPrecedent[];
+    sources: string[];
+    pending: string[];
+    unverified_citations: string[];
+}
+
+/**
  * O que os agentes leram de um relato — espelha
  * `LegalCaseClassification::toArray()`, a resposta de `POST /pecas/classificar`.
  *
@@ -321,6 +407,13 @@ export interface LegalCaseClassification {
     procedural_class_justification: string | null;
     defendant: DefendantSuggestion | null;
     requirements: ExtractedRequirement[] | null;
+    /**
+     * A revisão forense, ou nulo quando a pesquisa falhou — um portal fora do
+     * ar derruba a etapa sem que o enquadramento perca nada. Não confundir com
+     * a pesquisa que nada confirmou: essa chega com as duas listas vazias e o
+     * `pending` escrito.
+     */
+    research: LegalResearch | null;
 }
 
 /** Mirrors LegalCasePageProps::abilities(). */

@@ -1,4 +1,4 @@
-import type { DefendantSuggestion, ExtractedRequirement } from '@/types'
+import type { DefendantSuggestion, ExtractedRequirement, LegalResearch } from '@/types'
 
 /**
  * O que o preenchimento inteligente entrega ao assistente.
@@ -6,9 +6,9 @@ import type { DefendantSuggestion, ExtractedRequirement } from '@/types'
  * A área vai no slug porque é a moeda do formulário e da query string; a classe
  * vai no uuid porque é ele que será gravado. São as mesmas duas formas do
  * `LegalCaseClassification::toArray()`, e por isso nada é traduzido no caminho
- * — o réu e os pedidos também viajam como o servidor os escreveu, com os nulos
- * e o valor em decimal que ele tem, e é o assistente que os traduz para os
- * campos.
+ * — o réu, os pedidos e a revisão forense também viajam como o servidor os
+ * escreveu, com os nulos e os decimais que eles têm, e é o assistente que os
+ * traduz para os campos.
  */
 export interface LegalCaseHandoff {
     practice_area: string
@@ -17,6 +17,16 @@ export interface LegalCaseHandoff {
     facts: string
     defendant: DefendantSuggestion | null
     requirements: ExtractedRequirement[] | null
+    /**
+     * As teses e os precedentes que a pesquisa confirmou, para a etapa 6.
+     *
+     * É a única parte da entrega que **nada salva ainda**: as outras três são
+     * gravadas quando o advogado clica em "Continuar" na etapa delas, enquanto
+     * a revisão forense só existe enquanto esta aba estiver de pé. Um reload em
+     * `/pecas/{id}` descarta a entrega, como sempre descartou, e a etapa 6 abre
+     * vazia — o que muda no dia em que houver uma Action que a persista.
+     */
+    research: LegalResearch | null
 }
 
 const KEY = 'lexia:legal-case-handoff'
@@ -100,6 +110,7 @@ const parse = (value: string | null): LegalCaseHandoff | null => {
                   ...(data as LegalCaseHandoff),
                   defendant: defendantOf(data.defendant),
                   requirements: requirementsOf(data.requirements),
+                  research: researchOf(data.research),
               }
             : null
     } catch {
@@ -134,3 +145,25 @@ const requirementsOf = (value: unknown): ExtractedRequirement[] | null =>
                   typeof row === 'object' && row !== null && typeof row.description === 'string',
           )
         : null
+
+/**
+ * A pesquisa segue a regra do réu — não invalida a entrega —, e a peneira é
+ * pelas duas listas que a tela percorre.
+ *
+ * Uma entrega gravada antes desta etapa existir não as tem, e uma resposta
+ * pela metade seria pior do que nenhuma: a etapa 6 abriria com teses sem os
+ * precedentes que as sustentam, que é exatamente a leitura que ela existe para
+ * não oferecer. O resto do payload — a questão, as fontes, o pendente — pode
+ * faltar sem prejuízo, e por isso não é conferido aqui.
+ */
+const researchOf = (value: unknown): LegalResearch | null => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        return null
+    }
+
+    const research = value as LegalResearch
+
+    return Array.isArray(research.theses) && Array.isArray(research.precedents)
+        ? research
+        : null
+}

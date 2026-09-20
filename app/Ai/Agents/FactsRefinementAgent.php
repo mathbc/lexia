@@ -88,7 +88,7 @@ use Laravel\Ai\Promptable;
 // Trocar as duas linhas de lugar manda a inferência para o Gemini — e o bloco
 // `gemini` do config/ai.php precisa ser descomentado junto.
 // #[Provider('gemini')]
-#[Provider('ollama')]
+#[Provider('gemini')]
 #[Timeout(180)]
 #[Temperature(0.3)]
 final class FactsRefinementAgent implements Agent, HasProviderOptions, HasStructuredOutput

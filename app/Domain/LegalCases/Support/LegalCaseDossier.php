@@ -7,6 +7,7 @@ namespace App\Domain\LegalCases\Support;
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\LegalCases\Models\LegalCase;
+use App\Domain\ProceduralClasses\Models\ProceduralClass;
 use App\Domain\Requirements\Models\Requirement;
 
 /**
@@ -79,11 +80,9 @@ final class LegalCaseDossier
      */
     private static function pleading(LegalCase $legalCase): array
     {
-        $class = $legalCase->proceduralClass;
-
         return self::written([
             'Área de atuação' => $legalCase->practiceArea->label,
-            'Classe processual' => "[{$class->code}] {$class->name}",
+            'Classe processual' => self::filedAs($legalCase),
             'Endereçamento' => $legalCase->court_addressing,
             // Só aparece quando foi pedida: a ausência da linha diz que não há
             // urgência a sustentar, e é isso que o relato precisa saber.
@@ -91,6 +90,25 @@ final class LegalCaseDossier
                 ? 'pedida — '.($legalCase->injunctive_relief_description ?? 'sem justificativa escrita ainda')
                 : null,
         ]);
+    }
+
+    /**
+     * "[1118] Embargos à Execução Fiscal", quando há uma classe.
+     *
+     * Lida pela relação e não pela propriedade tipada, de propósito. Numa peça
+     * salva a classe nunca falta — a chave estrangeira é obrigatória, e é isso
+     * que `LegalCase` documenta —, mas o dossiê também é montado sobre a peça
+     * que ainda não existe: `ClassifyLegalCase` monta uma em memória para a
+     * pesquisa de teses, e ali a escolha da classe é uma das etapas que podem
+     * cair sozinhas. Sem ela a linha simplesmente some, como `written()` faz
+     * com todo campo vazio, e o agente continua sabendo o ramo do direito —
+     * que é o que decide onde procurar.
+     */
+    private static function filedAs(LegalCase $legalCase): ?string
+    {
+        $class = $legalCase->getRelationValue('proceduralClass');
+
+        return $class instanceof ProceduralClass ? "[{$class->code}] {$class->name}" : null;
     }
 
     /**

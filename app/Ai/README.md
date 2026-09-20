@@ -27,17 +27,25 @@ uma. Os dois últimos são a etapa 6 e formam um par indivisível: quem os expõ
 `ResearchLegalCaseTheses`, que chama os dois em série — a seção abaixo diz por que não
 podem ser um só.
 
-## O único agente que sai da máquina
+## Quem sai da máquina
 
-Os cinco primeiros rodam no Ollama. `LegalThesisResearchAgent` roda no **Gemini**, e não
-por preferência: um agente de pesquisa que não consegue abrir o `stj.jus.br` é um modelo
-recitando súmula de memória, que é exatamente a falha que o prompt inteiro existe para
-impedir. Buscar e ler página são ferramentas do lado do provedor neste SDK, e o
-`OllamaProvider` não implementa nenhuma das duas — `Gateway/Ollama/Concerns/MapsTools.php`
-lança antes de montar requisição.
+Quatro agentes rodam no Ollama e três no **Gemini**, e as razões não são a mesma.
 
-O que viaja é estreitado para compensar: `LegalCaseDossier::forResearch()` corta o cliente
-e o réu inteiros. O relato vai, porque não se pesquisa uma tese sem os fatos que a
+`LegalThesisResearchAgent` e o transcritor que lê a ficha dele não têm escolha: um agente
+de pesquisa que não consegue abrir o `stj.jus.br` é um modelo recitando súmula de memória,
+que é exatamente a falha que o prompt inteiro existe para impedir. Buscar e ler página são
+ferramentas do lado do provedor neste SDK, e o `OllamaProvider` não implementa nenhuma das
+duas — `Gateway/Ollama/Concerns/MapsTools.php` lança antes de montar requisição.
+
+`PracticeAreaClassificationAgent` tem escolha, e aponta para a nuvem mesmo assim: ele é a
+primeira das quatro inferências em série de `POST /pecas/classificar`, e o que se troca ali
+é latência por cota. Anote a consequência que a pesquisa de teses não tinha: **o relato do
+cliente passa a sair do escritório no enquadramento também**, inteiro e sem o estreitamento
+abaixo. Devolvê-lo à máquina é uma linha — o `#[Provider('ollama')]` comentado logo acima
+do atributo.
+
+O que viaja na pesquisa é estreitado para compensar: `LegalCaseDossier::forResearch()` corta
+o cliente e o réu inteiros. O relato vai, porque não se pesquisa uma tese sem os fatos que a
 levantam; os nomes não vão.
 
 ## Por que a pesquisa são dois agentes
@@ -308,11 +316,12 @@ Cuidado ao mexer: `providerOptions` cai na chave `options` do corpo, mas `think`
 
 ## Provider e modelo
 
-**Um provider, os dois trabalhos**, cada um com o seu modelo:
+**Dois providers**, e o Ollama com os dois trabalhos locais:
 
 | | provider | modelo | env |
 |---|---|---|---|
-| Texto (os cinco agentes) | `ollama` | `gpt-oss:20b` | `OLLAMA_URL`, `OLLAMA_TEXT_MODEL` |
+| Texto (os quatro agentes locais) | `ollama` | `gpt-oss:20b` | `OLLAMA_URL`, `OLLAMA_TEXT_MODEL` |
+| Texto (área, pesquisa e transcrição) | `gemini` | `gemini-3.6-flash` | `GEMINI_API_KEY`, `GEMINI_TEXT_MODEL` |
 | Embeddings (o catálogo) | `ollama` | `nomic-embed-text`, 768 dim. | `OLLAMA_URL`, `OLLAMA_EMBEDDINGS_MODEL` |
 
 O texto **voltou** para a máquina do escritório com o `gpt-oss:20b`, e o preço de volta é
@@ -332,17 +341,16 @@ O ranking falha **em silêncio**: `ProceduralClassRankingQuery` cai para a ordem
 (é o desenho dela) e as classificações pioram sem erro nenhum. Antes de começar,
 `ollama pull gpt-oss:20b` e `ollama pull nomic-embed-text`.
 
-**Nenhum agente carrega `#[Model]`.** O modelo é nomeado em um lugar só,
-`ai.providers.ollama.models.text` (env `OLLAMA_TEXT_MODEL`), e sem o atributo o SDK
-resolve cada agente por `defaultTextModel()`. Trocar de modelo é editar o `.env` e
-rodar `php artisan config:clear`.
+**Nenhum agente carrega `#[Model]`.** O modelo é nomeado por provider, em
+`ai.providers.{ollama,gemini}.models.text` (env `OLLAMA_TEXT_MODEL` e `GEMINI_TEXT_MODEL`),
+e sem o atributo o SDK resolve cada agente pelo `defaultTextModel()` do provider que ele
+nomeia. Trocar de modelo é editar o `.env` e rodar `php artisan config:clear`.
 
-**Mandar o texto para a nuvem** são três gestos: descomentar o bloco `gemini` do
-`config/ai.php`, pôr `AI_PROVIDER=gemini` e `GEMINI_API_KEY` no `.env`, e trocar o
-`#[Provider('ollama')]` dos cinco agentes pela linha comentada logo acima de cada um —
-mais `php artisan config:clear`. O bloco comentado ficou no arquivo, e não no histórico do
-git, porque o que custa a lembrar não é o driver: é a chave `models`, sem a qual o
-`GeminiProvider` cai num default que muda com a versão do pacote.
+**Mandar todo o texto para a nuvem** são dois gestos, agora que o bloco `gemini` já está
+ativo e a chave já está no `.env`: pôr `AI_PROVIDER=gemini` e trocar o
+`#[Provider('ollama')]` dos quatro agentes ainda locais pela linha comentada logo acima de
+cada um — mais `php artisan config:clear`. A chave `models` do bloco não é enfeite: sem
+ela o `GeminiProvider` cai num default que muda com a versão do pacote.
 
 ## Armadilhas
 

@@ -12,23 +12,37 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * The four agents against the real database and the real providers, no fakes.
+ * The whole chain against the real database and the real providers, no fakes.
  *
  * This is the integration the rest of the system does: hand the facts of a
  * matter and take back the area, the procedural class, the reasoning for each,
- * the other party and what is being asked for. The catalogue arrives through
- * RefreshDatabase for free, because the 24 areas and the 615 classes are loaded
- * by migration rather than by a seeder.
+ * the other party, what is being asked for and the theses the pleading can
+ * argue. The catalogue arrives through RefreshDatabase for free, because the 24
+ * areas and the 615 classes are loaded by migration rather than by a seeder.
  *
- * One test, four inferences. A separate area-only test would be a fifth call
- * that tells us nothing the first quarter of this one does not — and both
- * extractions have their own tests next door, which are about the quality of
- * what they read; what this one adds is that the chain still reaches them.
+ * One test, **six inferences** — the five steps, with the thesis research
+ * counting for two. A separate area-only test would be a call that tells us
+ * nothing the first sixth of this one does not, and every step has its own test
+ * next door about the quality of what it reads; what this one adds is that the
+ * chain still reaches them all.
  *
- * Grouped out of the default run: it needs Ollama up and spends seconds on
- * inference, which is not what `php artisan test` should cost. The group is
- * what enables it — naming the suite alone finds nothing, since phpunit.xml
- * excludes the group.
+ * ## What it costs, which changed when the research was wired in
+ *
+ * It used to be Ollama and seconds. It is now Ollama **and Gemini quota and the
+ * open internet**, and it takes minutes: the last step searches the official
+ * portals for real, and it is the slowest inference in the project because the
+ * provider opens the pages before it answers.
+ *
+ * So read a red build here the way `LegalThesisResearchTest` asks to be read:
+ * it can mean the STJ is slow or the quota is spent, and not that a prompt
+ * regressed. Nothing about the research is asserted below, deliberately — which
+ * theses a case supports is judgement, it is pinned loosely next door, and the
+ * `stage()` of ClassifyLegalCase already guarantees that a failed search costs
+ * the framing nothing. What is worth reading is the dump.
+ *
+ * Grouped out of the default run, which matters more than it used to: `php
+ * artisan test` must never reach a paid provider. The group is what enables it
+ * — naming the suite alone finds nothing, since phpunit.xml excludes the group.
  *
  *   composer test:agents
  */

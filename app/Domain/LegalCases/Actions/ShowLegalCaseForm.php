@@ -12,6 +12,8 @@ use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalCases\Support\LegalCaseFormProps;
 use App\Domain\LegalCases\Support\LegalCaseOptions;
+use App\Domain\LegalPrecedents\Enums\LegalPrecedentType;
+use App\Domain\LegalTheses\Enums\LegalThesisType;
 use App\Domain\ProceduralClasses\Enums\JurisdictionDegree;
 use App\Domain\ProceduralClasses\Enums\JusticeBranch;
 use App\Domain\ProceduralClasses\Queries\ProceduralClassOptionsQuery;
@@ -45,6 +47,11 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * dialog it opens, and `createdCustomer` is how the client that was just saved
  * finds its way back — CreateCustomer flashes it and redirects here, so the
  * select can show it chosen without a second round trip.
+ *
+ * `thesisTypes` and `precedentTypes` are the sixth step's share of the same
+ * rule: the forensic review arrives from the classification carrying the enum's
+ * backing value, because that is what will be written, and the Portuguese label
+ * is resolved here rather than restated in TypeScript.
  */
 final class ShowLegalCaseForm
 {
@@ -77,6 +84,11 @@ final class ShowLegalCaseForm
             'selectedArea' => $area,
             'branches' => JusticeBranch::options(),
             'degrees' => JurisdictionDegree::options(),
+            // A revisão forense recebe teses e precedentes com o `type` no valor
+            // do enum, porque é ele que será gravado; o português dos rótulos
+            // continua morando de um lado só, e é daqui que a tela o lê.
+            'thesisTypes' => LegalThesisType::options(),
+            'precedentTypes' => LegalPrecedentType::options(),
             'customerTypes' => CustomerType::options(),
             'states' => BrazilianState::options(),
             'can' => [
