@@ -192,16 +192,16 @@ final class ClassifyLegalCase
         // A quinta etapa. Fora do bloco porque lê a peça que as quatro
         // anteriores descreveram — e esta closure não é serializada, por isso
         // pode continuar ligada a `$this`.
-        $research = self::stage(
-            fn (): LegalResearchData => ResearchLegalCaseTheses::run(
-                $this->pleading(
-                    $facts,
-                    $framing->area->practiceArea,
-                    $framing->class?->proceduralClass,
-                    $requirements,
-                ),
-            ),
-        );
+        // $research = self::stage(
+        //     fn (): LegalResearchData => ResearchLegalCaseTheses::run(
+        //         $this->pleading(
+        //             $facts,
+        //             $framing->area->practiceArea,
+        //             $framing->class?->proceduralClass,
+        //             $requirements,
+        //         ),
+        //     ),
+        // );
 
         return new LegalCaseClassification(
             practiceArea: $framing->area->practiceArea,
@@ -210,8 +210,8 @@ final class ClassifyLegalCase
             proceduralClassJustification: $framing->class?->justification,
             defendant: $read['defendant'],
             requirements: $requirements,
-            research: $research,
-            // research: null,
+            // research: $research,
+            research: null,
         );
     }
 
