@@ -40,11 +40,14 @@ interface Props {
  * jurídica traz razão social e CNPJ. É a mesma regra que o `required_if` do
  * servidor aplica — aqui ela só evita pedir o que não vale.
  *
- * A qualificação — estado civil, profissão e data de nascimento — segue a mesma
- * regra ao contrário: só existe para pessoa física, e o `exclude_if` do servidor
- * descarta o que vier de uma pessoa jurídica. Os três são opcionais: a minuta
- * escreve `[estado civil]` para o que ninguém informou, o que é melhor do que
- * recusar o cadastro.
+ * Os três campos de pessoa física seguem a mesma regra ao contrário: só existem
+ * para ela, e o `exclude_if` do servidor descarta o que vier de uma pessoa
+ * jurídica. Os três são opcionais: a minuta escreve `[estado civil]` para o que
+ * ninguém informou, o que é melhor do que recusar o cadastro.
+ *
+ * A data de nascimento fica junto do CPF, e não no card de qualificação, porque
+ * é o que se digita lendo o mesmo documento — a petição, aliás, não a declara.
+ * Sobram no card os dois que a qualificação da parte realmente pede.
  */
 export function CustomerFormFields({
     values,
@@ -108,15 +111,30 @@ export function CustomerFormFields({
                             </Field>
                         </>
                     ) : (
-                        <Field label="CPF" required error={errors.cpf ?? (cpfLooksWrong ? 'CPF inválido.' : undefined)}>
-                            <Input
-                                value={formatCpf(values.cpf)}
-                                onChange={(e) => set({ cpf: digits(e.target.value) })}
-                                inputMode="numeric"
-                                placeholder="000.000.000-00"
-                                disabled={disabled}
-                            />
-                        </Field>
+                        <>
+                            <Field
+                                label="CPF"
+                                required
+                                error={errors.cpf ?? (cpfLooksWrong ? 'CPF inválido.' : undefined)}
+                            >
+                                <Input
+                                    value={formatCpf(values.cpf)}
+                                    onChange={(e) => set({ cpf: digits(e.target.value) })}
+                                    inputMode="numeric"
+                                    placeholder="000.000.000-00"
+                                    disabled={disabled}
+                                />
+                            </Field>
+
+                            <Field label="Data de nascimento" error={errors.birth_date}>
+                                <Input
+                                    type="date"
+                                    value={values.birth_date}
+                                    onChange={(e) => set({ birth_date: e.target.value })}
+                                    disabled={disabled}
+                                />
+                            </Field>
+                        </>
                     )}
                 </CardContent>
             </Card>
@@ -146,15 +164,6 @@ export function CustomerFormFields({
                                 value={values.occupation}
                                 onChange={(e) => set({ occupation: e.target.value })}
                                 placeholder="Comerciante"
-                                disabled={disabled}
-                            />
-                        </Field>
-
-                        <Field label="Data de nascimento" error={errors.birth_date}>
-                            <Input
-                                type="date"
-                                value={values.birth_date}
-                                onChange={(e) => set({ birth_date: e.target.value })}
                                 disabled={disabled}
                             />
                         </Field>

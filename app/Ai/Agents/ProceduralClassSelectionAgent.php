@@ -51,11 +51,12 @@ use Laravel\Ai\Promptable;
  * `response_json_schema` under the commented provider, which matters here
  * because this agent's `enum` is a list of integers.
  */
-// Trocar as duas linhas de lugar manda a inferência para o Gemini — e o bloco
-// `gemini` do config/ai.php precisa ser descomentado junto.
+// Trocar as duas linhas de lugar manda a inferência para o Gemini — o bloco
+// `gemini` do config/ai.php já está ativo, então a troca mais um `config:clear`
+// bastam.
 // #[Provider('gemini')]
-#[Provider('gemini')]
-#[Timeout(180)]
+#[Provider('ollama')]
+#[Timeout(360)]
 #[Temperature(0.2)]
 final class ProceduralClassSelectionAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {

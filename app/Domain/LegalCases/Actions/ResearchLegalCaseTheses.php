@@ -71,7 +71,7 @@ use RuntimeException;
  * That is exactly the request this docblock used to say should be a queue, and
  * saying so was right — what changed is only where the debt is recorded. It
  * belongs to `ClassifyLegalCase` now, which already owed four serial
- * `Timeout(180)` and owes six with these two; the first of the two is the
+ * `Timeout(360)` and owes six with these two; the first of the two is the
  * slowest inference in the project, because the provider runs the searches
  * before it answers. When that Action returns an identifier instead of a
  * result, this Action does not change a line.

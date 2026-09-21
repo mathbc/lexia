@@ -11,6 +11,8 @@ use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalTheses\Models\LegalThesis;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
 use App\Domain\Requirements\Models\Requirement;
+use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 
 /**
  * The pleading around a narrative, written out for a prompt to read.
@@ -233,8 +235,19 @@ final class LegalCaseDossier
      * what tells the agent to write `[estado civil]`. The gap moved from the
      * schema to the registration, where somebody can close it.
      *
-     * The date of birth stays out on purpose: the standard qualification does
-     * not state it, and a field in the dossier is an invitation to write it.
+     * **The date of birth still does not travel — the age does.** The reason the
+     * date used to be excluded outright stands unchanged: the standard
+     * qualification does not declare a birthday, and a field in the dossier is
+     * an invitation to write it. What the qualification *does* declare is "47
+     * anos", so that is what `age()` derives and hands over. Sending the date
+     * would have bought a second way to write the same line and one new way to
+     * get it wrong.
+     *
+     * Its absence is the one gap the agent must **not** bracket, and the prompt
+     * says so. Marital status and occupation are obligatory in the paragraph,
+     * so a missing one is a `[estado civil]` the lawyer fills in; the age is
+     * optional, so a missing one is simply a clause that is not written. The
+     * difference is the whole reason `[idade]` is nowhere in the marker list.
      *
      * @return list<string>
      */
@@ -243,6 +256,7 @@ final class LegalCaseDossier
         return self::written([
             'Nome' => $customer->displayName(),
             'Tipo' => $customer->type->label(),
+            'Idade' => self::age($customer->birth_date),
             'Estado civil' => $customer->marital_status?->label(),
             'Profissão' => $customer->occupation,
             'Documento' => self::documentAs($customer->identifier()),
@@ -256,6 +270,29 @@ final class LegalCaseDossier
                 $customer->postal_code,
             ),
         ]);
+    }
+
+    /**
+     * "47 anos", from the date of birth and today.
+     *
+     * Derived rather than carried, which is the whole decision: `customers`
+     * stores the birthday and the qualification paragraph states an age, so the
+     * conversion happens here instead of in the prompt. A model asked to
+     * subtract two dates is a model doing arithmetic, and this project already
+     * knows what that costs — `PleadingDraftData` exists in part to catch the
+     * sums it makes when nobody asked.
+     *
+     * The unsigned reading is deliberate: `diffInYears()` is negative for a date
+     * in the future, so a typo that puts the birthday in 2079 drops the line
+     * instead of qualifying the Autor as minus fifty-three. The same guard eats
+     * the first year of life, and that is the right trade — "0 anos" is not what
+     * a petição writes about an infant, and the clause is optional anyway.
+     */
+    private static function age(?CarbonInterface $birthDate): ?string
+    {
+        $years = (int) ($birthDate?->diffInYears(CarbonImmutable::now()) ?? 0);
+
+        return $years > 0 ? $years.' anos' : null;
     }
 
     /**

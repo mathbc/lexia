@@ -65,11 +65,12 @@ use Laravel\Ai\Promptable;
  * needs no answer from the other two. What they share is only the facts and the
  * moment the lawyer asks for them.
  */
-// Trocar as duas linhas de lugar manda a inferência para o Gemini — e o bloco
-// `gemini` do config/ai.php precisa ser descomentado junto.
+// Trocar as duas linhas de lugar manda a inferência para o Gemini — o bloco
+// `gemini` do config/ai.php já está ativo, então a troca mais um `config:clear`
+// bastam.
 // #[Provider('gemini')]
-#[Provider('gemini')]
-#[Timeout(180)]
+#[Provider('ollama')]
+#[Timeout(360)]
 #[Temperature(0.1)]
 final class DefendantExtractionAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {

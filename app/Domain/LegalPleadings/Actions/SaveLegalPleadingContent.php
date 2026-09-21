@@ -14,7 +14,7 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * Save the lawyer's edits to the drafted document.
  *
  * **No agent runs here.** Editing a paragraph is not a reason to spend a
- * `Timeout(180)` and several minutes regenerating a document the lawyer was in
+ * `Timeout(360)` and several minutes regenerating a document the lawyer was in
  * the middle of correcting — and it would throw their correction away to do it.
  * The agent writes once, when the sixth step is concluded; everything after that
  * is typing.

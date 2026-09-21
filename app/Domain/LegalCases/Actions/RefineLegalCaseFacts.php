@@ -34,7 +34,7 @@ use RuntimeException;
  * narrative the lawyer has just pasted in order to fill a wizard; this one
  * rewrites a narrative the lawyer is looking at, on a pleading that already
  * exists. It is a second gesture on a later screen, and it costs its own
- * `Timeout(180)`.
+ * `Timeout(360)`.
  *
  * No `asController()` while no route points here, exactly as its siblings. When
  * one arrives, the shell it needs is a comparison: the client's text and the

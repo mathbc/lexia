@@ -135,7 +135,7 @@ use Throwable;
  * assistente — a navegação vem depois, e é do browser.
  *
  * O preço continua sendo a latência, e o bloco a reduziu sem a resolver: em vez
- * da soma de seis chamadas a `Timeout(180)`, a espera é agora a mais longa
+ * da soma de seis chamadas a `Timeout(360)`, a espera é agora a mais longa
  * entre o enquadramento e as duas extrações, mais a pesquisa — que são duas
  * inferências e a parte mais lenta do total. O navegador ainda espera por tudo.
  * É uma dívida conhecida e o lugar dela é aqui; quando a espera passar a ser uma
@@ -192,16 +192,16 @@ final class ClassifyLegalCase
         // A quinta etapa. Fora do bloco porque lê a peça que as quatro
         // anteriores descreveram — e esta closure não é serializada, por isso
         // pode continuar ligada a `$this`.
-        // $research = self::stage(
-        //     fn (): LegalResearchData => ResearchLegalCaseTheses::run(
-        //         $this->pleading(
-        //             $facts,
-        //             $framing->area->practiceArea,
-        //             $framing->class?->proceduralClass,
-        //             $requirements,
-        //         ),
-        //     ),
-        // );
+        $research = self::stage(
+            fn (): LegalResearchData => ResearchLegalCaseTheses::run(
+                $this->pleading(
+                    $facts,
+                    $framing->area->practiceArea,
+                    $framing->class?->proceduralClass,
+                    $requirements,
+                ),
+            ),
+        );
 
         return new LegalCaseClassification(
             practiceArea: $framing->area->practiceArea,
@@ -210,8 +210,8 @@ final class ClassifyLegalCase
             proceduralClassJustification: $framing->class?->justification,
             defendant: $read['defendant'],
             requirements: $requirements,
-            // research: $research,
-            research: null,
+            research: $research,
+            // research: null,
         );
     }
 

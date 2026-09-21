@@ -16,6 +16,7 @@ use App\Domain\LegalTheses\Models\LegalThesis;
 use App\Domain\PracticeAreas\Models\PracticeArea;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
 use App\Domain\Requirements\Models\Requirement;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -113,12 +114,21 @@ final class LegalCaseDossierTest extends TestCase
      * A regra não mudou — mudou a chance: `written()` continua descartando a
      * linha vazia, e é essa ausência que manda escrever `[estado civil]`.
      *
-     * A data de nascimento fica de fora de propósito: a qualificação padrão não
-     * a declara, e um campo no dossiê é um convite a escrevê-lo.
+     * A idade entrou junto, e a data de nascimento continua fora: o dossiê
+     * declara "47 anos" porque é o que a qualificação declara, e nunca
+     * "02/04/1979", porque a qualificação padrão não declara aniversário e um
+     * campo no dossiê é um convite a escrevê-lo. A subtração é feita aqui, e
+     * não no prompt, que é a mesma regra da cifra vista de outro ângulo.
+     *
+     * O relógio é fixado porque a asserção é sobre um número que envelhece: sem
+     * isso este teste passa a vida inteira e fica vermelho no aniversário da
+     * cliente inventada.
      */
     #[Test]
     public function the_drafting_dossier_qualifies_the_plaintiff_only_as_far_as_the_registration_does(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-09-20'));
+
         $qualified = LegalCaseDossier::forDrafting($this->fullPleading(customerAttributes: [
             'marital_status' => MaritalStatus::Married,
             'occupation' => 'Marceneiro',
@@ -127,15 +137,38 @@ final class LegalCaseDossierTest extends TestCase
 
         $this->assertStringContainsString('- Estado civil: Casado(a)', $qualified);
         $this->assertStringContainsString('- Profissão: Marceneiro', $qualified);
+        $this->assertStringContainsString('- Idade: 47 anos', $qualified);
         $this->assertStringNotContainsString('1979', $qualified);
 
-        // O cliente que ninguém qualificou: as duas linhas somem inteiras, em
+        // O cliente que ninguém qualificou: as três linhas somem inteiras, em
         // vez de chegarem como "não informado" — que é o que ensina um modelo
         // pequeno a escrever "não informado" dentro da petição.
         $unqualified = LegalCaseDossier::forDrafting($this->fullPleading());
 
         $this->assertStringNotContainsString('Estado civil', $unqualified);
         $this->assertStringNotContainsString('Profissão', $unqualified);
+        $this->assertStringNotContainsString('Idade', $unqualified);
+    }
+
+    /**
+     * Uma data de nascimento no futuro não qualifica ninguém com idade negativa.
+     *
+     * `diffInYears()` é negativo para uma data que ainda não chegou, e o corte
+     * em zero de `age()` é o que transforma o erro de digitação em ausência —
+     * que o agente já sabe tratar, porque é o mesmo caso do cadastro que nunca
+     * perguntou a idade.
+     */
+    #[Test]
+    public function the_drafting_dossier_drops_an_age_it_cannot_compute(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-09-20'));
+
+        $dossier = LegalCaseDossier::forDrafting($this->fullPleading(customerAttributes: [
+            'birth_date' => '2079-04-02',
+        ]));
+
+        $this->assertStringNotContainsString('Idade', $dossier);
+        $this->assertStringNotContainsString('2079', $dossier);
     }
 
     /**

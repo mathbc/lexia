@@ -85,11 +85,12 @@ use Laravel\Ai\Promptable;
  * this one rewrites a narrative the lawyer is looking at, which is a second
  * gesture on a screen and not part of the first.
  */
-// Trocar as duas linhas de lugar manda a inferência para o Gemini — e o bloco
-// `gemini` do config/ai.php precisa ser descomentado junto.
+// Trocar as duas linhas de lugar manda a inferência para o Gemini — o bloco
+// `gemini` do config/ai.php já está ativo, então a troca mais um `config:clear`
+// bastam.
 // #[Provider('gemini')]
-#[Provider('gemini')]
-#[Timeout(180)]
+#[Provider('ollama')]
+#[Timeout(360)]
 #[Temperature(0.3)]
 final class FactsRefinementAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {

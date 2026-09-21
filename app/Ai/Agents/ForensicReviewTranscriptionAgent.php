@@ -57,10 +57,23 @@ use Laravel\Ai\Promptable;
  * Adding any would reintroduce exactly the problem the pair exists to avoid.
  * The absence is load-bearing, not an omission.
  *
+ * ## Local, unlike the half it transcribes
+ *
+ * The researcher has no choice about the cloud — it needs provider-side web
+ * tools, and `OllamaGateway::mapTools()` throws on the first `ProviderTool` it
+ * sees. This one has no tools at all, so the only thing it asks of a provider
+ * is a schema, and Ollama imposes one as a grammar. It is the halfway point of
+ * the pair in every sense: the sheet crosses the network, the structure is
+ * imposed at home.
+ *
  * Reached through ResearchLegalCaseTheses, right after the researcher.
  */
-#[Provider('gemini')]
-#[Timeout(180)]
+// Trocar as duas linhas de lugar manda a inferência para o Gemini — o bloco
+// `gemini` do config/ai.php já está ativo, então a troca mais um `config:clear`
+// bastam.
+// #[Provider('gemini')]
+#[Provider('ollama')]
+#[Timeout(360)]
 #[Temperature(0.1)]
 final class ForensicReviewTranscriptionAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {

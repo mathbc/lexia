@@ -29,20 +29,26 @@ podem ser um só.
 
 ## Quem sai da máquina
 
-Quatro agentes rodam no Ollama e três no **Gemini**, e as razões não são a mesma.
+Sete agentes rodam no Ollama e **um** no Gemini, e a assimetria é a resposta a uma
+pergunta só: quem precisa da internet?
 
-`LegalThesisResearchAgent` e o transcritor que lê a ficha dele não têm escolha: um agente
-de pesquisa que não consegue abrir o `stj.jus.br` é um modelo recitando súmula de memória,
-que é exatamente a falha que o prompt inteiro existe para impedir. Buscar e ler página são
-ferramentas do lado do provedor neste SDK, e o `OllamaProvider` não implementa nenhuma das
-duas — `Gateway/Ollama/Concerns/MapsTools.php` lança antes de montar requisição.
+`LegalThesisResearchAgent` precisa, e não tem escolha: um agente de pesquisa que não
+consegue abrir o `stj.jus.br` é um modelo recitando súmula de memória, que é exatamente a
+falha que o prompt inteiro existe para impedir. Buscar e ler página são ferramentas do
+lado do provedor neste SDK, e o `OllamaProvider` não implementa nenhuma das duas —
+`Gateway/Ollama/Concerns/MapsTools.php` lança `RuntimeException` antes de montar
+requisição, então apontá-lo para a máquina não degrada a pesquisa, apaga-a.
 
-`PracticeAreaClassificationAgent` tem escolha, e aponta para a nuvem mesmo assim: ele é a
-primeira das quatro inferências em série de `POST /pecas/classificar`, e o que se troca ali
-é latência por cota. Anote a consequência que a pesquisa de teses não tinha: **o relato do
-cliente passa a sair do escritório no enquadramento também**, inteiro e sem o estreitamento
-abaixo. Devolvê-lo à máquina é uma linha — o `#[Provider('ollama')]` comentado logo acima
-do atributo.
+Os outros sete não precisam, inclusive o transcritor que lê a ficha dele: transcrever pede
+um schema, e schema o Ollama impõe como gramática. `PracticeAreaClassificationAgent`
+chegou a apontar para a nuvem por latência — é a primeira inferência da cadeia mais longa
+de `POST /pecas/classificar` —, e voltou: a troca era cota por segundos, e mandava o
+relato inteiro do cliente para fora do escritório no enquadramento, sem o estreitamento
+descrito abaixo. Hoje o relato só sai na pesquisa, e ali já sai cortado.
+
+O que a volta custou foi tempo de parede, e está no atributo: todo agente carrega
+`#[Timeout(360)]`, o dobro do que bastava quando um flash respondia de um datacenter. Um
+timeout calibrado para a nuvem transforma uma inferência local que funciona numa exceção.
 
 O que viaja na pesquisa é estreitado para compensar: `LegalCaseDossier::forResearch()` corta
 o cliente e o réu inteiros. O relato vai, porque não se pesquisa uma tese sem os fatos que a
@@ -111,7 +117,7 @@ mas devolveria a resposta ao terreno da boa vontade: o código da classe deixari
 restringido por gramática e passaria a ser validado depois do fato. Duas chamadas, cada
 uma com seu `enum`, custam uma inferência a mais e compram a garantia.
 
-O preço é latência: dois `Timeout(180)` em série não cabem num request síncrono. A tela
+O preço é latência: dois `Timeout(360)` em série não cabem num request síncrono. A tela
 que pedir isso vai despachar, não esperar.
 
 ## Os dois extratores: acrescentados à cadeia, não encadeados
@@ -320,15 +326,17 @@ Cuidado ao mexer: `providerOptions` cai na chave `options` do corpo, mas `think`
 
 | | provider | modelo | env |
 |---|---|---|---|
-| Texto (os quatro agentes locais) | `ollama` | `gpt-oss:20b` | `OLLAMA_URL`, `OLLAMA_TEXT_MODEL` |
-| Texto (área, pesquisa e transcrição) | `gemini` | `gemini-3.6-flash` | `GEMINI_API_KEY`, `GEMINI_TEXT_MODEL` |
+| Texto (os sete agentes locais) | `ollama` | `gpt-oss:20b` | `OLLAMA_URL`, `OLLAMA_TEXT_MODEL` |
+| Texto (só a pesquisa de teses) | `gemini` | `gemini-3.6-flash` | `GEMINI_API_KEY`, `GEMINI_TEXT_MODEL` |
 | Embeddings (o catálogo) | `ollama` | `nomic-embed-text`, 768 dim. | `OLLAMA_URL`, `OLLAMA_EMBEDDINGS_MODEL` |
 
 O texto **voltou** para a máquina do escritório com o `gpt-oss:20b`, e o preço de volta é
-o que a ida ao Gemini tinha comprado: latência. `POST /pecas/classificar` são quatro
-inferências em série com o navegador esperando — a dívida que o `asController()` da rota
-documenta e que uma fila resolve. O que se compra de volta: nenhuma cota para pagar, e o
-relato do cliente nunca sai do escritório.
+o que a ida ao Gemini tinha comprado: latência — daí os `#[Timeout(360)]`.
+`POST /pecas/classificar` corre as quatro primeiras etapas num `Concurrency::run` e depois
+espera a pesquisa, com o navegador esperando tudo — a dívida que o `asController()` da
+rota documenta e que uma fila resolve. O que se compra de volta: quase nenhuma cota para
+pagar, e o relato do cliente saindo do escritório só na pesquisa de teses, já cortado por
+`LegalCaseDossier::forResearch()`.
 
 Os embeddings **nunca saíram**, e de propósito. Não havia o que ganhar movendo-os: o
 catálogo são 615 linhas já vetorizadas com `nomic-embed-text`, e vetor de um modelo não se
@@ -348,7 +356,7 @@ nomeia. Trocar de modelo é editar o `.env` e rodar `php artisan config:clear`.
 
 **Mandar todo o texto para a nuvem** são dois gestos, agora que o bloco `gemini` já está
 ativo e a chave já está no `.env`: pôr `AI_PROVIDER=gemini` e trocar o
-`#[Provider('ollama')]` dos quatro agentes ainda locais pela linha comentada logo acima de
+`#[Provider('ollama')]` dos sete agentes ainda locais pela linha comentada logo acima de
 cada um — mais `php artisan config:clear`. A chave `models` do bloco não é enfeite: sem
 ela o `GeminiProvider` cai num default que muda com a versão do pacote.
 

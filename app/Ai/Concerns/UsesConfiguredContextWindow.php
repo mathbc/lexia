@@ -23,13 +23,15 @@ use Laravel\Ai\Enums\Lab;
  * another driver gets nothing rather than an option it would reject — the
  * option list reaches the wire as the request's `options` key, unvalidated.
  *
- * Which is the provider four of the seven agents point at today, so the option
- * reaches the wire on their calls: for them this trait is doing its job rather
- * than documenting it. For the three on Gemini it sends nothing at all, and
- * that is correct and not a gap — a hosted window is orders of magnitude larger
- * than anything we build, and it answers an overlong prompt with an error
- * instead of a quiet truncation. The trait stays on every agent either way,
- * because which provider an agent names is one line and changes.
+ * Which is the provider seven of the eight agents point at today, so the option
+ * reaches the wire on almost every call: for them this trait is doing its job
+ * rather than documenting it, and doing it where it matters, because Ollama
+ * truncates an overrunning prompt in silence. For LegalThesisResearchAgent, the
+ * one on Gemini, it sends nothing at all, and that is correct and not a gap — a
+ * hosted window is orders of magnitude larger than anything we build, and it
+ * answers an overlong prompt with an error instead of a quiet truncation. The
+ * trait stays on every agent either way, because which provider an agent names
+ * is one line and changes.
  */
 trait UsesConfiguredContextWindow
 {

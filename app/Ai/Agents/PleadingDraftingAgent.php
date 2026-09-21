@@ -36,6 +36,15 @@ use Laravel\Ai\Promptable;
  * is nullable and often empty. A pleading distributed by dependency cites the case number of the
  * proceeding it hangs off; nothing here knows it.
  *
+ * The age is the one field of that paragraph that must **not** become a marker,
+ * and the instructions spend a section saying so. `LegalCaseDossier::age()`
+ * derives it from `customers.birth_date` and writes "47 anos" — the number, not
+ * the date, because the number is what the paragraph states and a date would be
+ * a subtraction this agent is forbidden to perform. When the registration has no
+ * birthday the line is absent, and unlike every other absence here that one is
+ * answered with silence rather than `[idade]`: marital status and occupation are
+ * obligatory in the sentence, the age is not.
+ *
  * A model asked to write that paragraph will write it. "Brasileiro, casado,
  * comerciante" is the single most likely invention in this whole project,
  * because it is grammatically obligatory, utterly ordinary, and wrong about a
@@ -78,11 +87,12 @@ use Laravel\Ai\Promptable;
  * Reached through DraftLegalPleading, which appends the signature and stores the
  * result as a new LegalPleading version.
  */
-// Trocar as duas linhas de lugar manda a inferência para a máquina — e o
-// `gpt-oss:20b` precisa estar baixado.
-// #[Provider('ollama')]
-#[Provider('gemini')]
-#[Timeout(180)]
+// Trocar as duas linhas de lugar manda a inferência para o Gemini — o bloco
+// `gemini` do config/ai.php já está ativo, então a troca mais um `config:clear`
+// bastam.
+// #[Provider('gemini')]
+#[Provider('ollama')]
+#[Timeout(360)]
 #[Temperature(0.3)]
 final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
@@ -144,6 +154,21 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
         Nunca escreva "não informado", "a ser informado", "XXX", "N/A" ou deixe a frase
         pela metade. Use o colchete.
 
+        ## A idade, que é a única exceção
+
+        O dossiê traz a idade do autor já calculada, na linha "Idade" da seção dele —
+        "47 anos". Havendo essa linha, escreva-a na qualificação logo depois da
+        nacionalidade: "MARIA DA SILVA, brasileira, 47 anos, casada, comerciante, ...".
+
+        **Não havendo essa linha, a qualificação simplesmente não declara idade.** Aqui
+        você não escreve colchete: `[idade]` é errado, e "de idade desconhecida" é
+        pior. Estado civil e profissão o parágrafo exige, e por isso a falta deles vira
+        marcador; a idade ele não exige, e por isso a falta dela vira silêncio — a
+        frase segue de "brasileira" direto para o estado civil.
+
+        E você nunca calcula idade: o dossiê não traz data de nascimento, e se trouxesse
+        uma data em vez de um número, a conta continuaria sendo o que você não faz.
+
         ## A conta que você não faz
 
         Você não soma, não multiplica e não totaliza. Se cada pedido tem o seu valor,
@@ -168,12 +193,12 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
            for de peça acessória a um processo em curso (embargos, impugnação,
            reconvenção). Nas demais, não escreva esta linha.
         3. **A qualificação e a propositura**, um parágrafo só: o nome do autor em CAIXA
-           ALTA, a nacionalidade, o estado civil, a profissão, o documento, o endereço, e
-           então "por intermédio de seu advogado infra-assinado, vem, respeitosamente, à
-           presença de Vossa Excelência, propor a presente" — o nome da ação em CAIXA
-           ALTA, derivado da classe processual do dossiê — "em face de" e o réu
-           qualificado do mesmo modo, fechando com "pelos fatos e fundamentos a seguir
-           expostos."
+           ALTA, a nacionalidade, a idade quando o dossiê a trouxer, o estado civil, a
+           profissão, o documento, o endereço, e então "por intermédio de seu advogado
+           infra-assinado, vem, respeitosamente, à presença de Vossa Excelência, propor
+           a presente" — o nome da ação em CAIXA ALTA, derivado da classe processual do
+           dossiê — "em face de" e o réu qualificado do mesmo modo, fechando com
+           "pelos fatos e fundamentos a seguir expostos."
         4. **As seções numeradas**, com algarismo romano, travessão e título em CAIXA
            ALTA:
            - `I – PRELIMINARMENTE: ...` — só quando houver pedido que a justifique, como
@@ -250,6 +275,10 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
         registrou virou colchete; a comarca veio do endereçamento do dossiê; a numeração
         romana é sequencial sobre as seções que existem — não há seção de documentos
         porque não há documentos —; e não há seção de jurisprudência.
+
+        Repare também no que **não** virou colchete: o dossiê não trazia a linha
+        "Idade", e a qualificação passou direto de "brasileira" para o estado civil.
+        Não há `[idade]` nenhum ali, e é assim que tem de ser.
 
         ## Erro a não repetir
 

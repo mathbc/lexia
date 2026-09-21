@@ -174,29 +174,32 @@ sessão. O `/register` do Fortify está desligado: o cadastro público é
 
 ## Os agentes
 
-`laravel/ai` com **dois providers**. Atenção: o que esta seção descreve abaixo é o
-arranjo em que as medições foram feitas, e **não é o arranjo de hoje** — os oito agentes
-estão todos com `#[Provider('gemini')]`, com a linha do Ollama comentada acima de cada
-um. O Ollama continua servindo os embeddings do catálogo com `nomic-embed-text` (768
-dimensões), e é só isso que ele ainda faz. O oitavo agente é `PleadingDraftingAgent`,
-que redige a minuta — ver "A minuta", abaixo.
+`laravel/ai` com **dois providers**, e a divisão responde a uma pergunta só: quem precisa
+da internet? São **oito agentes**; sete rodam no Ollama com `gpt-oss:20b`, e o oitavo é
+`PleadingDraftingAgent`, que redige a minuta — ver "A minuta", abaixo. Os embeddings do
+catálogo nunca saíram da máquina: `nomic-embed-text`, 768 dimensões.
 
-O desenho original, que as medições registram: o Ollama fazia o texto
-de quatro dos sete agentes e os embeddings do catálogo, `gpt-oss:20b` para a prosa e
-`nomic-embed-text` para os vetores. O **Gemini** responde por três:
-a pesquisa de teses e o transcritor que lê a ficha dela, que precisam de busca na web e
-por isso não têm como ser locais (ver "A pesquisa de teses", abaixo), e
-`PracticeAreaClassificationAgent`, que **tem** como ser local e ainda assim aponta para a
-nuvem — ali se troca latência por cota, já que a área abre a cadeia mais longa de
-`POST /pecas/classificar`. As duas últimas das seis inferências da rota são a pesquisa de
-teses, que também é do Gemini: a rota toca os dois providers, e uma cota esgotada a atinge
-em dois pontos — e agora em rajada, porque as quatro primeiras correm em paralelo. Anote o que vem junto: o relato do cliente agora
-sai do escritório no enquadramento também, e inteiro, sem o estreitamento que
-`LegalCaseDossier::forResearch()` faz na pesquisa. `AI_PROVIDER` continua `ollama`; quem
-aponta para a nuvem é o `#[Provider('gemini')]` desses três, e de mais nenhum — e devolver
-qualquer um deles à máquina é trocar o atributo pela linha comentada logo acima. Os
-embeddings nunca saíram: as 615 classes já estão vetorizadas com o nomic, vetor de
-um modelo não se compara com vetor de outro, e mover custaria uma reembutida
+O **Gemini** responde por **um**: `LegalThesisResearchAgent`, que pesquisa nos portais
+oficiais. Ele não tem opção local, e a falha não seria graciosa —
+`OllamaGateway::mapTools()` lança `RuntimeException` no primeiro `ProviderTool` que vê, de
+modo que apontá-lo para o daemon não degrada a pesquisa, apaga-a (ver "A pesquisa de
+teses", abaixo). O transcritor que lê a ficha dele **é** local: transcrever pede um
+schema, e schema o Ollama impõe como gramática.
+
+`PracticeAreaClassificationAgent` chegou a apontar para a nuvem, trocando cota por
+latência já que a área abre a cadeia mais longa de `POST /pecas/classificar`, e voltou. A
+consequência de fronteira que essa ida trazia junto era grande: o relato inteiro do
+cliente saía do escritório no enquadramento, sem o estreitamento que
+`LegalCaseDossier::forResearch()` faz na pesquisa. Hoje o relato só sai na pesquisa, e ali
+já sai cortado.
+
+`AI_PROVIDER` é `ollama`; quem aponta para a nuvem é o `#[Provider('gemini')]` de um
+agente só, e mandar qualquer outro para lá é trocar o atributo pela linha comentada logo
+acima. O preço da volta está no atributo vizinho: **todo agente carrega
+`#[Timeout(360)]`**, o dobro do que bastava quando um flash respondia de um datacenter —
+um timeout calibrado para a nuvem transforma uma inferência local que funciona numa
+exceção. Os embeddings nunca saíram: as 615 classes já estão vetorizadas com o nomic,
+vetor de um modelo não se compara com vetor de outro, e mover custaria uma reembutida
 inteira para comprar nada.
 
 Consequência operacional: **o Ollama é dependência de desenvolvimento inteira** —
@@ -207,7 +210,7 @@ classificações piorando sem erro nenhum.
 
 O bloco `gemini` do `config/ai.php` já está ativo — a pesquisa de teses depende dele —,
 então mandar **todo** o texto para a nuvem são dois gestos: pôr `AI_PROVIDER=gemini` no
-`.env` e trocar o `#[Provider('ollama')]` dos quatro agentes ainda locais pela linha
+`.env` e trocar o `#[Provider('ollama')]` dos sete agentes ainda locais pela linha
 comentada logo acima de cada um, mais `config:clear`. A chave `models` no bloco não é enfeite: sem
 ela o `GeminiProvider` cai num default que muda com a versão do pacote.
 
@@ -320,7 +323,7 @@ vazia é o relato que não pede nada.
 `POST /pecas/classificar` é a única rota das Actions de agente: ela aponta para
 `ClassifyLegalCase`, e as demais não têm `asController()` enquanto nada apontar para elas.
 O preço da rota continua sendo latência, com o navegador esperando, mas deixou de ser a
-soma: as seis chamadas a `Timeout(180)` não correm mais todas em série. As quatro etapas
+soma: as seis chamadas a `Timeout(360)` não correm mais todas em série. As quatro etapas
 básicas estão num `Concurrency::run` — três tasks, porque área e classe são uma cadeia —,
 então a espera é a mais longa delas, e não o total. **A dívida da fila continua de pé**, e
 por um motivo que o paralelismo não alcança: quem domina o tempo é a pesquisa, que ficou
@@ -334,9 +337,10 @@ atravessando `serialize()`; `sync` devolve o comportamento em série sem tocar e
 a saída se a cota do provedor reclamar das requisições simultâneas. E a suíte padrão **tem**
 de rodar em `sync`, fixado no `phpunit.xml`: um dublê registrado no container do processo de
 teste não cruza para um processo filho, então em `process` os mocks seriam ignorados e os
-testes iriam ao Gemini de verdade. `tests/Agents/LegalCaseClassificationTest` sobrescreve
+testes iriam ao provedor de verdade. `tests/Agents/LegalCaseClassificationTest` sobrescreve
 isso de propósito — é o único lugar que exercita o bloco como produção o roda, e custa
-minutos, cota do Gemini e rede, podendo ficar vermelho porque um portal caiu.
+minutos de máquina, mais a cota do Gemini e a rede da última etapa, podendo ficar vermelho
+porque um portal caiu.
 
 Um agente continua fora da cadeia e não é chamado por ela. `FactsRefinementAgent`,
 exposto por `RefineLegalCaseFacts`, reescreve o relato do cliente como a narrativa de
@@ -361,10 +365,11 @@ medido contra essa tabela, e é por isso que a saída deste agente é uma minuta
 advogado aceitar, nunca um campo que se preenche sozinho.
 
 Testes de agente ficam em `tests/Agents`, no grupo `agents`, **fora** do
-`php artisan test` padrão porque gastam inferência de verdade. Para três deles a conta
-é só o tempo da máquina — Ollama de pé com `gpt-oss:20b` e `nomic-embed-text` baixados.
-`LegalCaseClassificationTest` passou a custar as duas coisas, porque a área responde do
-Gemini e a classe, do daemon.
+`php artisan test` padrão porque gastam inferência de verdade. Para quase todos a conta
+é só o tempo da máquina — Ollama de pé com `gpt-oss:20b` e `nomic-embed-text` baixados —,
+e com os agentes locais e `#[Timeout(360)]` esse tempo é real: conte minutos, não segundos.
+`LegalCaseClassificationTest` custa as duas coisas, porque as quatro primeiras etapas
+respondem do daemon e a quinta, a pesquisa, do Gemini.
 `LegalThesisResearchTest` é o extremo e custa **cota do Gemini** mais rede: ele pesquisa
 nos portais de verdade, leva minutos e pode ficar vermelho porque o STJ está fora do ar,
 e não porque o prompt regrediu. Tudo o que nele não depende do modelo — a guarda de
@@ -443,6 +448,10 @@ Súmula 430 e citou a capa do STJ como onde a leu, porque não leu nada. Então
 estrutura aninhada. `ResearchLegalCaseTheses` chama os dois em série. O custo é o inverso
 do usual: o que a ficha não escrever, o transcritor não inventa — e também não recupera.
 
+Note que o par está dividido entre os dois providers: só o pesquisador é do Gemini. O
+transcritor não pede rede, pede schema, e schema o Ollama impõe como gramática — então ele
+é local como os outros seis, e a ficha é a única coisa que atravessa a fronteira.
+
 Três armadilhas medidas, todas do Gemini e todas silenciosas:
 
 1. **O `->allow([...])` das ferramentas de web é descartado.**
@@ -465,7 +474,7 @@ em duas listas e cunha o uuid em PHP é `ForensicReviewData::fromAgent()`, que �
 
 `ClassifyLegalCase` aponta para `ResearchLegalCaseTheses` como última etapa, e a ressalva
 que esta seção fazia continua valendo — ela devia ser fila e é request. A dívida só mudou de
-dono: são dois `Timeout(180)` em série depois de um bloco concorrente que encurtou as
+dono: são dois `Timeout(360)` em série depois de um bloco concorrente que encurtou as
 quatro primeiras e não toca nestas duas — o primeiro deles é a inferência mais lenta do
 projeto, e hoje domina a espera da rota sozinho. A tela que consome isso é a etapa 6 do
 assistente (`ForensicReviewFields`). As teses ainda viajam pelo `sessionStorage` com o
@@ -519,8 +528,21 @@ e `birth_date`, os três **opcionais e exclusivos de pessoa física**: o `exclud
 é o objeto que os carrega, irmão de `AddressData` pelo mesmo motivo — "qualificação" é
 uma parte do documento, não três colunas soltas. Um cadastro sem eles continua válido,
 `written()` continua descartando a linha vazia do dossiê, e é essa ausência que manda
-escrever `[estado civil]`. A data de nascimento fica **fora** de `forDrafting()`: a
-qualificação padrão não a declara, e um campo no dossiê é um convite a escrevê-lo.
+escrever `[estado civil]`.
+
+Os três chegam ao agente, mas o terceiro chega **convertido**: a data de nascimento
+continua fora de `forDrafting()` e quem entra é a idade que `LegalCaseDossier::age()`
+deriva dela — "Idade: 47 anos". O motivo de excluir a data segue de pé (a qualificação
+padrão não declara aniversário, e um campo no dossiê é um convite a escrevê-lo); o que se
+declara é a idade, então é a idade que viaja. A subtração é feita em PHP pela mesma razão
+que a assinatura é: pedir uma conta a este agente é o que o resto do prompt gasta páginas
+proibindo.
+
+E a idade é a **única** lacuna que não vira colchete. Estado civil e profissão o parágrafo
+exige, então a falta deles é `[estado civil]`; a idade ele não exige, então a falta dela é
+silêncio — `[idade]` não está na lista de marcadores e o prompt diz por quê. Uma data no
+futuro cai no mesmo silêncio, porque `age()` corta em zero em vez de qualificar o autor
+com idade negativa.
 
 `LegalCaseDossier::forDrafting()` é a terceira projeção, e a mais larga: qualifica as
 duas partes com endereço inteiro, mascara o documento (vai copiado para um parágrafo

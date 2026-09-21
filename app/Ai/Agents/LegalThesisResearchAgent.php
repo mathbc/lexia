@@ -112,7 +112,7 @@ use Laravel\Ai\Providers\Tools\WebSearch;
  * what this agent needs is the framing, not a primary key.
  */
 #[Provider('gemini')]
-#[Timeout(180)]
+#[Timeout(360)]
 #[Temperature(0.1)]
 final class LegalThesisResearchAgent implements Agent, HasProviderOptions, HasTools
 {
