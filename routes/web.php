@@ -22,6 +22,7 @@ use App\Domain\LegalCases\Actions\ClassifyLegalCase;
 use App\Domain\LegalCases\Actions\CreateLegalCase;
 use App\Domain\LegalCases\Actions\FinalizeLegalCase;
 use App\Domain\LegalCases\Actions\ListLegalCases;
+use App\Domain\LegalCases\Actions\ResearchLegalCaseForensicReview;
 use App\Domain\LegalCases\Actions\SaveLegalCaseForensicReview;
 use App\Domain\LegalCases\Actions\SaveLegalCaseRequirements;
 use App\Domain\LegalCases\Actions\ShowAssistedLegalCaseForm;
@@ -103,7 +104,9 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     // A única rota de peça que não devolve tela: o enquadramento sai em JSON
     // porque quem o pede — o preenchimento inteligente — leva o resultado até
     // o assistente em vez de exibi-lo.
-    Route::post('/pecas/classificar', ClassifyLegalCase::class)->name('legal-cases.classify');
+    Route::post('/pecas/classificar', ClassifyLegalCase::class)
+        ->middleware('inference')
+        ->name('legal-cases.classify');
 
     Route::post('/pecas', CreateLegalCase::class)->name('legal-cases.store');
 
@@ -121,13 +124,28 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         // request. Ver SaveLegalCaseForensicReview.
         Route::put('/revisao-forense', SaveLegalCaseForensicReview::class)->name('legal-cases.forensic-review');
 
+        // A pesquisa que preenche a etapa 6, disparada ao abri-la e nunca de
+        // novo sozinha: `research_findings` é o marcador de que já rodou. Ela
+        // grava o que acha, então responde com um redirect para a própria etapa
+        // em vez de devolver o payload — ver ResearchLegalCaseForensicReview.
+        //
+        // `inference` é o teto de execução do PHP levantado: sem ele o
+        // `max_execution_time` de fábrica abate a requisição em 32 s, no meio
+        // do cURL, muito antes de o `#[Timeout(360)]` do agente ter opinião —
+        // e aqui são dois agentes em série. Ver AllowLongInference.
+        Route::post('/revisao-forense/pesquisar', ResearchLegalCaseForensicReview::class)
+            ->middleware('inference')
+            ->name('legal-cases.forensic-review.research');
+
         // Os documentos ainda não persistem, mas o Continuar deles diz uma
         // verdade sobre a peça: ela chegou até ali.
         Route::patch('/etapa', AdvanceLegalCaseStep::class)->name('legal-cases.step');
 
         // O fim do assistente, e a única rota que fecha uma peça: grava a
         // revisão forense, tira do rascunho e manda o agente redigir a minuta.
-        Route::post('/concluir', FinalizeLegalCase::class)->name('legal-cases.finalize');
+        Route::post('/concluir', FinalizeLegalCase::class)
+            ->middleware('inference')
+            ->name('legal-cases.finalize');
 
         // A segunda aba da peça. A minuta é uma URL de verdade como as abas da
         // conta, para que uma peça aberta no documento sobreviva a um reload.
@@ -135,6 +153,8 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::put('/minuta', SaveLegalPleadingContent::class)->name('legal-cases.pleading.save');
 
         // Só a recuperação de falha: a Action recusa quando já existe versão.
-        Route::post('/minuta/gerar', GenerateLegalPleading::class)->name('legal-cases.pleading.generate');
+        Route::post('/minuta/gerar', GenerateLegalPleading::class)
+            ->middleware('inference')
+            ->name('legal-cases.pleading.generate');
     });
 });

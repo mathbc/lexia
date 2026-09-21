@@ -273,6 +273,16 @@ export interface LegalCaseDraft {
      */
     theses: ResearchedThesis[];
     precedents: ResearchedPrecedent[];
+    /**
+     * O relato da pesquisa que produziu as teses acima, ou nulo se nunca se
+     * pesquisou nesta peça.
+     *
+     * O nulo é o gatilho: é ele que faz a etapa 6 chamar o agente ao abrir, uma
+     * vez só. Conferir `theses.length` no lugar disto seria repesquisar para
+     * sempre toda peça cuja pesquisa nada confirmou — e, pior, apagando o que o
+     * advogado já tivesse curado, porque a gravação reconcilia por diff.
+     */
+    research: LegalResearchFindings | null;
 }
 
 /**
@@ -427,25 +437,41 @@ export interface ResearchedPrecedent {
 }
 
 /**
- * O que uma rodada de pesquisa encontrou, e o que ela teve de recusar —
- * espelha `LegalResearchData::toArray()`.
+ * O relato de uma rodada de pesquisa — espelha `LegalResearchData::findings()`,
+ * que é o que a coluna `legal_cases.research_findings` guarda.
  *
- * Duas camadas, e a separação é o ponto. `theses` e `precedents` são a parte que
- * um dia vira linha no banco; o resto é o **relato da pesquisa**: a questão que
- * foi perguntada, os portais oficiais que foram abertos, o que ficou em aberto e
- * as citações que a guarda removeu por não terem fonte oficial.
+ * Tudo o que uma pesquisa produz **menos** as duas listas que viraram tabela: a
+ * questão que foi perguntada, os portais oficiais que foram abertos, o que
+ * ficou em aberto e as citações que a guarda removeu por não terem fonte
+ * oficial.
  *
  * `unverified_citations` merece a tela que tem. Uma tese sem fundamentação
  * nenhuma tem duas causas opostas — a pesquisa não achou nada, ou a guarda
  * recusou o que ela achou — e as duas produzem exatamente a mesma lista vazia.
+ *
+ * O objeto inteiro ser nulo é a terceira coisa, e a mais importante para a
+ * tela: significa que **nunca se pesquisou**, e é o que faz a etapa 6 disparar
+ * a pesquisa ao abrir. Um objeto presente com tudo vazio é uma pesquisa que
+ * rodou e nada confirmou, e essa não se repete sozinha.
  */
-export interface LegalResearch {
+export interface LegalResearchFindings {
     legal_question: string | null;
-    theses: ResearchedThesis[];
-    precedents: ResearchedPrecedent[];
     sources: string[];
     pending: string[];
     unverified_citations: string[];
+    researched_at: string;
+}
+
+/**
+ * O relato mais as duas listas, que é a forma que a pesquisa publica antes de
+ * ser gravada — espelha `LegalResearchData::toArray()`.
+ *
+ * Sobrevive como a origem de `ResearchedReview` em `@/lib/forensic-review`: as
+ * duas listas achatadas, com o precedente citando a tese por `legal_thesis_id`.
+ */
+export interface LegalResearch extends LegalResearchFindings {
+    theses: ResearchedThesis[];
+    precedents: ResearchedPrecedent[];
 }
 
 /**
@@ -460,6 +486,10 @@ export interface LegalResearch {
  * O réu é nulo quando a extração falhou, que não é o mesmo que um relato sem
  * réu identificado: esse chega como doze campos nulos dentro do objeto. Os
  * pedidos carregam a mesma distinção, com a lista vazia no lugar dos nulos.
+ *
+ * A revisão forense não vem daqui. Ela roda ao abrir a etapa 6, sobre uma peça
+ * já gravada, e chega ao assistente por `LegalCaseDraft` — do banco, e não do
+ * `sessionStorage`.
  */
 export interface LegalCaseClassification {
     practice_area: { id: string; slug: string; label: string };
@@ -468,13 +498,6 @@ export interface LegalCaseClassification {
     procedural_class_justification: string | null;
     defendant: DefendantSuggestion | null;
     requirements: ExtractedRequirement[] | null;
-    /**
-     * A revisão forense, ou nulo quando a pesquisa falhou — um portal fora do
-     * ar derruba a etapa sem que o enquadramento perca nada. Não confundir com
-     * a pesquisa que nada confirmou: essa chega com as duas listas vazias e o
-     * `pending` escrito.
-     */
-    research: LegalResearch | null;
 }
 
 /** Mirrors LegalCasePageProps::abilities(). */

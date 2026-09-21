@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Ai\Agents;
 
-use App\Ai\Concerns\UsesConfiguredContextWindow;
+use App\Ai\Concerns\ConfiguresOllamaRuntime;
 use App\Domain\LegalCases\Data\LegalResearchData;
 use App\Domain\Shared\Support\OfficialLegalSources;
 use Laravel\Ai\Attributes\Provider;
@@ -95,7 +95,7 @@ use Laravel\Ai\Providers\Tools\WebSearch;
  * most. A clumsy sentence is visible; a fabricated Súmula 393 reads exactly
  * like a real one.
  *
- * `UsesConfiguredContextWindow` returns `[]` for anything that is not Ollama,
+ * `ConfiguresOllamaRuntime` returns `[]` for anything that is not Ollama,
  * so here it is documentation — exactly what CLAUDE.md predicted it would
  * become the day an agent pointed at the cloud. `#[Model]` stays absent: the
  * model is named in `config/ai.php` and nowhere else.
@@ -116,8 +116,8 @@ use Laravel\Ai\Providers\Tools\WebSearch;
 #[Temperature(0.1)]
 final class LegalThesisResearchAgent implements Agent, HasProviderOptions, HasTools
 {
+    use ConfiguresOllamaRuntime;
     use Promptable;
-    use UsesConfiguredContextWindow;
 
     /**
      * A budget generous enough to confirm, small enough to end.

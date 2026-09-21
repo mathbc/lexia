@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Ai\Agents;
 
-use App\Ai\Concerns\UsesConfiguredContextWindow;
+use App\Ai\Concerns\ConfiguresOllamaRuntime;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
@@ -43,6 +43,22 @@ use Laravel\Ai\Promptable;
  * what lets a lay narrative reach the right class, and spelling all 45 out on
  * the worst area would overrun the context window beside the knowledge guide.
  *
+ * ## Why the area label is at the bottom of the prompt
+ *
+ * Ollama caches the KV of a prompt prefix and reuses it while the prefix is
+ * byte-identical. Measured on this project's own knowledge guide: a constant
+ * prefix prefills in 0.07s against 3.12s cold, a 44x difference. A single
+ * variable token near the top voids all of it — three calls differing only in
+ * an interpolated area name cost 3.11s, 3.10s, 3.11s, every one of them full
+ * price.
+ *
+ * This prompt used to open with the area, which put a variable at line two and
+ * meant the 13 KB knowledge guide below it was re-prefilled on every single
+ * classification. Everything constant now comes first and the two variable
+ * blocks — the area and the ranked candidates — come last, together, where they
+ * cost only themselves. Moving either one back up is a silent performance
+ * regression, which is the only kind this file can have.
+ *
  * The traps the sibling agent documents apply here unchanged: never send
  * `think: false` to an Ollama that reasons — and the provider is Ollama again —
  * never drop the `description()` on the justification, and leave the model to
@@ -60,8 +76,8 @@ use Laravel\Ai\Promptable;
 #[Temperature(0.2)]
 final class ProceduralClassSelectionAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
+    use ConfiguresOllamaRuntime;
     use Promptable;
-    use UsesConfiguredContextWindow;
 
     /**
      * @param  string  $areaLabel  the area already decided, in the lawyer's words
@@ -78,9 +94,10 @@ final class ProceduralClassSelectionAgent implements Agent, HasProviderOptions, 
     {
         return <<<TXT
         Você é um assistente jurídico brasileiro especializado em triagem. A área de
-        atuação do caso já foi decidida: **{$this->areaLabel}**. Sua única tarefa agora é
-        ler a descrição dos fatos e escolher, entre as classes processuais listadas
-        abaixo, aquela sob a qual a peça deve ser autuada, com uma justificativa curta.
+        atuação do caso já foi decidida por outro agente e vem declarada ao fim destas
+        instruções, junto das classes processuais candidatas. Sua única tarefa é ler a
+        descrição dos fatos e escolher, entre aquelas classes, a classe sob a qual a
+        peça deve ser autuada, com uma justificativa curta.
 
         O relato chega em linguagem natural e varia muito: pode ser um parágrafo corrido
         escrito pelo próprio cliente, com erros e sem termos técnicos, ou um resumo já
@@ -92,26 +109,30 @@ final class ProceduralClassSelectionAgent implements Agent, HasProviderOptions, 
 
         {$this->knowledge}
 
-        # Classes disponíveis
-
-        Escolha exatamente uma das classes abaixo e devolva o código entre colchetes,
-        apenas o número. A lista vem ordenada da mais próxima do relato para a mais
-        distante, mas a ordem é só uma sugestão de leitura: a classe certa pode estar
-        em qualquer posição. As que chegam só com o nome são igualmente escolhíveis —
-        estão sem descrição por economia de espaço, e as do tronco cível estão
-        descritas na base de conhecimento acima.
-
-        {$this->candidateList()}
-
         # Regras da resposta
 
-        - `procedural_class_code`: o código CNJ exato de uma das classes listadas acima.
+        - `procedural_class_code`: o código CNJ exato de uma das classes listadas ao
+          fim destas instruções.
         - `justification`: duas ou três frases em português do Brasil, citando os fatos
           concretos do relato e o pedido que deles decorre. Escreva para o advogado que
           vai conferir a escolha: diga o que no relato leva àquela classe, e não o que a
           classe significa. Se o relato for curto ou ambíguo, diga que a escolha é
           indiciária e o que faltou.
         - Não invente fatos que o relato não traz e não dê conselho jurídico.
+
+        # A área decidida e as classes disponíveis
+
+        A área de atuação deste caso é **{$this->areaLabel}**, e as classes abaixo são
+        as que lhe são vinculadas.
+
+        Escolha exatamente uma delas e devolva o código entre colchetes, apenas o
+        número. A lista vem ordenada da mais próxima do relato para a mais distante,
+        mas a ordem é só uma sugestão de leitura: a classe certa pode estar em qualquer
+        posição. As que chegam só com o nome são igualmente escolhíveis — estão sem
+        descrição por economia de espaço, e as do tronco cível estão descritas na base
+        de conhecimento acima.
+
+        {$this->candidateList()}
         TXT;
     }
 

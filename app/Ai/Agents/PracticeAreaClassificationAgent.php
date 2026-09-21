@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Ai\Agents;
 
-use App\Ai\Concerns\UsesConfiguredContextWindow;
+use App\Ai\Concerns\ConfiguresOllamaRuntime;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
@@ -69,8 +69,8 @@ use Laravel\Ai\Promptable;
 #[Temperature(0.2)]
 final class PracticeAreaClassificationAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
+    use ConfiguresOllamaRuntime;
     use Promptable;
-    use UsesConfiguredContextWindow;
 
     /**
      * @param  list<array{slug: string, label: string}>  $areas  every area the answer may name

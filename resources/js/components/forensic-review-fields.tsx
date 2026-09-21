@@ -1,25 +1,53 @@
-import { ExternalLink, Scale, ShieldAlert } from 'lucide-react'
-import { useId } from 'react'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
-import { adherenceLabel, keptTheses, sourceLabel, type ThesisDraft } from '@/lib/forensic-review'
-import { cn } from '@/lib/utils'
-import type { LegalResearch, Option, ResearchedPrecedent } from '@/types'
+import { ExternalLink, RefreshCw, Scale, ShieldAlert } from "lucide-react";
+import { useId } from "react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import {
+    adherenceLabel,
+    keptTheses,
+    sourceLabel,
+    type ThesisDraft,
+} from "@/lib/forensic-review";
+import { cn } from "@/lib/utils";
+import type {
+    LegalResearchFindings,
+    Option,
+    ResearchedPrecedent,
+} from "@/types";
 
 interface Props {
-    /** A pesquisa inteira, ou nulo quando não há uma nesta sessão. */
-    research: LegalResearch | null
+    /**
+     * O relato da pesquisa já gravada, ou nulo quando nunca se pesquisou.
+     *
+     * O nulo é o estado transitório: a etapa dispara a pesquisa ao abrir, então
+     * ele dura o tempo do diálogo. Presente com tudo vazio é o outro caso — uma
+     * rodada que abriu os portais e nada confirmou —, e essa não se repete.
+     */
+    research: LegalResearchFindings | null;
+    /** O agente está respondendo agora: a etapa mostra o esqueleto. */
+    researching: boolean;
+    /** A rodada falhou — portal fora do ar, cota esgotada — e nada foi gravado. */
+    failed: boolean;
+    /** Refaz a pesquisa, descartando a anterior. Um gesto do advogado, nunca automático. */
+    onResearch: () => void;
     /** As teses com a decisão do advogado ao lado — ver `@/lib/forensic-review`. */
-    theses: ThesisDraft[]
-    onToggle: (id: string, keep: boolean) => void
+    theses: ThesisDraft[];
+    onToggle: (id: string, keep: boolean) => void;
     /** `LegalThesisType::options()`: o português dos rótulos vem do enum. */
-    thesisTypes: Option[]
+    thesisTypes: Option[];
     /** `LegalPrecedentType::options()`, pelo mesmo motivo. */
-    precedentTypes: Option[]
+    precedentTypes: Option[];
 }
 
 /**
@@ -27,9 +55,17 @@ interface Props {
  * sustentam.
  *
  * É a única etapa do assistente que abre **preenchida por uma pesquisa**, e não
- * por um relato: `ClassifyLegalCase` a pede como última etapa, e o que chega
- * aqui já passou pela guarda de `LegalResearchData` — toda citação que sobrou
- * foi lida num portal oficial, e a que não foi está dita em separado, embaixo.
+ * por um relato — e a única cuja espera sai da máquina. Abrir a etapa dispara
+ * `ResearchLegalCaseForensicReview`, que pesquisa nos portais oficiais e grava
+ * o que confirma; o que chega aqui já passou pela guarda de
+ * `LegalResearchData` — toda citação que sobrou foi lida num portal oficial, e
+ * a que não foi está dita em separado, embaixo.
+ *
+ * O disparo é **uma vez por peça**, e quem decide é `research` ser nulo, nunca
+ * a lista de teses estar vazia: uma rodada que nada confirma é uma resposta
+ * cara e legítima que grava zero teses, e repeti-la a cada visita gastaria cota
+ * e apagaria o que o advogado já curou. Uma segunda rodada é o botão
+ * "Pesquisar novamente", e ele avisa o que faz.
  *
  * Por isso a decisão que a tela pede é **tirar**, não escolher. Toda tese chega
  * marcada; a caixa ao lado do título é o que a desvincula da peça. Uma tese
@@ -51,52 +87,105 @@ interface Props {
  * — não se achou nada, ou se achou e não se confirmou — que produzem
  * exatamente a mesma lista vazia.
  *
- * Nada aqui é enviado. A lista vive no rascunho até existir a Action que grava
- * a revisão forense, e é o mesmo arranjo dos documentos: a tela está pronta
- * antes da gravação, de propósito. A consequência é que recarregar a página
- * perde o que a pesquisa custou — o único ponto do assistente em que isso
- * acontece, e a razão pela qual a tela em branco não afirma que a pesquisa
- * falhou.
+ * **As teses são linhas no banco antes de esta tela desenhá-las.** Já não
+ * foram: elas viajavam no `sessionStorage` e morriam com a aba, e a tela em
+ * branco tinha de ser vaga porque não sabia distinguir a pesquisa que falhou
+ * da aba que foi recarregada. Agora a gravação acontece junto com a pesquisa,
+ * então recarregar mostra o que está no banco, e cada estado desta tela afirma
+ * uma coisa só: pesquisando, falhou sem gravar nada, nada confirmado, ou as
+ * teses.
+ *
+ * O que ainda vive em estado local é só a **decisão** — o `keep` de cada tese —,
+ * que vira gravação no "Concluir e gerar minuta" da etapa. Desmarcar e sair sem
+ * concluir não desmarca nada no banco.
  */
 export function ForensicReviewFields({
     research,
+    researching,
+    failed,
+    onResearch,
     theses,
     onToggle,
     thesisTypes,
     precedentTypes,
 }: Props) {
-    const kept = keptTheses(theses).length
+    const kept = keptTheses(theses).length;
 
     return (
         <Card>
-            <CardHeader>
-                <CardTitle>Revisão forense</CardTitle>
-                <CardDescription>
-                    {theses.length === 0
-                        ? 'As teses que a peça sustenta e os julgados que as fundamentam.'
-                        : `${theses.length} ${theses.length === 1 ? 'tese encontrada' : 'teses encontradas'} · ${kept} ${
-                              kept === 1 ? 'mantida na peça' : 'mantidas na peça'
-                          }`}
-                </CardDescription>
+            <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
+                <div className="space-y-1.5">
+                    <CardTitle>Revisão forense</CardTitle>
+                    <CardDescription>
+                        {theses.length === 0
+                            ? "As teses que a peça sustenta e os julgados que as fundamentam."
+                            : `${theses.length} ${theses.length === 1 ? "tese encontrada" : "teses encontradas"} · ${kept} ${
+                                  kept === 1
+                                      ? "mantida na peça"
+                                      : "mantidas na peça"
+                              }`}
+                    </CardDescription>
+                </div>
+
+                {/* Depois de uma rodada ter acontecido, ou de uma ter falhado:
+                    a primeira falha deixa `research` nulo, e o alerta abaixo
+                    manda usar este botão. Antes disso a etapa já está
+                    pesquisando sozinha, e um botão ali convidaria a uma segunda
+                    chamada simultânea. */}
+                {(research !== null || failed) && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={researching}
+                        onClick={onResearch}
+                    >
+                        <RefreshCw />
+                        Pesquisar novamente
+                    </Button>
+                )}
             </CardHeader>
 
             <CardContent className="space-y-6">
-                {research === null ? (
-                    // Três situações caem aqui e a tela não consegue distingui-las:
-                    // a peça montada à mão, que nunca pediu pesquisa; a pesquisa
-                    // que falhou durante o preenchimento inteligente; e a aba que
-                    // foi recarregada, que descarta a entrega. Afirmar uma das três
-                    // seria inventar — a frase diz o que vale para todas.
+                {researching ? (
+                    // O diálogo modal de `form.tsx` é quem conta o que está
+                    // acontecendo; aqui basta não afirmar que não há nada — e
+                    // repetir a demora, porque é o que esta caixa mostra se o
+                    // diálogo já tiver se fechado e a rodada for a do botão.
+                    <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-balance text-muted-foreground">
+                        Pesquisando as teses nos portais oficiais… Leva alguns
+                        minutos: o agente lê cada página antes de responder.
+                    </p>
+                ) : failed ? (
+                    // A falha não gravou marcador nenhum, então a etapa não
+                    // tenta de novo sozinha — e é preciso dizer isso, senão a
+                    // tela parece uma pesquisa que não achou nada.
+                    <Alert variant="destructive">
+                        <ShieldAlert />
+                        <AlertTitle>
+                            A pesquisa não pôde ser concluída
+                        </AlertTitle>
+                        <AlertDescription>
+                            Nada foi gravado. A pesquisa depende dos portais
+                            oficiais — um deles fora do ar basta para
+                            derrubá-la. Use "Pesquisar novamente" para tentar
+                            outra vez, ou siga sem teses: a peça pode ser
+                            concluída assim.
+                        </AlertDescription>
+                    </Alert>
+                ) : research === null ? (
+                    // Estado de partida numa peça que nunca pesquisou e cuja
+                    // etapa ainda não disparou — um piscar, na prática.
                     <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-                        Não há pesquisa de teses nesta sessão. Ela é feita pelo preenchimento
-                        inteligente, junto com o enquadramento, e vive apenas enquanto esta aba
-                        estiver aberta — recarregar a página a descarta.
+                        Ainda não há pesquisa de teses nesta peça.
                     </p>
                 ) : (
                     <>
                         {research.legal_question && (
                             <div className="rounded-lg bg-muted/50 p-4">
-                                <p className="text-xs font-medium">Questão pesquisada</p>
+                                <p className="text-xs font-medium">
+                                    Questão pesquisada
+                                </p>
                                 <p className="mt-1 text-sm text-muted-foreground">
                                     {research.legal_question}
                                 </p>
@@ -105,8 +194,8 @@ export function ForensicReviewFields({
 
                         {theses.length === 0 ? (
                             <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-                                A pesquisa não confirmou nenhuma tese em fonte oficial. O que ficou
-                                em aberto está abaixo.
+                                A pesquisa não confirmou nenhuma tese em fonte
+                                oficial. O que ficou em aberto está abaixo.
                             </p>
                         ) : (
                             <ol className="space-y-4">
@@ -128,7 +217,7 @@ export function ForensicReviewFields({
                 )}
             </CardContent>
         </Card>
-    )
+    );
 }
 
 /**
@@ -144,15 +233,15 @@ function ThesisItem({
     thesisTypes,
     precedentTypes,
 }: {
-    draft: ThesisDraft
-    position: number
-    onToggle: (id: string, keep: boolean) => void
-    thesisTypes: Option[]
-    precedentTypes: Option[]
+    draft: ThesisDraft;
+    position: number;
+    onToggle: (id: string, keep: boolean) => void;
+    thesisTypes: Option[];
+    precedentTypes: Option[];
 }) {
-    const id = useId()
-    const { thesis } = draft
-    const type = labelOf(thesisTypes, thesis.type)
+    const id = useId();
+    const { thesis } = draft;
+    const type = labelOf(thesisTypes, thesis.type);
 
     return (
         <li className="rounded-lg border p-4">
@@ -160,11 +249,18 @@ function ThesisItem({
                 <Checkbox
                     id={id}
                     checked={draft.keep}
-                    onCheckedChange={(checked) => onToggle(draft.id, checked === true)}
+                    onCheckedChange={(checked) =>
+                        onToggle(draft.id, checked === true)
+                    }
                     className="mt-1"
                 />
 
-                <div className={cn('min-w-0 flex-1 space-y-4', !draft.keep && 'opacity-50')}>
+                <div
+                    className={cn(
+                        "min-w-0 flex-1 space-y-4",
+                        !draft.keep && "opacity-50",
+                    )}
+                >
                     <div className="space-y-1.5">
                         <div className="flex flex-wrap items-center gap-2">
                             <Label htmlFor={id} className="text-base">
@@ -173,13 +269,19 @@ function ThesisItem({
                             {type && <Badge variant="secondary">{type}</Badge>}
                         </div>
 
-                        <p className="text-sm text-muted-foreground">{thesis.description}</p>
+                        <p className="text-sm text-muted-foreground">
+                            {thesis.description}
+                        </p>
                     </div>
 
                     {thesis.impact && (
                         <div>
-                            <p className="text-xs font-medium">O que o cliente ganha</p>
-                            <p className="mt-1 text-sm text-muted-foreground">{thesis.impact}</p>
+                            <p className="text-xs font-medium">
+                                O que o cliente ganha
+                            </p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                {thesis.impact}
+                            </p>
                         </div>
                     )}
 
@@ -188,7 +290,10 @@ function ThesisItem({
                             <p className="text-xs font-medium">Fundamentação</p>
                             <div className="mt-2 flex flex-wrap gap-2">
                                 {thesis.legal_bases.map((basis) => (
-                                    <Badge key={basis.reference} variant="outline">
+                                    <Badge
+                                        key={basis.reference}
+                                        variant="outline"
+                                    >
                                         {basis.reference}
                                     </Badge>
                                 ))}
@@ -199,7 +304,8 @@ function ThesisItem({
                     <div>
                         <p className="text-xs font-medium">
                             Precedentes
-                            {draft.precedents.length > 0 && ` (${draft.precedents.length})`}
+                            {draft.precedents.length > 0 &&
+                                ` (${draft.precedents.length})`}
                         </p>
 
                         {draft.precedents.length === 0 ? (
@@ -221,7 +327,7 @@ function ThesisItem({
                 </div>
             </div>
         </li>
-    )
+    );
 }
 
 /**
@@ -235,11 +341,11 @@ function PrecedentItem({
     precedent,
     precedentTypes,
 }: {
-    precedent: ResearchedPrecedent
-    precedentTypes: Option[]
+    precedent: ResearchedPrecedent;
+    precedentTypes: Option[];
 }) {
-    const type = labelOf(precedentTypes, precedent.type)
-    const adherence = adherenceLabel(precedent.adherence)
+    const type = labelOf(precedentTypes, precedent.type);
+    const adherence = adherenceLabel(precedent.adherence);
 
     return (
         <li className="space-y-2 rounded-md border bg-muted/30 p-3">
@@ -247,23 +353,31 @@ function PrecedentItem({
                 <Scale className="size-4 text-muted-foreground" />
                 <p className="text-sm font-medium">{precedent.name}</p>
                 {type && <Badge variant="secondary">{type}</Badge>}
-                {adherence && <Badge variant="muted">{adherence} de aderência</Badge>}
+                {adherence && (
+                    <Badge variant="muted">{adherence} de aderência</Badge>
+                )}
             </div>
 
-            <p className="text-sm text-muted-foreground">{precedent.description}</p>
+            <p className="text-sm text-muted-foreground">
+                {precedent.description}
+            </p>
 
             {precedent.grounding && (
                 <p className="text-sm">
                     <span className="font-medium">Por que serve: </span>
-                    <span className="text-muted-foreground">{precedent.grounding}</span>
+                    <span className="text-muted-foreground">
+                        {precedent.grounding}
+                    </span>
                 </p>
             )}
 
             {precedent.citation && (
-                <p className="text-xs text-muted-foreground">{precedent.citation}</p>
+                <p className="text-xs text-muted-foreground">
+                    {precedent.citation}
+                </p>
             )}
         </li>
-    )
+    );
 }
 
 /**
@@ -273,14 +387,14 @@ function PrecedentItem({
  * separado delas. As três listas somem quando estão vazias, que é o caso
  * comum de duas delas.
  */
-function Findings({ research }: { research: LegalResearch }) {
+function Findings({ research }: { research: LegalResearchFindings }) {
     const hasFindings =
         research.pending.length > 0 ||
         research.unverified_citations.length > 0 ||
-        research.sources.length > 0
+        research.sources.length > 0;
 
     if (!hasFindings) {
-        return null
+        return null;
     }
 
     return (
@@ -304,16 +418,21 @@ function Findings({ research }: { research: LegalResearch }) {
                 {research.unverified_citations.length > 0 && (
                     <Alert variant="destructive">
                         <ShieldAlert />
-                        <AlertTitle>Citações removidas por falta de fonte oficial</AlertTitle>
+                        <AlertTitle>
+                            Citações removidas por falta de fonte oficial
+                        </AlertTitle>
                         <AlertDescription className="space-y-2">
                             <p>
-                                A pesquisa as trouxe, mas nenhuma página oficial as confirmou. Não
-                                use nenhuma delas sem conferir na fonte.
+                                A pesquisa as trouxe, mas nenhuma página oficial
+                                as confirmou. Não use nenhuma delas sem conferir
+                                na fonte.
                             </p>
                             <ul className="list-disc space-y-1 pl-4">
-                                {research.unverified_citations.map((citation) => (
-                                    <li key={citation}>{citation}</li>
-                                ))}
+                                {research.unverified_citations.map(
+                                    (citation) => (
+                                        <li key={citation}>{citation}</li>
+                                    ),
+                                )}
                             </ul>
                         </AlertDescription>
                     </Alert>
@@ -321,7 +440,9 @@ function Findings({ research }: { research: LegalResearch }) {
 
                 {research.sources.length > 0 && (
                     <div>
-                        <p className="text-xs font-medium">Fontes consultadas</p>
+                        <p className="text-xs font-medium">
+                            Fontes consultadas
+                        </p>
                         <ul className="mt-2 space-y-1">
                             {research.sources.map((source) => (
                                 <li key={source}>
@@ -344,7 +465,7 @@ function Findings({ research }: { research: LegalResearch }) {
                 )}
             </div>
         </>
-    )
+    );
 }
 
 /**
@@ -355,4 +476,4 @@ function Findings({ research }: { research: LegalResearch }) {
  * do que desenhar o valor cru — "principal_merits" não é português nenhum.
  */
 const labelOf = (options: Option[], value: string | null): string | null =>
-    options.find((option) => option.value === value)?.label ?? null
+    options.find((option) => option.value === value)?.label ?? null;

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Ai\Agents;
 
-use App\Ai\Concerns\UsesConfiguredContextWindow;
+use App\Ai\Concerns\ConfiguresOllamaRuntime;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\StringType;
 use Illuminate\JsonSchema\Types\Type;
@@ -74,8 +74,8 @@ use Laravel\Ai\Promptable;
 #[Temperature(0.1)]
 final class DefendantExtractionAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
+    use ConfiguresOllamaRuntime;
     use Promptable;
-    use UsesConfiguredContextWindow;
 
     /**
      * @param  list<string>  $states  the UF sigla the answer may name

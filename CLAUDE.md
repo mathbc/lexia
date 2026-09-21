@@ -21,6 +21,7 @@ PostgreSQL com pgvector, PHP 8.4+.
 
 ```bash
 docker compose up -d                 # Postgres + pgvector na porta 5442
+launchctl setenv OLLAMA_NUM_PARALLEL 4      # sem isto o daemon atende uma por vez
 php artisan migrate:fresh --seed     # senha de todos os usuários: password
 composer dev                         # serve + queue + pail + vite
 php artisan test                     # PHPUnit contra o banco lexia_testing
@@ -214,16 +215,40 @@ então mandar **todo** o texto para a nuvem são dois gestos: pôr `AI_PROVIDER=
 comentada logo acima de cada um, mais `config:clear`. A chave `models` no bloco não é enfeite: sem
 ela o `GeminiProvider` cai num default que muda com a versão do pacote.
 
-Nem o modelo nem o tamanho do contexto pertencem a um agente. Nenhum deles carrega
-`#[Model]` — o nome do modelo vive em `OLLAMA_TEXT_MODEL` e o SDK resolve cada
-agente por `defaultTextModel()` —, e o `num_ctx` sai de `ai.context_window`
-(`AI_CONTEXT_WINDOW`, 24576) através do trait `UsesConfiguredContextWindow`. É
-o que torna a troca de modelo uma linha de `.env`: o número descreve o tamanho
-dos prompts que escrevemos, não a janela do modelo da vez. Com o texto local o
-trait está **valendo**, porque `num_ctx` é grafia do Ollama — e sem ele o daemon
-truncaria em silêncio um prompt grande, sendo que o maior prompt de classe tem
-10.946 tokens medidos pelo `prompt_eval_count` do próprio Ollama. Ele volta a ser
-documentação no dia em que os agentes apontarem para um provedor de nuvem.
+Nem o modelo nem as opções de runtime pertencem a um agente. Nenhum deles carrega
+`#[Model]` — o nome do modelo vive em `OLLAMA_TEXT_MODEL` e o SDK resolve cada agente por
+`defaultTextModel()` —, e as três grafias do Ollama saem de `config/ai.php` pelo trait
+`ConfiguresOllamaRuntime`. Fora do Ollama ele devolve `[]`, então é documentação no dia
+em que um agente apontar para a nuvem.
+
+- **`num_ctx`** (`ai.context_window`, 24576) é a janela que o prompt pode encher. Sem ele
+  o daemon truncaria em silêncio um prompt grande, e o maior prompt de classe tem 10.946
+  tokens medidos pelo `prompt_eval_count` do próprio Ollama. É **uniforme de propósito**:
+  o Ollama chaveia o runner carregado pelo `num_ctx`, então um valor por agente forçaria
+  recarga do modelo entre um e outro.
+- **`keep_alive`** (`ai.runtime.keep_alive`, 30m) é quanto tempo o modelo fica residente.
+  O default do daemon é cinco minutos, e toda pausa maior cobra da requisição seguinte a
+  recarga de 12,8 GB.
+- **`think`** (`ai.runtime.reasoning_effort`, `low`) é a maior alavanca de performance do
+  projeto. Medido com o prompt real do agente de pedidos: o padrão gastou 42.239
+  caracteres de raciocínio em 156 s e devolveu **lista vazia**, e `low` respondeu em 5,6 s
+  com três pedidos; noutra amostra o padrão levou 29 s e devolveu quatro. Mais raciocínio
+  comprava variância, não qualidade. **Não confundir com a armadilha do `think: false`**,
+  que é outra coisa e continua valendo. Quem compõe prosa — `FactsRefinementAgent` e
+  `PleadingDraftingAgent` — sobrescreve `reasoningEffort()` e devolve null.
+
+E há uma quarta grafia que **não** é do projeto: `OLLAMA_NUM_PARALLEL`, variável do
+daemon. Sem ela o Ollama atende uma requisição por vez, e o `Concurrency::run` de
+`ClassifyLegalCase` não paraleliza nada — três requisições simultâneas foram medidas
+terminando em degraus de 0,75 s. Com 48 GB e um modelo de 12,8 GB, quatro slots cabem, e
+cada agente ainda ganha o próprio cache de prefixo. É parte do setup, como os `ollama
+pull`.
+
+Sobre o cache de prefixo: o Ollama reaproveita o KV de um prefixo idêntico, e isso foi
+medido valendo **44×** (3,12 s → 0,07 s num prompt de 4.780 tokens). Uma variável no topo
+do prompt anula tudo o que vem depois dela, e por isso `ProceduralClassSelectionAgent`
+coloca a área e as candidatas no **fim** de `instructions()`. `PleadingDraftingAgent` é a
+exceção deliberada, e o docblock dele diz por quê.
 
 O conhecimento tem **dois regimes de recuperação**, cada um onde ganha. O markdown
 de `app/Rag/knowledge/` vai inteiro pelo `KnowledgeBase`: para escolher entre 24
@@ -288,14 +313,15 @@ de `ClassifyLegalCase`, começando juntas. As Actions seguem chamáveis sozinhas
 é assim que a etapa 2 ou a etapa 4 de uma peça já salva deve pedir a sugestão:
 uma inferência, e não cinco.
 
-E uma quinta etapa fecha a cadeia, de natureza diferente das quatro: `ResearchLegalCaseTheses`
-— a dupla de agentes da seção "A pesquisa de teses" — **lê a peça, e não os fatos**. É a
-única que não podia ter entrado no bloco concorrente, e é por isso que ela é a última: o enquadramento diz em que ramo
-procurar e os pedidos dizem o que a tese precisa sustentar, e nenhum dos dois existe antes
-de o agente correspondente responder. `ClassifyLegalCase::pleading()` monta um `LegalCase`
-**não salvo** com as três relações que `LegalCaseDossier::forResearch()` consulta — área,
-classe e pedidos — e entrega. Uma peça que ainda não está no banco continua sendo uma peça;
-o que a pesquisa precisa é do enquadramento, não de uma chave primária.
+Houve uma quinta etapa aqui, e ela saiu: `ResearchLegalCaseTheses` — a dupla da seção "A
+pesquisa de teses" — **lê a peça, e não os fatos**, então não podia entrar no bloco
+concorrente e ficava em série depois dele. Duas coisas a tiraram. É a única inferência que
+sai da máquina e abre páginas antes de responder, então anulava o ganho do paralelismo: o
+advogado esperava por ela antes de ver o primeiro campo. E uma peça não salva não tem onde
+guardar o que ela acha — as teses voltavam no JSON, atravessavam o `sessionStorage` e
+morriam com a aba. Hoje ela roda ao abrir a etapa 6, sobre uma peça gravada, e
+`ClassifyLegalCase::pleading()` deixou de existir junto. O teste
+`the_classification_never_researches_and_never_leaves_the_machine` é o que impede a volta.
 
 A diferença de natureza. Os dois primeiros **escolhem** uma linha de catálogo; o
 do réu **copia**, então os doze campos são `required()` e `nullable()` ao mesmo
@@ -322,13 +348,11 @@ vazia é o relato que não pede nada.
 
 `POST /pecas/classificar` é a única rota das Actions de agente: ela aponta para
 `ClassifyLegalCase`, e as demais não têm `asController()` enquanto nada apontar para elas.
-O preço da rota continua sendo latência, com o navegador esperando, mas deixou de ser a
-soma: as seis chamadas a `Timeout(360)` não correm mais todas em série. As quatro etapas
-básicas estão num `Concurrency::run` — três tasks, porque área e classe são uma cadeia —,
-então a espera é a mais longa delas, e não o total. **A dívida da fila continua de pé**, e
-por um motivo que o paralelismo não alcança: quem domina o tempo é a pesquisa, que ficou
-fora do bloco porque lê a peça que as outras descreveram, e que é a inferência mais lenta
-do projeto porque o provider abre as páginas antes de responder.
+O preço da rota continua sendo latência, com o navegador esperando, mas encolheu duas
+vezes. As quatro etapas estão num `Concurrency::run` — três tasks, porque área e classe
+são uma cadeia —, então a espera é a mais longa delas e não o total; e a saída da pesquisa
+tirou da conta a única que saía da máquina. Sobram quatro inferências locais.
+**A dívida da fila continua de pé**, e agora por um motivo menor do que era.
 
 Duas consequências operacionais. O driver vive em `CONCURRENCY_DRIVER`
 (`config/concurrency.php`): em `process` — o default, e o único que serve a um request web,
@@ -368,8 +392,9 @@ Testes de agente ficam em `tests/Agents`, no grupo `agents`, **fora** do
 `php artisan test` padrão porque gastam inferência de verdade. Para quase todos a conta
 é só o tempo da máquina — Ollama de pé com `gpt-oss:20b` e `nomic-embed-text` baixados —,
 e com os agentes locais e `#[Timeout(360)]` esse tempo é real: conte minutos, não segundos.
-`LegalCaseClassificationTest` custa as duas coisas, porque as quatro primeiras etapas
-respondem do daemon e a quinta, a pesquisa, do Gemini.
+`LegalCaseClassificationTest` voltou a custar só o daemon: as quatro etapas são locais, e
+a pesquisa saiu da cadeia. Com `think: low` esse tempo caiu de minutos para dezenas de
+segundos.
 `LegalThesisResearchTest` é o extremo e custa **cota do Gemini** mais rede: ele pesquisa
 nos portais de verdade, leva minutos e pode ficar vermelho porque o STJ está fora do ar,
 e não porque o prompt regrediu. Tudo o que nele não depende do modelo — a guarda de
@@ -472,15 +497,51 @@ de correlação de forma confiável, e o aninhamento torna o vínculo estrutural
 em duas listas e cunha o uuid em PHP é `ForensicReviewData::fromAgent()`, que é o par de
 `crypto.randomUUID()` no navegador.
 
-`ClassifyLegalCase` aponta para `ResearchLegalCaseTheses` como última etapa, e a ressalva
-que esta seção fazia continua valendo — ela devia ser fila e é request. A dívida só mudou de
-dono: são dois `Timeout(360)` em série depois de um bloco concorrente que encurtou as
-quatro primeiras e não toca nestas duas — o primeiro deles é a inferência mais lenta do
-projeto, e hoje domina a espera da rota sozinho. A tela que consome isso é a etapa 6 do
-assistente (`ForensicReviewFields`). As teses ainda viajam pelo `sessionStorage` com o
-resto da entrega, mas **deixaram de morrer com a aba**: o "Concluir" da etapa as grava, e
-`LegalCaseFormProps::draft()` as projeta de volta com os ids reais, de modo que reabrir a
-peça mostra o que está no banco em vez de dizer que não há pesquisa nesta sessão.
+### Quem dispara a pesquisa, e exatamente uma vez
+
+Não é mais o `ClassifyLegalCase`: é **abrir a etapa 6**, por
+`ResearchLegalCaseForensicReview` (`POST /pecas/{id}/revisao-forense/pesquisar`). A troca
+resolveu duas coisas de uma vez — a espera saiu do preenchimento inteligente, e o
+resultado passou a ter onde ser gravado, porque ali a peça já tem chave primária. A Action
+pesquisa, chama `SaveLegalCaseForensicReview` (o mapa de ids, o diff, o `advanceTo`) e
+grava o envelope. A inferência fica **fora** da transação: são minutos de rede, e
+segurar uma linha travada por eles seria um lock que ninguém quis.
+
+**O gatilho é `legal_cases.research_findings` ser nulo, e nunca a lista de teses estar
+vazia.** É a distinção que sustenta o desenho: uma rodada que abriu os portais e nada
+confirmou é resposta legítima e cara que grava zero teses, então um gatilho pela lista
+dispararia de novo a cada visita à etapa, a cada troca de aba e a cada reload — gastando
+cota toda vez e, pior, substituindo em silêncio o que o advogado já curou, porque a
+gravação reconcilia por diff. Uma segunda rodada é o botão "Pesquisar novamente".
+
+Essa coluna (jsonb) guarda o que não tem tabela: a questão pesquisada, os portais
+abertos, o pendente e as citações que a guarda recusou — mais o `researched_at`, que não
+pode ser o `updated_at` porque toda etapa do assistente toca a peça. Sem ela o painel
+`Findings` morreria com a aba, e é justamente ele que separa "não achou nada" de "a guarda
+recusou o que achou".
+
+Consequência a montante: **a etapa 1 precisa ter sido salva antes de qualquer navegação**,
+senão não há peça para a pesquisa gravar em cima. A trilha do assistente já travava as
+outras etapas numa peça nova; o que faltava era o `?etapa`, que abria a etapa 6 de uma
+peça parada na 2 — `ShowLegalCaseForm::initialStep()` agora limita pela marca d'água.
+
+A dívida da fila continua de pé aqui, e agora só aqui: são dois `Timeout(360)` em série, e
+o primeiro é a inferência mais lenta do projeto. A tela que consome isso é
+`ForensicReviewFields`, com o `AnalysisDialog` durante a espera.
+
+E há um teto que não é do SDK: o **`max_execution_time` do PHP**. Um `php.ini` de fábrica
+traz 30, e a requisição morre em 32 s dentro do cURL do Guzzle —
+`Maximum execution time of 30+2 seconds exceeded (terminated)`. O `+2` é o timeout duro,
+que dispara porque o normal não consegue interromper um `curl_exec()` bloqueado: não é
+exceção, é o processo abatido, sem gravar nada e sem nada a capturar. Subir o `#[Timeout]`
+do agente não move isso um segundo — são coisas independentes, e vence o interpretador.
+Quem levanta é o middleware `AllowLongInference` (`ai.request_time_limit`, 900 s, o pior
+caso destes dois agentes em série), pelo alias `inference` nas **quatro** rotas que
+esperam por uma inferência: classificar, pesquisar, concluir e gerar a minuta. Ele só
+levanta — zero é ilimitado, que é o que a CLI e o `artisan serve` entregam, e escrever um
+número ali construiria a parede em vez de derrubá-la. Num servidor de verdade o corte
+volta de fora (`fastcgi_read_timeout`, `request_terminate_timeout`), onde nenhum
+`set_time_limit()` alcança, e aí a saída é mesmo a fila.
 
 ## A minuta
 

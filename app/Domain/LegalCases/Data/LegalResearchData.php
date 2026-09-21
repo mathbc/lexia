@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\LegalCases\Data;
 
 use App\Domain\Shared\Support\OfficialLegalSources;
+use Carbon\CarbonImmutable;
 
 /**
  * What a research run found, and what it had to throw away.
@@ -111,6 +112,38 @@ final readonly class LegalResearchData
             pending: self::lines($answer['pending'] ?? null),
             unverifiedCitations: self::refused($theses),
         );
+    }
+
+    /**
+     * Everything about a run except the two lists that have tables.
+     *
+     * This is what goes into `legal_cases.research_findings`, and the split is
+     * the same one `toArray()` makes: the theses and the precedents become
+     * rows, and what surrounds them — the question, the portals opened, the
+     * unresolved, the refused — becomes this. None of it has a column of its
+     * own and none of it needs one; one screen reads it whole.
+     *
+     * `researched_at` is written here rather than derived from `updated_at`
+     * because the pleading is touched by every step of the wizard, and this has
+     * to say when the *research* ran.
+     *
+     * The value is also the marker that a run happened at all. A run that
+     * confirms nothing writes no theses, so the presence of this array is the
+     * only thing that distinguishes "researched, found nothing" from "never
+     * researched" — which is what keeps the screen from asking again, and from
+     * paying for the answer twice. The migration says the rest.
+     *
+     * @return array<string, mixed>
+     */
+    public function findings(): array
+    {
+        return [
+            'legal_question' => $this->legalQuestion,
+            'sources' => $this->sources,
+            'pending' => $this->pending,
+            'unverified_citations' => $this->unverifiedCitations,
+            'researched_at' => CarbonImmutable::now()->toIso8601String(),
+        ];
     }
 
     /**

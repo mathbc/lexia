@@ -112,19 +112,38 @@ final class ShowLegalCaseForm
     }
 
     /**
-     * Where to open: the step the URL names, else how far the pleading got,
-     * else the beginning.
+     * Where to open: the step the URL names, but never past the high-water mark.
+     *
+     * The `?etapa` used to be taken at face value, and that was a hole with two
+     * ends. `GET /pecas/{id}/editar?etapa=review` opened step 6 on a pleading
+     * whose `current_step` was `defendant`, showing a forensic review for a
+     * matter with no facts and no requests — and, now that opening that step
+     * fires the research, it would have spent a cloud inference on a dossier
+     * that says nothing. On a pleading that does not exist yet there is no
+     * `etapa` that means anything at all, because there is no row for any step
+     * to have been reached on.
+     *
+     * So the query parameter can only ever narrow: it picks a step the pleading
+     * has genuinely been to, and anything beyond that lands on the mark itself.
+     * A new pleading always opens at the beginning.
+     *
+     * This does not make `initialStep` the same thing as `current_step`, and
+     * the distinction the class docblock draws still holds: the mark is the
+     * furthest the pleading ever got, while this is where *this* visit begins.
+     * Re-saving step 1 still redirects to `?etapa=defendant` and still opens
+     * there, on a pleading whose mark stays at step 6.
      */
     private function initialStep(ActionRequest $request, ?LegalCase $legalCase): LegalCaseStep
     {
-        $named = LegalCaseStep::tryFrom($request->string('etapa')->toString());
-
-        if ($named instanceof LegalCaseStep) {
-            return $named;
+        if (! $legalCase instanceof LegalCase) {
+            return LegalCaseStep::Basics;
         }
 
-        return $legalCase instanceof LegalCase
-            ? $legalCase->current_step
-            : LegalCaseStep::Basics;
+        $furthest = $legalCase->current_step;
+        $named = LegalCaseStep::tryFrom($request->string('etapa')->toString());
+
+        return $named instanceof LegalCaseStep && $named->position() <= $furthest->position()
+            ? $named
+            : $furthest;
     }
 }

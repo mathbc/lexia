@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Ai\Agents;
 
-use App\Ai\Concerns\UsesConfiguredContextWindow;
+use App\Ai\Concerns\ConfiguresOllamaRuntime;
 use App\Domain\LegalCases\Data\LegalResearchData;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
@@ -77,8 +77,8 @@ use Laravel\Ai\Promptable;
 #[Temperature(0.1)]
 final class ForensicReviewTranscriptionAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
+    use ConfiguresOllamaRuntime;
     use Promptable;
-    use UsesConfiguredContextWindow;
 
     /**
      * @param  list<string>  $thesisTypes  the backing values LegalThesisType accepts

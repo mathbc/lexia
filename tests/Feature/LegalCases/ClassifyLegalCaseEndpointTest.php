@@ -9,15 +9,6 @@ use App\Domain\LegalCases\Actions\ExtractLegalCaseDefendant;
 use App\Domain\LegalCases\Actions\ExtractLegalCaseRequirements;
 use App\Domain\LegalCases\Actions\ResearchLegalCaseTheses;
 use App\Domain\LegalCases\Data\DefendantData;
-use App\Domain\LegalCases\Data\ForensicReviewData;
-use App\Domain\LegalCases\Data\LegalResearchData;
-use App\Domain\LegalCases\Models\LegalCase;
-use App\Domain\LegalPrecedents\Data\LegalPrecedentData;
-use App\Domain\LegalPrecedents\Enums\LegalPrecedentType;
-use App\Domain\LegalTheses\Data\LegalBasisData;
-use App\Domain\LegalTheses\Data\LegalThesisData;
-use App\Domain\LegalTheses\Enums\LegalBasisType;
-use App\Domain\LegalTheses\Enums\LegalThesisType;
 use App\Domain\PracticeAreas\Actions\ClassifyPracticeArea;
 use App\Domain\PracticeAreas\Data\PracticeAreaClassification;
 use App\Domain\PracticeAreas\Models\PracticeArea;
@@ -41,13 +32,16 @@ use Tests\TestCase;
  * quando a inferência falha —, não a qualidade da classificação; essa vive em
  * `tests/Agents`, exige o Ollama de pé e custa segundos por caso.
  *
- * Todo teste que chega à inferência dubla as cinco: uma que ficasse de fora
+ * Todo teste que chega à inferência dubla as quatro: uma que ficasse de fora
  * sairia daqui direto para o modelo, e um teste da suíte padrão passaria a
- * depender dele. A quinta — `ResearchLegalCaseTheses` — cobra isso mais caro
- * que as outras: ela é a única que sai da máquina, então esquecê-la gastaria
- * cota do Gemini e abriria os portais oficiais de verdade a cada rodada da
- * suíte. Daí `fakeResearch()`, que nenhum teste que chega à inferência pode
- * deixar de chamar.
+ * depender dele.
+ *
+ * `ResearchLegalCaseTheses` não está entre elas, e não por esquecimento: ela
+ * saiu desta rota. Ela aparece aqui uma vez só, em
+ * `the_classification_never_researches_and_never_leaves_the_machine`, e com
+ * `shouldNotReceive` — é a única das cinco antigas que sairia da máquina, então
+ * religá-la sem querer gastaria cota do Gemini e abriria os portais oficiais de
+ * verdade a cada rodada da suíte.
  */
 final class ClassifyLegalCaseEndpointTest extends TestCase
 {
@@ -107,8 +101,6 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
                 ),
             ]));
 
-        $this->fakeResearch();
-
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro e se recusa a reconstruí-lo.'])
             ->assertOk()
@@ -142,26 +134,11 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             )
             ->assertJsonPath('requirements.0.amount', null)
             ->assertJsonPath('requirements.1.amount', '4300.00')
-            // A revisão forense chega achatada em duas listas, e não aninhada:
-            // é assim que `SaveLegalCaseForensicReview` a aceita, e o vínculo
-            // entre precedente e tese viaja no `legal_thesis_id`.
-            ->assertJsonPath('research.legal_question', 'É cabível o redirecionamento da execução fiscal por mero inadimplemento?')
-            ->assertJsonCount(1, 'research.theses')
-            ->assertJsonPath('research.theses.0.name', 'Ilegitimidade passiva do sócio-administrador')
-            // O tipo sai como o valor do enum, nunca como o objeto: o rótulo em
-            // português é resolvido na tela, a partir das opções do enum.
-            ->assertJsonPath('research.theses.0.type', 'preliminary')
-            ->assertJsonPath('research.theses.0.legal_bases.0.reference', 'Súmula 430 do STJ')
-            ->assertJsonCount(1, 'research.precedents')
-            ->assertJsonPath(
-                'research.precedents.0.legal_thesis_id',
-                '2168abf8-94ce-435b-b9b3-bab97bf30e77',
-            )
-            // O id de um precedente novo é cunhado pelo banco, e a rota não
-            // grava nada: ele chega nulo e presente.
-            ->assertJsonPath('research.precedents.0.id', null)
-            ->assertJsonPath('research.precedents.0.adherence', '100.00')
-            ->assertJsonPath('research.pending.0', 'Juntada da certidão de arquivamento do distrato social.');
+            // A revisão forense **não** está aqui, e a ausência é contrato: a
+            // pesquisa saiu desta rota porque não tem onde gravar o que acha
+            // enquanto a peça não tem chave primária. Quem a roda hoje é
+            // `ResearchLegalCaseForensicReview`, ao abrir a etapa 6.
+            ->assertJsonMissingPath('research');
     }
 
     /**
@@ -205,17 +182,12 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
                 ),
             ]));
 
-        $this->fakeResearch();
-
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
             ->assertOk()
             ->assertJsonPath('practice_area.slug', 'civil')
             ->assertJsonPath('defendant', null)
-            ->assertJsonCount(1, 'requirements')
-            // A extração que caiu não leva a pesquisa junto: ela vem depois e
-            // não depende do réu.
-            ->assertJsonCount(1, 'research.theses');
+            ->assertJsonCount(1, 'requirements');
     }
 
     /**
@@ -261,10 +233,6 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         $this->fakeAction(ExtractLegalCaseRequirements::class)
             ->shouldReceive('handle')
             ->andReturn(new RequirementListData([]));
-
-        // A classe nula chega ao dossiê da pesquisa como uma linha a menos, e
-        // não como um erro: `LegalCaseDossier::filedAs()` omite o que não há.
-        $this->fakeResearch();
 
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
@@ -328,9 +296,6 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         $this->fakeAction(ExtractLegalCaseRequirements::class)
             ->shouldReceive('handle')
             ->andReturn(new RequirementListData([]));
-
-        // Esta sim fica de fora: é a última, fora do bloco, e a mais cara.
-        $this->fakeAction(ResearchLegalCaseTheses::class)->shouldNotReceive('handle');
 
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
@@ -408,21 +373,6 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->once()
             ->andReturn(new RequirementListData([]));
 
-        $this->fakeAction(ResearchLegalCaseTheses::class)
-            ->shouldReceive('handle')
-            ->once()
-            ->globally()
-            ->ordered()
-            // A peça que chega aqui não está salva, e é esse o contrato: o que
-            // a pesquisa lê são as três relações penduradas à mão.
-            ->with(Mockery::on(static function (LegalCase $pleading): bool {
-                return ! $pleading->exists
-                    && $pleading->practiceArea->slug === 'civil'
-                    && $pleading->proceduralClass->code === 7
-                    && $pleading->requirements->isEmpty();
-            }))
-            ->andReturn($this->research());
-
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
             ->assertOk();
@@ -481,8 +431,6 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
                 ),
             ]));
 
-        $this->fakeResearch();
-
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
             ->assertOk()
@@ -490,25 +438,28 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->assertJsonPath('procedural_class', null)
             ->assertJsonPath('procedural_class_justification', null)
             ->assertJsonPath('defendant.defendant_name', 'Joaquim Vizinho')
-            ->assertJsonCount(1, 'requirements')
-            ->assertJsonCount(1, 'research.theses');
+            ->assertJsonCount(1, 'requirements');
     }
 
     /**
-     * A pesquisa é a última da fila e a única que depende da rede.
+     * A pesquisa saiu desta rota, e a ausência é o contrato que este teste fixa.
      *
-     * Um portal oficial fora do ar, a cota do Gemini esgotada, o provedor lento
-     * demais: nenhuma dessas coisas é defeito deste código, e todas derrubam a
-     * etapa. Devolver 503 por causa delas cobraria do advogado as cinco
-     * inferências que deram certo para entregar a mesma tela de erro de quem
-     * não teve nenhuma — e o enquadramento, que é o que a tela foi buscar, já
-     * estava pronto.
+     * Ela já foi a quinta etapa daqui, e duas coisas a tiraram. A primeira é que
+     * é a única inferência do projeto que sai da máquina e abre páginas antes de
+     * responder: ficando aqui, anulava o bloco concorrente, porque encurtar as
+     * quatro primeiras não encurta a quinta e o advogado esperava por ela antes
+     * de ver o primeiro campo preenchido. A segunda é que uma peça não salva não
+     * tem onde guardar o que a pesquisa acha — as teses voltavam no JSON,
+     * atravessavam o `sessionStorage` e morriam com a aba.
      *
-     * O nulo é a etapa que falhou, e não a pesquisa que nada confirmou: essa
-     * chega com as duas listas vazias e o `pending` escrito.
+     * Hoje quem a roda é `ResearchLegalCaseForensicReview`, ao abrir a etapa 6,
+     * sobre uma peça que já tem chave primária para receber o resultado.
+     * Religá-la aqui traria os dois problemas de volta de uma vez, e sem barulho
+     * nenhum: a suíte padrão passaria a gastar cota do Gemini e a abrir o STJ de
+     * verdade, ficando vermelha por um portal fora do ar em vez de por um bug.
      */
     #[Test]
-    public function a_research_run_that_failed_does_not_cost_the_framing(): void
+    public function the_classification_never_researches_and_never_leaves_the_machine(): void
     {
         [, $owner] = $this->accountWithOwner();
 
@@ -528,54 +479,21 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
 
         $this->fakeAction(ExtractLegalCaseDefendant::class)
             ->shouldReceive('handle')
-            ->andReturn(new DefendantData(
-                name: 'Joaquim Vizinho',
-                document: null,
-                email: null,
-                phone: null,
-                postalCode: null,
-                street: null,
-                number: null,
-                complement: null,
-                district: null,
-                city: null,
-                state: null,
-                notes: null,
-            ));
+            ->andReturn($this->defendant());
 
         $this->fakeAction(ExtractLegalCaseRequirements::class)
             ->shouldReceive('handle')
             ->andReturn(new RequirementListData([]));
 
-        $this->fakeAction(ResearchLegalCaseTheses::class)
-            ->shouldReceive('handle')
-            ->andThrow(new RuntimeException('504 Gateway Timeout'));
+        // Sem dublê que a deixe passar: se alguém religar a quinta etapa, este
+        // é o teste que fica vermelho, e não uma fatura do Gemini.
+        $this->fakeAction(ResearchLegalCaseTheses::class)->shouldNotReceive('handle');
 
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
             ->assertOk()
             ->assertJsonPath('practice_area.slug', 'civil')
-            ->assertJsonPath('procedural_class.code', 7)
-            ->assertJsonPath('defendant.defendant_name', 'Joaquim Vizinho')
-            ->assertJsonPath('research', null);
-    }
-
-    /**
-     * O dublê da pesquisa de teses, que toda rodada que chega à inferência
-     * precisa registrar.
-     *
-     * É a única das cinco etapas que sairia da máquina: sem este dublê a suíte
-     * padrão passaria a gastar cota do Gemini e a abrir o STJ de verdade, e
-     * ficaria vermelha por um portal fora do ar. O valor devolvido é o do
-     * exemplo que motivou a etapa — o redirecionamento de execução fiscal
-     * barrado pela Súmula 430 —, reduzido a uma tese e um precedente, que é o
-     * bastante para a forma do payload.
-     */
-    private function fakeResearch(): void
-    {
-        $this->fakeAction(ResearchLegalCaseTheses::class)
-            ->shouldReceive('handle')
-            ->andReturn($this->research());
+            ->assertJsonMissingPath('research');
     }
 
     /**
@@ -599,52 +517,6 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             city: null,
             state: null,
             notes: null,
-        );
-    }
-
-    /**
-     * Uma pesquisa com um achado, montada como `ForensicReviewData::fromAgent()`
-     * a devolve: o id da tese é a chave de correlação cunhada em PHP, e é ela
-     * que o precedente cita.
-     */
-    private function research(): LegalResearchData
-    {
-        $thesisId = '2168abf8-94ce-435b-b9b3-bab97bf30e77';
-
-        return new LegalResearchData(
-            legalQuestion: 'É cabível o redirecionamento da execução fiscal por mero inadimplemento?',
-            review: new ForensicReviewData(
-                theses: [
-                    new LegalThesisData(
-                        id: $thesisId,
-                        name: 'Ilegitimidade passiva do sócio-administrador',
-                        type: LegalThesisType::Preliminary,
-                        description: 'O mero inadimplemento não autoriza a responsabilização pessoal do art. 135, III, do CTN.',
-                        impact: 'Exclusão do Embargante do polo passivo.',
-                        legalBases: [
-                            new LegalBasisData(
-                                type: LegalBasisType::Sumula,
-                                reference: 'Súmula 430 do STJ',
-                                source: 'STJ',
-                            ),
-                        ],
-                    ),
-                ],
-                precedents: [
-                    new LegalPrecedentData(
-                        id: null,
-                        thesisId: $thesisId,
-                        name: 'STJ — Súmula nº 430',
-                        type: LegalPrecedentType::Sumula,
-                        description: 'O inadimplemento da obrigação tributária pela sociedade não gera, por si só, a responsabilidade solidária do sócio-gerente.',
-                        citation: 'STJ. Primeira Seção. Súmula nº 430. Julgado em 24/03/2010.',
-                        grounding: 'Impede o redirecionamento pretendido pelo Estado.',
-                        adherence: '100.00',
-                    ),
-                ],
-            ),
-            sources: ['https://www.planalto.gov.br/ccivil_03/leis/l5172compilado.htm'],
-            pending: ['Juntada da certidão de arquivamento do distrato social.'],
         );
     }
 

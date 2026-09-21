@@ -19,16 +19,19 @@ import { stashHandoff } from "@/lib/legal-case-handoff";
 import type { LegalCaseClassification, Option } from "@/types";
 
 /**
- * O que as cinco etapas fazem — ler os fatos, decidir a área, escolher entre as
- * classes de ajuizamento vinculadas a ela, procurar no mesmo relato quem é o
- * réu, o que o cliente está pedindo e, por fim, pesquisar nos portais oficiais
- * as teses que a peça pode sustentar.
+ * O que as quatro etapas fazem — ler os fatos, decidir a área, escolher entre as
+ * classes de ajuizamento vinculadas a ela e procurar no mesmo relato quem é o
+ * réu e o que o cliente está pedindo.
  *
- * São frases sobre o trabalho, não sobre o andamento, e a distinção ficou mais
- * importante: as quatro primeiras etapas correm **em paralelo** no servidor, e a
- * ordem em que estão escritas aqui é a de quem lê, não a de quem executa. A
- * chamada é uma só e o servidor não relata por onde anda, então nenhuma delas
- * afirma que uma etapa terminou.
+ * São frases sobre o trabalho, não sobre o andamento, e a distinção importa:
+ * as quatro correm **em paralelo** no servidor, e a ordem em que estão escritas
+ * aqui é a de quem lê, não a de quem executa. A chamada é uma só e o servidor
+ * não relata por onde anda, então nenhuma delas afirma que uma etapa terminou.
+ *
+ * A pesquisa de teses **não está aqui**, e as frases dela saíram junto: ela
+ * acontece ao abrir a etapa 6, sobre uma peça já gravada, com o diálogo próprio
+ * de `ForensicReviewFields`. Prometê-la nesta tela era prometer uma espera que
+ * não acontece mais aqui.
  */
 const ANALYSIS_STEPS = [
     "Lendo o relato e separando o que tem peso jurídico.",
@@ -41,11 +44,6 @@ const ANALYSIS_STEPS = [
     "Recolhendo o que o relato diz sobre o réu e onde encontrá-lo.",
     "Procurando no relato o que o cliente quer do juízo.",
     "Escrevendo cada pedido e conferindo os valores contra os fatos.",
-    "Formulando a questão jurídica que o caso levanta.",
-    "Pesquisando no Planalto, no STJ e no STF as teses que cabem aqui.",
-    "Abrindo as páginas oficiais e conferindo cada súmula e cada tema.",
-    "Descartando o que não se confirmou em fonte oficial.",
-    "Transcrevendo as teses, a fundamentação e os julgados que as sustentam.",
 ] as const;
 
 interface Props {
@@ -69,26 +67,26 @@ interface Props {
  * faz uma chamada só, `POST /pecas/classificar`, que não devolve tela nenhuma
  * — devolve o que os agentes leram do relato —, guarda o resultado junto com o
  * cliente e o relato e navega para `/pecas/nova`, onde o assistente abre com a
- * área e a classe escolhidas, os fatos já escritos e as etapas do réu, dos
- * pedidos e da revisão forense sugeridas. O
- * `?area=` é o que faz o servidor mandar as classes daquela área; o resto viaja
- * pelo `sessionStorage`, e `@/lib/legal-case-handoff` explica por quê.
+ * área e a classe escolhidas, os fatos já escritos e as etapas do réu e dos
+ * pedidos sugeridas. O `?area=` é o que faz o servidor mandar as classes
+ * daquela área; o resto viaja pelo `sessionStorage`, e
+ * `@/lib/legal-case-handoff` explica por quê.
  *
- * A espera é pelas cinco etapas, que são seis inferências — a pesquisa de teses
- * são duas. As quatro primeiras correm em paralelo e a pesquisa vem depois
- * delas, o que encurtou a conta sem mudar a natureza dela: continua levando
- * minutos, e não o instante de um `submit`. Por isso
- * ela é um diálogo modal e não um punhado de campos desabilitados: congelar os
- * controles deste formulário deixaria de fora tudo o que está em volta dele — a
- * barra lateral, o cabeçalho, o menu do usuário —, e sair da tela joga fora a
- * inferência inteira sem que nada tenha avisado. O `AnalysisDialog` tranca a
- * página, conta o que está acontecendo e não se deixa fechar.
+ * A espera é pelas quatro etapas, em três tasks que correm em paralelo, e
+ * nenhuma delas sai da máquina. Ainda assim é espera de inferência local e não
+ * o instante de um `submit`, e é por isso que ela é um diálogo modal e não um
+ * punhado de campos desabilitados: congelar os controles deste formulário
+ * deixaria de fora tudo o que está em volta dele — a barra lateral, o
+ * cabeçalho, o menu do usuário —, e sair da tela joga fora a inferência inteira
+ * sem que nada tenha avisado. O `AnalysisDialog` tranca a página, conta o que
+ * está acontecendo e não se deixa fechar.
  *
- * A última etapa é a que mais pesa nessa conta, e é a única que sai da máquina:
- * a pesquisa abre os portais oficiais antes de responder. Ela ficou de fora do
- * paralelismo por necessidade — lê a peça que as outras descreveram —, então
- * hoje ela domina a espera sozinha, e é por isso que trocar esta requisição por
- * uma fila continua sendo o próximo passo — ver `ClassifyLegalCase`.
+ * A revisão forense não está nesta conta e já esteve. Ela era a quinta etapa,
+ * a única que saía da máquina e a mais lenta de todas, e dominava esta espera
+ * sozinha — sem nada para mostrar depois, porque uma peça não salva não tem
+ * onde guardar teses. Hoje ela roda ao abrir a etapa 6, sobre a peça já
+ * gravada. Trocar esta requisição por uma fila continua sendo o próximo passo,
+ * e agora por um motivo menor — ver `ClassifyLegalCase`.
  */
 export default function LegalCaseAssistedForm({
     customers,
@@ -131,12 +129,6 @@ export default function LegalCaseAssistedForm({
                 // é a inferência que caiu, e a lista vazia é o relato que não
                 // pede nada. A etapa abre igual nos dois casos.
                 requirements: classification.requirements,
-                // E a revisão forense, que é a única parte da entrega que nada
-                // grava ainda: ela vive no `sessionStorage` até a aba fechar.
-                // Nulo aqui é a pesquisa que falhou — um portal fora do ar
-                // basta —, e não a que nada confirmou, que chega com as listas
-                // vazias e o pendente escrito.
-                research: classification.research,
             });
 
             // Sem desligar o estado de espera: a navegação já está em curso, e
@@ -171,8 +163,7 @@ export default function LegalCaseAssistedForm({
                         <CardDescription>
                             Diga para quem é a peça e conte o caso com o máximo
                             de detalhe. A área de atuação, a classe processual,
-                            os dados do réu, os pedidos e as teses da revisão
-                            forense são deduzidos daqui.
+                            os dados do réu e os pedidos são deduzidos daqui.
                         </CardDescription>
                     </CardHeader>
 
@@ -189,9 +180,7 @@ export default function LegalCaseAssistedForm({
                                 can.create_customer && (
                                     <CustomerCreateDialog
                                         customerTypes={customerTypes}
-                                        maritalStatuses={
-                                            maritalStatuses
-                                        }
+                                        maritalStatuses={maritalStatuses}
                                         states={states}
                                         onCreated={(customer) =>
                                             setCustomerId(customer.value)
@@ -228,9 +217,9 @@ export default function LegalCaseAssistedForm({
 
                 <div className="flex flex-wrap items-center justify-end gap-3">
                     <p className="mr-auto text-sm text-muted-foreground">
-                        A área de atuação, a classe processual, os dados do réu,
-                        os pedidos e as teses serão sugeridos, e você poderá
-                        revisá-los no assistente.
+                        A área de atuação, a classe processual, os dados do réu
+                        e os pedidos serão sugeridos, e você poderá revisá-los
+                        no assistente.
                     </p>
 
                     <Button variant="outline" asChild>
@@ -259,7 +248,7 @@ export default function LegalCaseAssistedForm({
             <AnalysisDialog
                 open={classifying}
                 title="Analisando o caso"
-                hint="A análise pode levar vários minutos — a pesquisa de teses consulta os portais oficiais. Mantenha esta aba aberta: ao terminar, o assistente abre com o enquadramento, os dados do réu, os pedidos e a revisão forense preenchidos."
+                hint="A análise pode levar alguns minutos. Mantenha esta aba aberta: ao terminar, o assistente abre com o enquadramento, os dados do réu e os pedidos preenchidos."
                 messages={ANALYSIS_STEPS}
             />
         </AppLayout>

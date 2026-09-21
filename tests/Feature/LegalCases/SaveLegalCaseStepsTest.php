@@ -393,4 +393,58 @@ final class SaveLegalCaseStepsTest extends TestCase
 
         return LegalCase::query()->latest()->firstOrFail();
     }
+
+    /**
+     * O `?etapa` só pode estreitar: ele nunca abre uma etapa que a peça não
+     * alcançou.
+     *
+     * Era um buraco com duas pontas. `?etapa=review` numa peça parada na etapa
+     * 2 abria a revisão forense de um caso sem fatos e sem pedidos — e, agora
+     * que abrir aquela etapa dispara a pesquisa de teses, gastaria uma
+     * inferência de nuvem sobre um dossiê que não diz nada.
+     *
+     * A marca d'água continua sendo outra coisa: pedir uma etapa que a peça já
+     * alcançou abre exatamente ela, que é o que faz o "Continuar" funcionar.
+     */
+    #[Test]
+    public function the_step_in_the_url_cannot_go_past_the_high_water_mark(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        $legalCase = LegalCase::factory()->forAccount($account)->create([
+            'current_step' => LegalCaseStep::Defendant,
+        ]);
+
+        // Além da marca: aterra na marca, e não na etapa pedida.
+        $this->actingAs($owner)
+            ->get("/pecas/{$legalCase->id}/editar?etapa=review")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('initialStep', LegalCaseStep::Defendant->value));
+
+        // Aquém da marca: abre onde se pediu, que é o caso do "Continuar" e o
+        // da correção de uma etapa anterior.
+        $this->actingAs($owner)
+            ->get("/pecas/{$legalCase->id}/editar?etapa=basics")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('initialStep', LegalCaseStep::Basics->value));
+    }
+
+    /**
+     * Numa peça que ainda não existe não há etapa alcançada nenhuma, então o
+     * `?etapa` não significa coisa alguma — e é o que sustenta a trava da
+     * trilha no assistente: até o "Continuar" da etapa 1 gravar a peça, não há
+     * para onde ir.
+     */
+    #[Test]
+    public function a_pleading_that_does_not_exist_yet_always_opens_at_the_first_step(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+
+        $this->actingAs($owner)
+            ->get('/pecas/nova?etapa=review')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('initialStep', LegalCaseStep::Basics->value)
+                ->where('legalCase', null));
+    }
 }

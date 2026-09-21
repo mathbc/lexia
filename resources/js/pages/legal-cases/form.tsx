@@ -1,6 +1,6 @@
 import { Head, Link, router, useForm } from "@inertiajs/react";
 import { Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppLayout } from "@/layouts/app-layout";
 import { AnalysisDialog } from "@/components/analysis-dialog";
 import { CustomerCreateDialog } from "@/components/customer-create-dialog";
@@ -77,6 +77,26 @@ const STEP_DESCRIPTIONS: Record<LegalCaseStepValue, string> = {
     documents: "Os anexos que instruem a peça",
     review: "As teses que a peça sustenta e os julgados que as fundamentam",
 };
+
+/**
+ * O que a pesquisa de teses está fazendo enquanto a etapa 6 espera.
+ *
+ * Estas frases moravam no preenchimento inteligente, porque era lá que a
+ * pesquisa rodava. Vieram junto com ela: hoje a etapa 6 é quem abre os portais
+ * oficiais, e é a única espera do assistente que sai da máquina.
+ *
+ * Como em `ANALYSIS_STEPS`, são frases sobre o trabalho e não sobre o
+ * andamento — a chamada é uma só e o servidor não relata por onde anda.
+ */
+const RESEARCH_STEPS = [
+    "Lendo o enquadramento e os pedidos já registrados.",
+    "Formulando a questão jurídica que o caso levanta.",
+    "Pesquisando no Planalto, no STJ e no STF as teses que cabem aqui.",
+    "Abrindo as páginas oficiais e conferindo cada súmula e cada tema.",
+    "Distinguindo súmula, tema repetitivo e acórdão isolado.",
+    "Descartando o que não se confirmou em fonte oficial.",
+    "Transcrevendo as teses, a fundamentação e os julgados que as sustentam.",
+] as const;
 
 /**
  * O que acontece ao concluir a etapa 6, para a espera dizer alguma coisa.
@@ -232,13 +252,17 @@ export default function LegalCaseForm({
      * aproveitar, e a leitura descarta: foi a criação que transformou aquela
      * entrega em linha no banco.
      */
-    const [handoff] = useState(() => readHandoff(legalCase ? "" : selectedArea));
+    const [handoff] = useState(() =>
+        readHandoff(legalCase ? "" : selectedArea),
+    );
 
     const basics = useForm({
         customer_id: legalCase?.customer_id ?? handoff?.customer_id ?? "",
         practice_area: selectedArea,
         procedural_class_id:
-            legalCase?.procedural_class_id ?? handoff?.procedural_class_id ?? "",
+            legalCase?.procedural_class_id ??
+            handoff?.procedural_class_id ??
+            "",
         court_addressing: legalCase?.court_addressing ?? "",
     });
 
@@ -262,7 +286,8 @@ export default function LegalCaseForm({
     // seria. Cada linha chega com a chave cunhada aqui e o valor já mascarado.
     const requirements = useForm<{ requirements: RequirementDraft[] }>({
         requirements:
-            legalCase?.requirements ?? toRequirementDrafts(handoff?.requirements),
+            legalCase?.requirements ??
+            toRequirementDrafts(handoff?.requirements),
     });
 
     const [documents, setDocuments] = useState<DocumentDraft[]>([]);
@@ -282,14 +307,47 @@ export default function LegalCaseForm({
      */
     const [theses, setTheses] = useState<ThesisDraft[]>(() =>
         toThesisDrafts(
-            legalCase && legalCase.theses.length > 0
+            legalCase
                 ? {
                       theses: legalCase.theses,
                       precedents: legalCase.precedents,
                   }
-                : handoff?.research,
+                : undefined,
         ),
     );
+
+    /**
+     * As teses vinham do `handoff` e agora vêm do banco, então elas mudam
+     * **depois** da montagem: a pesquisa da etapa 6 grava e o Inertia
+     * re-renderiza com props novas, sem remontar a página (`preserveState`).
+     * Sem este efeito o `useState` acima continuaria mostrando a lista vazia
+     * que existia quando a etapa abriu.
+     *
+     * A dependência é uma **assinatura de ids**, e não os arrays das props. A
+     * diferença não é estilo: um `keep` desmarcado vive só em estado local até
+     * o "Concluir", e depender das referências faria qualquer re-render com
+     * props novas remarcar tudo, desfazendo em silêncio o que o advogado
+     * acabou de decidir. Com a assinatura, o efeito só dispara quando o
+     * conjunto de teses realmente muda — que é o que a pesquisa faz.
+     */
+    const thesisSignature = [
+        ...(legalCase?.theses ?? []).map((thesis) => thesis.id),
+        ...(legalCase?.precedents ?? []).map((precedent) => precedent.id),
+    ].join(",");
+
+    useEffect(() => {
+        if (!legalCase) {
+            return;
+        }
+
+        setTheses(
+            toThesisDrafts({
+                theses: legalCase.theses,
+                precedents: legalCase.precedents,
+            }),
+        );
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [thesisSignature]);
 
     /**
      * A conclusão é um `useForm` como as quatro etapas que gravam, e não um
@@ -429,6 +487,71 @@ export default function LegalCaseForm({
         review.post(`/pecas/${id}/concluir`);
     };
 
+    /**
+     * A pesquisa de teses, que preenche a etapa 6.
+     *
+     * `router.post` solto e não um `useForm`: não há payload nenhum — a peça
+     * está na URL e tudo o que o agente lê já está no banco. O `researching`
+     * é local porque é ele que abre o diálogo, e o `preserveState` impede que
+     * a volta remonte a página e o apague sozinho.
+     */
+    const [researching, setResearching] = useState(false);
+    const [researchFailed, setResearchFailed] = useState(false);
+
+    const research = () => {
+        if (!id || researching) {
+            return;
+        }
+
+        setResearching(true);
+        setResearchFailed(false);
+
+        router.post(
+            `/pecas/${id}/revisao-forense/pesquisar`,
+            {},
+            {
+                preserveScroll: true,
+                // Sem `onSuccess` que mexa na etapa: o servidor redireciona
+                // para `?etapa=review`, que é onde já estamos. Quem redesenha
+                // é o efeito das teses, com as props novas.
+                onError: () => setResearchFailed(true),
+                onFinish: () => setResearching(false),
+            },
+        );
+    };
+
+    /**
+     * Uma vez, ao abrir a etapa, e nunca mais sozinha.
+     *
+     * O gatilho é `legalCase.research === null`, que é "nunca se pesquisou", e
+     * **não** `theses.length === 0`. A diferença é a que decide: uma pesquisa
+     * que abriu os portais e nada confirmou é uma resposta legítima e cara que
+     * grava zero teses, então um gatilho pela lista vazia dispararia de novo a
+     * cada visita à etapa, a cada troca de aba e a cada reload — gastando cota
+     * do Gemini toda vez e, pior, substituindo em silêncio o que o advogado já
+     * tivesse curado, porque `SaveLegalCaseForensicReview` reconcilia por diff.
+     *
+     * Com o marcador no banco, voltar à etapa não pesquisa: o que já foi
+     * encontrado está gravado e é isso que a tela mostra. Uma segunda rodada é
+     * o botão "Pesquisar novamente", que é um gesto do advogado.
+     *
+     * `researchFailed` é o que impede o laço depois de um erro: a falha não
+     * grava marcador nenhum, então sem ele a etapa tentaria de novo a cada
+     * render.
+     */
+    useEffect(() => {
+        if (
+            step === 5 &&
+            id &&
+            legalCase?.research == null &&
+            !researching &&
+            !researchFailed
+        ) {
+            research();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [step, id, legalCase?.research, researchFailed]);
+
     const title = legalCase ? "Editar peça" : "Nova peça";
 
     return (
@@ -449,13 +572,31 @@ export default function LegalCaseForm({
             <Head title={title} />
 
             <div className="grid gap-6 pb-4 lg:grid-cols-[16rem_minmax(0,1fr)]">
-                <LegalCaseSteps
-                    steps={trail}
-                    current={step}
-                    // Enquanto a etapa 1 não é salva, as outras ficam inertes.
-                    reachable={reachable}
-                    onSelect={setStep}
-                />
+                <div className="space-y-3">
+                    <LegalCaseSteps
+                        steps={trail}
+                        current={step}
+                        // Enquanto a etapa 1 não é salva, as outras ficam
+                        // inertes — e o aviso abaixo diz por quê.
+                        reachable={reachable}
+                        onSelect={setStep}
+                    />
+
+                    {/* Sem isto a trilha cinza parece defeito, e nunca tanto
+                        quanto depois do preenchimento inteligente: os campos
+                        chegam preenchidos e nada clica. O que falta é a peça
+                        existir — nada foi gravado ainda, e é o "Continuar"
+                        desta etapa que a cria. Tudo o que vem depois precisa
+                        dela: a etapa 6 pesquisa teses e as grava, e não há
+                        onde gravá-las sem uma chave primária. */}
+                    {!id && (
+                        <p className="text-xs text-muted-foreground">
+                            As demais etapas abrem depois de você salvar os
+                            dados básicos: é o "Continuar" desta etapa que cria
+                            a peça.
+                        </p>
+                    )}
+                </div>
 
                 <div className="min-w-0 space-y-6">
                     {step === 0 && (
@@ -688,7 +829,10 @@ export default function LegalCaseForm({
 
                     {step === 5 && (
                         <ForensicReviewFields
-                            research={handoff?.research ?? null}
+                            research={legalCase?.research ?? null}
+                            researching={researching}
+                            failed={researchFailed}
+                            onResearch={research}
                             theses={theses}
                             onToggle={(thesisId, keep) =>
                                 setTheses((current) =>
@@ -748,6 +892,29 @@ export default function LegalCaseForm({
                     </div>
                 </div>
             </div>
+
+            {/* A pesquisa é a única espera do assistente que sai da máquina:
+                o agente abre os portais oficiais antes de responder. Diálogo
+                modal pela mesma razão do preenchimento inteligente — sair da
+                tela joga fora a inferência inteira sem avisar.
+
+                O título e a dica dizem a demora de saída, e isso é deliberado:
+                é de longe a espera mais longa do projeto — dois agentes em
+                série, um deles abrindo página por página —, e uma tela que
+                prometesse pouco faria o advogado desistir no meio, jogando
+                fora minutos de inferência. Quem espera sabendo que vai
+                demorar espera; quem espera achando que travou, recarrega.
+
+                As frases circulam mais devagar aqui do que no preenchimento
+                inteligente: numa espera de minutos, um texto que troca a cada
+                quatro segundos passa de sinal de vida a agitação. */}
+            <AnalysisDialog
+                open={researching}
+                title="Pesquisando as teses — leva alguns minutos"
+                hint="É a etapa mais demorada da peça, e a espera é normal: o agente consulta o Planalto, o STJ e o STF e lê cada página antes de responder, o que costuma levar alguns minutos. Mantenha esta aba aberta e não recarregue a página — ao terminar, as teses ficam gravadas na peça e a pesquisa não se repete."
+                messages={RESEARCH_STEPS}
+                interval={6500}
+            />
 
             <AnalysisDialog
                 open={review.processing}

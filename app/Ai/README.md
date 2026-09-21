@@ -312,13 +312,72 @@ curl -s http://localhost:11434/api/generate -d '{"model":"gpt-oss:20b","prompt":
 
 O número é **um só, e não é do modelo**: `ai.context_window` (env `AI_CONTEXT_WINDOW`,
 24576 por padrão) descreve o tamanho dos prompts que este projeto escreve, e quem o
-entrega ao provider é o trait `App\Ai\Concerns\UsesConfiguredContextWindow`. Um agente
+entrega ao provider é o trait `App\Ai\Concerns\ConfiguresOllamaRuntime`. Um agente
 novo usa o trait e implementa `HasProviderOptions`; nada nele precisa saber qual modelo
 está respondendo. O trait só emite `num_ctx` para o driver `ollama`, que é quem conhece
 essa chave.
 
 Cuidado ao mexer: `providerOptions` cai na chave `options` do corpo, mas `think`,
-`format` e `keep_alive` são içados para o topo — não coloque `think` ali.
+`format` e `keep_alive` são içados para o topo pelo gateway — o trait emite os três, e o
+`BuildsTextRequests` do Ollama os separa.
+
+Também é uniforme de propósito. O Ollama chaveia o runner carregado pelo `num_ctx`, então
+um valor por agente forçaria recarga do modelo entre um agente e o seguinte — a pegada
+fica dimensionada pelo pior prompt, que é o certo.
+
+## Raciocínio: `OLLAMA_REASONING_EFFORT`, a maior alavanca medida
+
+No caminho local o **decode é ~99% do tempo**, e o raciocínio é quase todo o decode. Os
+números abaixo são do caso do condomínio (obra barulhenta, dois possíveis réus), com os
+prompts e schemas reais, `num_ctx` 24576, num M5 Pro:
+
+| agente | wall | prefill | decode | raciocínio |
+|---|---|---|---|---|
+| área | 5,4 s | 5.668 tok / 0,06 s | 321 tok / 5,28 s | 1.150 ch |
+| réu | 7,4 s | 2.628 tok / 0,04 s | 444 tok / 7,27 s | 1.359 ch |
+| pedidos | 29,2 s | 3.574 tok / 0,38 s | 1.687 tok / 28,70 s | 7.374 ch |
+
+Repare no prefill: **é de graça**. Enxugar prompt, cortar `AI_DESCRIPTION_BUDGET` ou
+brigar com o schema duplicado do `ComposesSchemaInstructions` compraria centésimos de
+segundo, pagos em qualidade. O que custa é o decode, a ~60 tok/s.
+
+E o agente de pedidos, mesmo prompt, variando só o esforço:
+
+| configuração | wall | raciocínio | resultado |
+|---|---|---|---|
+| padrão, amostra 1 | 29,2 s | 7.374 ch | 4 pedidos |
+| padrão, amostra 2 | **156,2 s** | 42.239 ch | **lista vazia** |
+| `think: "low"` | **5,6 s** | 302 ch | 3 pedidos |
+| `think: "high"` | 85,6 s | 21.248 ch | 2 pedidos |
+
+O padrão variou 29 s → 156 s no mesmo prompt, e a rodada longa entregou pior. Daí o
+default ser `low` para quem lê e escolhe. Quem compõe prosa — `FactsRefinementAgent` e
+`PleadingDraftingAgent` — sobrescreve `reasoningEffort()` devolvendo `null`, porque ali a
+falha a evitar é um fato que não estava no relato, e essa é decisão que se toma pensando.
+
+Ressalva: n=1 por configuração, e a qualidade não foi avaliada sistematicamente. Antes de
+mexer no default, rode os casos de `tests/Agents` algumas vezes por configuração.
+
+## Cache de prefixo: por que a ordem do prompt importa
+
+O Ollama reaproveita o KV de um prefixo idêntico. Medido com o guia de áreas (4.780
+tokens) como prefixo:
+
+| | prefill |
+|---|---|
+| prefixo constante, 1ª chamada | 3,12 s (1.534 tok/s) |
+| prefixo constante, 2ª e 3ª | **0,07 s** (68.097 tok/s) |
+| variável no topo, três chamadas | 3,11 s / 3,10 s / 3,11 s |
+
+Uma variável no início anula tudo o que vem depois dela. Por isso
+`ProceduralClassSelectionAgent` põe a área e as candidatas no **fim** de `instructions()`:
+antes elas abriam o prompt, e os 13 KB do guia eram reprocessados a cada classificação.
+`PleadingDraftingAgent` é a exceção deliberada — o docblock dele faz a conta.
+
+Nada disso funciona se o daemon atender uma requisição por vez. `OLLAMA_NUM_PARALLEL=4`
+não é código do projeto, é variável do daemon, e sem ela três requisições simultâneas
+foram medidas terminando em degraus de 0,75 s — enfileiradas, com o `Concurrency::run` de
+`ClassifyLegalCase` sem efeito nenhum.
 
 ## Provider e modelo
 
@@ -332,10 +391,12 @@ Cuidado ao mexer: `providerOptions` cai na chave `options` do corpo, mas `think`
 
 O texto **voltou** para a máquina do escritório com o `gpt-oss:20b`, e o preço de volta é
 o que a ida ao Gemini tinha comprado: latência — daí os `#[Timeout(360)]`.
-`POST /pecas/classificar` corre as quatro primeiras etapas num `Concurrency::run` e depois
-espera a pesquisa, com o navegador esperando tudo — a dívida que o `asController()` da
-rota documenta e que uma fila resolve. O que se compra de volta: quase nenhuma cota para
-pagar, e o relato do cliente saindo do escritório só na pesquisa de teses, já cortado por
+`POST /pecas/classificar` corre as quatro etapas num `Concurrency::run` e não espera mais
+nada: a pesquisa de teses saiu da rota e hoje roda ao abrir a etapa 6, por
+`ResearchLegalCaseForensicReview`, sobre uma peça gravada. O navegador ainda espera as
+quatro — a dívida que o `asController()` da rota documenta e que uma fila resolve —, mas
+já não espera a rede. O que se compra de volta: quase nenhuma cota para pagar, e o relato
+do cliente saindo do escritório só na pesquisa de teses, já cortado por
 `LegalCaseDossier::forResearch()`.
 
 Os embeddings **nunca saíram**, e de propósito. Não havia o que ganhar movendo-os: o

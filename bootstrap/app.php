@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Middleware\AllowLongInference;
 use App\Http\Middleware\BindTenantContext;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
@@ -23,6 +24,13 @@ return Application::configure(basePath: dirname(__DIR__))
             BindTenantContext::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+        ]);
+
+        // Nas rotas, e não no grupo `web`: só as quatro que esperam por um
+        // agente precisam do teto de execução levantado, e dizê-lo na rota é
+        // o que torna visível quais são elas.
+        $middleware->alias([
+            'inference' => AllowLongInference::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

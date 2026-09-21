@@ -1,4 +1,4 @@
-import type { DefendantSuggestion, ExtractedRequirement, LegalResearch } from '@/types'
+import type { DefendantSuggestion, ExtractedRequirement } from "@/types";
 
 /**
  * O que o preenchimento inteligente entrega ao assistente.
@@ -6,30 +6,26 @@ import type { DefendantSuggestion, ExtractedRequirement, LegalResearch } from '@
  * A área vai no slug porque é a moeda do formulário e da query string; a classe
  * vai no uuid porque é ele que será gravado. São as mesmas duas formas do
  * `LegalCaseClassification::toArray()`, e por isso nada é traduzido no caminho
- * — o réu, os pedidos e a revisão forense também viajam como o servidor os
- * escreveu, com os nulos e os decimais que eles têm, e é o assistente que os
- * traduz para os campos.
+ * — o réu e os pedidos também viajam como o servidor os escreveu, com os nulos
+ * e os decimais que eles têm, e é o assistente que os traduz para os campos.
+ *
+ * A revisão forense **não** viaja por aqui, e já viajou. Ela era a única parte
+ * da entrega que nada salvava: as outras são gravadas quando o advogado clica
+ * em "Continuar" na etapa delas, enquanto as teses só existiam enquanto esta
+ * aba estivesse de pé — pesquisa que custa minutos e não sobrevive a um F5.
+ * Hoje ela roda ao abrir a etapa 6, sobre uma peça já gravada, e é gravada no
+ * mesmo gesto.
  */
 export interface LegalCaseHandoff {
-    practice_area: string
-    customer_id: string
-    procedural_class_id: string
-    facts: string
-    defendant: DefendantSuggestion | null
-    requirements: ExtractedRequirement[] | null
-    /**
-     * As teses e os precedentes que a pesquisa confirmou, para a etapa 6.
-     *
-     * É a única parte da entrega que **nada salva ainda**: as outras três são
-     * gravadas quando o advogado clica em "Continuar" na etapa delas, enquanto
-     * a revisão forense só existe enquanto esta aba estiver de pé. Um reload em
-     * `/pecas/{id}` descarta a entrega, como sempre descartou, e a etapa 6 abre
-     * vazia — o que muda no dia em que houver uma Action que a persista.
-     */
-    research: LegalResearch | null
+    practice_area: string;
+    customer_id: string;
+    procedural_class_id: string;
+    facts: string;
+    defendant: DefendantSuggestion | null;
+    requirements: ExtractedRequirement[] | null;
 }
 
-const KEY = 'lexia:legal-case-handoff'
+const KEY = "lexia:legal-case-handoff";
 
 /**
  * Por que armazenamento de navegador, num projeto que guarda estado na URL.
@@ -47,12 +43,12 @@ const KEY = 'lexia:legal-case-handoff'
  */
 export const stashHandoff = (handoff: LegalCaseHandoff): void => {
     try {
-        sessionStorage.setItem(KEY, JSON.stringify(handoff))
+        sessionStorage.setItem(KEY, JSON.stringify(handoff));
     } catch {
         // Aba anônima, cota estourada: a tela de destino abre em branco, que é
         // ruim, mas travar a geração por causa do armazenamento seria pior.
     }
-}
+};
 
 /**
  * O rascunho guardado, se ele pertence à área que a tela está mostrando.
@@ -62,32 +58,32 @@ export const stashHandoff = (handoff: LegalCaseHandoff): void => {
  * de outra.
  */
 export const readHandoff = (area: string): LegalCaseHandoff | null => {
-    const handoff = parse(raw())
+    const handoff = parse(raw());
 
-    if (handoff && area !== '' && handoff.practice_area === area) {
-        return handoff
+    if (handoff && area !== "" && handoff.practice_area === area) {
+        return handoff;
     }
 
-    discardHandoff()
+    discardHandoff();
 
-    return null
-}
+    return null;
+};
 
 export const discardHandoff = (): void => {
     try {
-        sessionStorage.removeItem(KEY)
+        sessionStorage.removeItem(KEY);
     } catch {
         // Ver `stashHandoff`.
     }
-}
+};
 
 const raw = (): string | null => {
     try {
-        return sessionStorage.getItem(KEY)
+        return sessionStorage.getItem(KEY);
     } catch {
-        return null
+        return null;
     }
-}
+};
 
 /**
  * Nada aqui é confiável: o texto veio do armazenamento e pode ser de uma versão
@@ -96,27 +92,26 @@ const raw = (): string | null => {
  */
 const parse = (value: string | null): LegalCaseHandoff | null => {
     if (value === null) {
-        return null
+        return null;
     }
 
     try {
-        const data = JSON.parse(value) as Partial<LegalCaseHandoff>
+        const data = JSON.parse(value) as Partial<LegalCaseHandoff>;
 
-        return typeof data?.practice_area === 'string' &&
-            typeof data.customer_id === 'string' &&
-            typeof data.procedural_class_id === 'string' &&
-            typeof data.facts === 'string'
+        return typeof data?.practice_area === "string" &&
+            typeof data.customer_id === "string" &&
+            typeof data.procedural_class_id === "string" &&
+            typeof data.facts === "string"
             ? {
                   ...(data as LegalCaseHandoff),
                   defendant: defendantOf(data.defendant),
                   requirements: requirementsOf(data.requirements),
-                  research: researchOf(data.research),
               }
-            : null
+            : null;
     } catch {
-        return null
+        return null;
     }
-}
+};
 
 /**
  * O réu é a exceção à regra acima: ele não invalida a entrega.
@@ -127,9 +122,9 @@ const parse = (value: string | null): LegalCaseHandoff | null => {
  * branco, que é como ela abria antes de haver agente nenhum.
  */
 const defendantOf = (value: unknown): DefendantSuggestion | null =>
-    typeof value === 'object' && value !== null && !Array.isArray(value)
+    typeof value === "object" && value !== null && !Array.isArray(value)
         ? (value as DefendantSuggestion)
-        : null
+        : null;
 
 /**
  * Os pedidos seguem a mesma regra do réu, e a peneira é por linha em vez de
@@ -142,28 +137,8 @@ const requirementsOf = (value: unknown): ExtractedRequirement[] | null =>
     Array.isArray(value)
         ? value.filter(
               (row): row is ExtractedRequirement =>
-                  typeof row === 'object' && row !== null && typeof row.description === 'string',
+                  typeof row === "object" &&
+                  row !== null &&
+                  typeof row.description === "string",
           )
-        : null
-
-/**
- * A pesquisa segue a regra do réu — não invalida a entrega —, e a peneira é
- * pelas duas listas que a tela percorre.
- *
- * Uma entrega gravada antes desta etapa existir não as tem, e uma resposta
- * pela metade seria pior do que nenhuma: a etapa 6 abriria com teses sem os
- * precedentes que as sustentam, que é exatamente a leitura que ela existe para
- * não oferecer. O resto do payload — a questão, as fontes, o pendente — pode
- * faltar sem prejuízo, e por isso não é conferido aqui.
- */
-const researchOf = (value: unknown): LegalResearch | null => {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        return null
-    }
-
-    const research = value as LegalResearch
-
-    return Array.isArray(research.theses) && Array.isArray(research.precedents)
-        ? research
-        : null
-}
+        : null;

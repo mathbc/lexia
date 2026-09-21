@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Ai\Agents;
 
-use App\Ai\Concerns\UsesConfiguredContextWindow;
+use App\Ai\Concerns\ConfiguresOllamaRuntime;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Attributes\Provider;
@@ -88,8 +88,8 @@ use Laravel\Ai\Promptable;
 #[Temperature(0.2)]
 final class RequirementExtractionAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
+    use ConfiguresOllamaRuntime;
     use Promptable;
-    use UsesConfiguredContextWindow;
 
     /**
      * Mais pedidos do que qualquer inicial faz no mérito.

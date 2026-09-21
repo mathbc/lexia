@@ -45,7 +45,37 @@ final class LegalCaseFormProps
             'requirements' => self::requirements($legalCase),
             'theses' => self::theses($legalCase),
             'precedents' => self::precedents($legalCase),
+            'research' => self::research($legalCase),
         ];
+    }
+
+    /**
+     * The account of the research run that produced the theses above.
+     *
+     * Everything a run returns except the two lists that became rows: the
+     * question, the official pages opened, what stayed unresolved, and the
+     * citations the guard refused. It lives in one jsonb column because one
+     * screen reads it whole and nothing queries it.
+     *
+     * **Null is the signal, not an absence of detail.** It means this pleading
+     * has never been researched, and it is what makes step 6 call the agent
+     * when it opens. Present-but-empty is the opposite statement — a run
+     * happened and confirmed nothing — and the step must not ask again for that
+     * one, which is why the screen keys on this and never on `theses` being
+     * empty.
+     *
+     * Read straight off the column with no reshaping: it was written by
+     * `LegalResearchData::findings()`, which is the shape the screen speaks.
+     * The one guard is against a row written before the column existed, where
+     * the cast hands back something that is not an array.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function research(LegalCase $legalCase): ?array
+    {
+        $findings = $legalCase->research_findings;
+
+        return is_array($findings) && $findings !== [] ? $findings : null;
     }
 
     /**

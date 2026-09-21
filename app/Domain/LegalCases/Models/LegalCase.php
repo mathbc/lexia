@@ -95,6 +95,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $injunctive_relief_description
  * @property LegalCaseStep $current_step
  * @property bool $is_draft
+ * @property array<string, mixed>|null $research_findings
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property CarbonImmutable|null $deleted_at
@@ -132,6 +133,7 @@ class LegalCase extends Model
             'injunctive_relief' => 'boolean',
             'current_step' => LegalCaseStep::class,
             'is_draft' => 'boolean',
+            'research_findings' => 'array',
         ];
     }
 

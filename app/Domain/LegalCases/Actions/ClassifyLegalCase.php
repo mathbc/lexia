@@ -7,18 +7,12 @@ namespace App\Domain\LegalCases\Actions;
 use App\Domain\LegalCases\Data\DefendantData;
 use App\Domain\LegalCases\Data\LegalCaseClassification;
 use App\Domain\LegalCases\Data\LegalCaseFraming;
-use App\Domain\LegalCases\Data\LegalResearchData;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\PracticeAreas\Actions\ClassifyPracticeArea;
-use App\Domain\PracticeAreas\Models\PracticeArea;
 use App\Domain\ProceduralClasses\Actions\SelectProceduralClass;
 use App\Domain\ProceduralClasses\Data\ProceduralClassSelection;
-use App\Domain\ProceduralClasses\Models\ProceduralClass;
-use App\Domain\Requirements\Data\RequirementData;
 use App\Domain\Requirements\Data\RequirementListData;
-use App\Domain\Requirements\Models\Requirement;
 use Closure;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Concurrency;
 use Lorisleiva\Actions\ActionRequest;
@@ -27,17 +21,18 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Read the facts of a matter: frame it, describe who is on the other side,
- * write out what is being asked of the court, and research what the pleading
- * can argue.
+ * Read the facts of a matter: frame it, describe who is on the other side, and
+ * write out what is being asked of the court.
  *
- * Cinco etapas, e o que as arruma é a **dependência** entre elas e nada mais.
- * Três correm ao mesmo tempo dentro de um `Concurrency::run`; a pesquisa vem
- * depois do bloco, porque não teria o que ler antes. Já foi diferente, e de
- * duas formas: as extrações viajavam como argumentos nomeados do construtor, e
- * a ordem delas era a ordem de avaliação de argumentos do PHP; depois viraram
- * cinco `statement` em série, o que era uma garantia do desenho mas cobrava do
- * advogado a soma de todas as esperas.
+ * Quatro etapas em três tasks, e **todas** correm ao mesmo tempo dentro de um
+ * único `Concurrency::run`. Não há mais nada em série depois do bloco: a espera
+ * desta rota é a mais longa das três tasks, e não a soma de coisa nenhuma.
+ *
+ * Já foi diferente, e de três formas. As extrações viajaram como argumentos
+ * nomeados do construtor, com a ordem sendo a de avaliação de argumentos do
+ * PHP; depois viraram `statement` em série, o que era garantia do desenho mas
+ * cobrava do advogado a soma de todas as esperas; e por último houve uma quinta
+ * etapa aqui — a pesquisa de teses —, que saiu. Onde ela foi parar está abaixo.
  *
  * ## O que corre junto, e o que não pode
  *
@@ -90,32 +85,34 @@ use Throwable;
  * é a saída — em `sync` tudo volta a correr em série, no mesmo processo, sem
  * tocar numa linha daqui.
  *
- * ## A quinta, que é de outra natureza
+ * ## A pesquisa de teses não está mais aqui
  *
- * `ResearchLegalCaseTheses` é a última, fora do bloco, e é a única que **não lê
- * só os fatos**: ela lê a peça que as quatro anteriores acabaram de descrever.
- * Daí a posição — o enquadramento diz em que ramo procurar e os pedidos dizem o
- * que a tese precisa sustentar, e nenhum dos dois existe antes de o agente
- * correspondente responder. É a única etapa que não podia ter entrado no bloco.
+ * Ela já foi a quinta etapa deste `handle()`, e a posição se justificava: ela é
+ * a única que não lê só os fatos, e sim a peça que as quatro anteriores acabaram
+ * de descrever. Para lhe dar o que ler, esta classe montava um `LegalCase` **não
+ * salvo** com a área, a classe e os pedidos pendurados à mão.
  *
- * Ela recebe um `LegalCase` **não salvo**, montado aqui em `pleading()`: é a
- * peça que está prestes a nascer, com a área, a classe e os pedidos pendurados
- * à mão. A alternativa — projetar o dossiê de pesquisa a partir das partes
- * soltas — significaria escrever duas vezes o texto que o agente lê, e as duas
- * cópias divergiriam na primeira mudança. `LegalCaseDossier::forResearch()` só
- * toca o modelo que recebe, e por isso um modelo em memória lhe serve tão bem
- * quanto um vindo do banco; `tests/Agents/LegalThesisResearchTest` monta o seu
- * do mesmo jeito.
+ * Duas coisas derrubaram esse arranjo, e a segunda é a que decide.
  *
- * Ela é também a única que **sai da máquina** com busca nos portais oficiais, e
- * de longe a mais lenta: a pesquisa é a inferência mais demorada do projeto
- * porque o provider abre as páginas antes de responder. Encurtar as quatro
- * primeiras não a encurta — ela é agora a maior parte da espera, e é por isso
- * que a dívida da fila continua de pé.
+ * A primeira é o tempo. A pesquisa sai da máquina, abre as páginas dos portais
+ * antes de responder, e é de longe a inferência mais lenta do projeto. Ficando
+ * aqui, ela anulava o bloco concorrente: encurtar as quatro primeiras não
+ * encurta a quinta, e o advogado esperava por ela antes de ver o primeiro campo
+ * preenchido.
+ *
+ * A segunda é que uma peça não salva não tem onde guardar o que a pesquisa
+ * acha. As teses voltavam no JSON, atravessavam o `sessionStorage` e morriam com
+ * a aba — pesquisa que custa minutos e não sobrevive a um F5. Hoje a pesquisa
+ * roda ao abrir a etapa 6, sobre uma peça que já tem chave primária, por
+ * `ResearchLegalCaseForensicReview`, que a persiste no mesmo gesto. É por isso
+ * que a etapa 1 do assistente precisa ser salva antes de qualquer navegação.
+ *
+ * O que sobra aqui é o que o preenchimento inteligente realmente é: tudo o que
+ * um relato pode dar **sem sair da máquina e sem precisar de uma peça gravada**.
  *
  * ## Onde uma etapa pode faltar
  *
- * Quatro das cinco. A área é a única obrigatória, por duas razões que se somam:
+ * Três das quatro. A área é a única obrigatória, por duas razões que se somam:
  * a classe depende dela, e é ela o que a tela foi buscar — sem área não há
  * enquadramento nenhum a devolver, e a resposta é o 503 lá de baixo. O preço do
  * paralelismo aparece exatamente aqui: quando a área cai, as duas extrações já
@@ -134,16 +131,16 @@ use Throwable;
  * inteligente, que precisa do resultado em mãos para carregá-lo até o
  * assistente — a navegação vem depois, e é do browser.
  *
- * O preço continua sendo a latência, e o bloco a reduziu sem a resolver: em vez
- * da soma de seis chamadas a `Timeout(360)`, a espera é agora a mais longa
- * entre o enquadramento e as duas extrações, mais a pesquisa — que são duas
- * inferências e a parte mais lenta do total. O navegador ainda espera por tudo.
- * É uma dívida conhecida e o lugar dela é aqui; quando a espera passar a ser uma
+ * O preço continua sendo a latência, mas encolheu duas vezes. O bloco trocou a
+ * soma das etapas pela mais longa delas; a saída da pesquisa tirou da conta a
+ * única que saía da máquina. O que resta são quatro inferências locais, e o teto
+ * é a mais lenta das três tasks.
+ *
+ * A dívida da fila continua de pé e o lugar dela é aqui: quando a espera virar
  * fila de verdade, é este `asController()` que devolve um identificador em vez
- * do resultado, e o `handle()` não muda uma linha. É também lá que as etapas
- * ganhariam progresso por etapa — e note que o paralelismo tornou isso mais
- * pobre, não mais rico: três tasks que correm junto não têm uma ordem para
- * relatar.
+ * do resultado, e o `handle()` não muda uma linha. Note que o paralelismo tornou
+ * o relato de progresso mais pobre, não mais rico — três tasks que correm junto
+ * não têm uma ordem para relatar.
  *
  * Um agente fora do ar é condição de operação, não defeito de código: daí o
  * 503 com uma frase que a tela consegue mostrar, e o `report()` para que a
@@ -187,31 +184,13 @@ final class ClassifyLegalCase
             throw new RuntimeException('Não foi possível enquadrar o caso.');
         }
 
-        $requirements = $read['requirements'];
-
-        // A quinta etapa. Fora do bloco porque lê a peça que as quatro
-        // anteriores descreveram — e esta closure não é serializada, por isso
-        // pode continuar ligada a `$this`.
-        // $research = self::stage(
-        //     fn (): LegalResearchData => ResearchLegalCaseTheses::run(
-        //         $this->pleading(
-        //             $facts,
-        //             $framing->area->practiceArea,
-        //             $framing->class?->proceduralClass,
-        //             $requirements,
-        //         ),
-        //     ),
-        // );
-
         return new LegalCaseClassification(
             practiceArea: $framing->area->practiceArea,
             practiceAreaJustification: $framing->area->justification,
             proceduralClass: $framing->class?->proceduralClass,
             proceduralClassJustification: $framing->class?->justification,
             defendant: $read['defendant'],
-            requirements: $requirements,
-            // research: $research,
-            research: null,
+            requirements: $read['requirements'],
         );
     }
 
@@ -249,59 +228,12 @@ final class ClassifyLegalCase
     }
 
     /**
-     * A peça que ainda não existe, montada em memória para a pesquisa ler.
-     *
-     * Nada aqui é salvo, e nada aqui tem id: é um `LegalCase` com as três
-     * relações que `LegalCaseDossier::forResearch()` consulta penduradas à mão
-     * — a área, a classe e os pedidos. `setRelation()` é o que faz o
-     * `loadMissing()` da Action de pesquisa não ir ao banco procurar o que uma
-     * peça sem chave primária não teria como ter.
-     *
-     * O cliente e o réu ficam **de fora de propósito**, e não por esquecimento:
-     * `forResearch()` não os lê, porque esta é a única inferência do projeto
-     * que sai da máquina e a qualificação das partes não muda resposta nenhuma
-     * da pesquisa. Defini-los aqui seria dizer que o agente os vê.
-     *
-     * A classe pode ser nula — é a etapa 2 que pode ter caído —, e o dossiê
-     * trata disso omitindo a linha. Os pedidos chegam como `Requirement` não
-     * salvos porque é isso que a relação promete; o que o dossiê lê deles é a
-     * frase e a cifra, que é exatamente o que o agente de extração devolveu. E
-     * eles podem faltar inteiros: a extração é uma task irmã do enquadramento,
-     * não uma etapa anterior, e a pesquisa é a única que sente isso.
-     */
-    private function pleading(
-        string $facts,
-        PracticeArea $area,
-        ?ProceduralClass $class,
-        ?RequirementListData $requirements,
-    ): LegalCase {
-        $claims = $requirements instanceof RequirementListData ? $requirements->requirements : [];
-
-        $pleading = new LegalCase(['facts' => $facts]);
-
-        $pleading->setRelation('practiceArea', $area);
-        $pleading->setRelation('proceduralClass', $class);
-        $pleading->setRelation('requirements', new Collection(array_map(
-            static fn (RequirementData $requirement): Requirement => new Requirement([
-                'description' => $requirement->description,
-                'amount' => $requirement->amount,
-            ]),
-            $claims,
-        )));
-
-        return $pleading;
-    }
-
-    /**
      * Uma etapa que pode faltar sem levar as outras junto.
      *
-     * O enquadramento é o que a tela foi buscar; o réu, os pedidos e as teses
-     * são o que ela ganha de brinde. Deixar uma falha numa delas derrubar a
-     * resposta inteira cobraria do advogado os minutos das inferências que já
-     * deram certo, para devolver a mesma tela de erro que ele veria sem
-     * nenhuma. Vale em dobro para a pesquisa, que é a última e a mais lenta, e
-     * cuja falha pode nem ser nossa — um portal oficial fora do ar derruba a
-     * etapa sem que nada no projeto tenha mudado.
+     * O enquadramento é o que a tela foi buscar; o réu e os pedidos são o que ela
+     * ganha de brinde. Deixar uma falha numa delas derrubar a resposta inteira
+     * cobraria do advogado os minutos das inferências que já deram certo, para
+     * devolver a mesma tela de erro que ele veria sem nenhuma.
      *
      * **Ela é chamada de dentro das closures, e não em volta do bloco**, porque
      * é só aí que ela protege alguma coisa: o `ProcessDriver` relança no pai a
@@ -312,11 +244,9 @@ final class ClassifyLegalCase
      * O `report()` é o que separa isto de engolir o erro: a causa continua
      * chegando ao log — e, para as três tasks, ao log escrito de dentro do
      * processo filho, onde o stack trace ainda é o verdadeiro. O nulo diz à tela
-     * que não há sugestão, e não que o relato não descreve ninguém, que ele não
-     * pede nada ou que a pesquisa nada confirmou. Essas três outras coisas são
-     * doze nulos dentro de um `DefendantData`, uma lista vazia dentro de um
-     * `RequirementListData` e um `LegalResearchData` de listas vazias com o
-     * `pending` escrito.
+     * que não há sugestão, e não que o relato não descreve ninguém ou que ele não
+     * pede nada. Essas duas outras coisas são doze nulos dentro de um
+     * `DefendantData` e uma lista vazia dentro de um `RequirementListData`.
      *
      * Estática por causa das closures serializadas: `self::` é reescrito para o
      * nome da classe ao serializar, e uma instância não atravessaria.

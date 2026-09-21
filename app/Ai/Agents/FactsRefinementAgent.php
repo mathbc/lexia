@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Ai\Agents;
 
-use App\Ai\Concerns\UsesConfiguredContextWindow;
+use App\Ai\Concerns\ConfiguresOllamaRuntime;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Attributes\Provider;
@@ -94,13 +94,31 @@ use Laravel\Ai\Promptable;
 #[Temperature(0.3)]
 final class FactsRefinementAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
+    use ConfiguresOllamaRuntime;
     use Promptable;
-    use UsesConfiguredContextWindow;
 
     /**
      * @param  string  $dossier  the pleading around the narrative, as LegalCaseDossier writes it
      */
     public function __construct(private readonly string $dossier) {}
+
+    /**
+     * Prose keeps the model's own deliberation.
+     *
+     * The siblings that read and choose run at `low`, where the reasoning was
+     * measured to be buying variance rather than quality. This one composes,
+     * and composing is where the extra seconds earn themselves: the failure to
+     * avoid here is a fact that was not in the relato, and that is a judgement
+     * the model makes while thinking, not while emitting.
+     *
+     * The return type is `null` and not `?string` on purpose: this agent has no
+     * effort to declare, and saying so in the signature keeps a later `low`
+     * from being slipped in without reading the paragraph above.
+     */
+    protected function reasoningEffort(): null
+    {
+        return null;
+    }
 
     public function instructions(): string
     {

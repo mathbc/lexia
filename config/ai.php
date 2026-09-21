@@ -89,7 +89,7 @@ return [
     | almost none.
     |
     | With text back on Ollama this is a setting again rather than documentation:
-    | `UsesConfiguredContextWindow` emits `num_ctx`, which is Ollama's spelling,
+    | `ConfiguresOllamaRuntime` emits `num_ctx`, which is Ollama's spelling,
     | so the number now reaches the wire. It matters because Ollama truncates an
     | overrunning prompt in silence, leaving an answer that still reads
     | plausible on top of a system prompt that lost its tail.
@@ -97,6 +97,76 @@ return [
     */
 
     'context_window' => (int) env('AI_CONTEXT_WINDOW', 24576),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ollama Runtime
+    |--------------------------------------------------------------------------
+    |
+    | Duas grafias que só o Ollama entende, emitidas por
+    | `App\Ai\Concerns\ConfiguresOllamaRuntime` ao lado do `num_ctx` acima.
+    |
+    | `keep_alive` é quanto tempo o modelo fica residente. O default do daemon é
+    | cinco minutos, e toda pausa maior cobra da requisição seguinte a recarga
+    | de um modelo de 12,8 GB — latência pura, em desenvolvimento e em qualquer
+    | produção de tráfego esparso.
+    |
+    | `reasoning_effort` é a maior alavanca de performance do projeto, porque no
+    | caminho local o decode é ~99% do tempo e o raciocínio é quase todo ele.
+    | Medido no `gpt-oss:20b` com o prompt real do agente de pedidos: o padrão
+    | gastou 42.239 caracteres de raciocínio em 156 s e devolveu lista **vazia**,
+    | enquanto `low` respondeu em 5,6 s com três pedidos. Numa segunda amostra o
+    | padrão levou 29 s e devolveu quatro. Mais raciocínio estava comprando
+    | variância, não qualidade.
+    |
+    | Atenção: isto NÃO é a armadilha do `think: false`, que devolve conteúdo
+    | vazio. `low` mantém o raciocínio ligado e curto, e o daemon continua
+    | separando-o em `message.thinking`, que o gateway ignora.
+    |
+    | Este é o padrão de quem lê e escolhe. Quem compõe prosa — o refinamento de
+    | fatos e a minuta — sobrescreve `reasoningEffort()` e devolve null, porque
+    | ali a deliberação extra paga os segundos que custa.
+    |
+    */
+
+    'runtime' => [
+        'keep_alive' => env('OLLAMA_KEEP_ALIVE', '30m'),
+        'reasoning_effort' => env('OLLAMA_REASONING_EFFORT', 'low'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Request Time Limit
+    |--------------------------------------------------------------------------
+    |
+    | Quanto tempo o PHP pode gastar num request que espera por um agente.
+    |
+    | Não confundir com o `#[Timeout(360)]` dos agentes: aquele é a paciência do
+    | cliente HTTP falando com o provedor, este é a paciência do interpretador
+    | com o próprio script. São independentes, e o segundo vence — um `php.ini`
+    | de fábrica traz `max_execution_time = 30`, e a requisição morre em 32 s
+    | com `Maximum execution time of 30+2 seconds exceeded (terminated)`,
+    | apontando para o cURL do Guzzle. O `+2` é o timeout duro: o normal não
+    | consegue interromper um `curl_exec()` bloqueado, então o processo é
+    | abatido em vez de lançar exceção — nada é gravado e nada é capturado.
+    |
+    | Quem aplica é `App\Http\Middleware\AllowLongInference`, e só nas quatro
+    | rotas que de fato esperam por uma inferência. Ele nunca abaixa um limite:
+    | zero é ilimitado, que é o que a CLI e o `artisan serve` entregam.
+    |
+    | 900 s é o pior caso com folga. A pesquisa de teses são **dois** agentes em
+    | série — o do Gemini abrindo os portais e o transcritor local —, cada um
+    | com 360 s de teto, mais o que a gravação custa. As demais rotas cabem
+    | numa fração disso e usam o mesmo número por não haver motivo para
+    | distingui-las.
+    |
+    | Isto não alcança `fastcgi_read_timeout` nem `request_terminate_timeout`:
+    | num servidor de verdade quem corta é o proxy, e a saída é a fila que
+    | ResearchLegalCaseForensicReview registra como dívida.
+    |
+    */
+
+    'request_time_limit' => (int) env('AI_REQUEST_TIME_LIMIT', 900),
 
     /*
     |--------------------------------------------------------------------------

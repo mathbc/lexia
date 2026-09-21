@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Ai\Agents;
 
-use App\Ai\Concerns\UsesConfiguredContextWindow;
+use App\Ai\Concerns\ConfiguresOllamaRuntime;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Attributes\Provider;
@@ -96,13 +96,50 @@ use Laravel\Ai\Promptable;
 #[Temperature(0.3)]
 final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
+    use ConfiguresOllamaRuntime;
     use Promptable;
-    use UsesConfiguredContextWindow;
 
     /**
+     * ## Why the dossier stays in the middle, unlike the class agent's
+     *
+     * ProceduralClassSelectionAgent moved its variable block to the bottom to win
+     * Ollama's prefix cache, which is worth 44x on the prefill. The same move was
+     * considered here and refused.
+     *
+     * The dossier is not a block this prompt shows once: the rules below it name it
+     * twenty-five times — "o dossiê traz a idade", "um dado que não está aqui",
+     * "um item por pedido do dossiê" — and several of those are positional. Moving
+     * it would mean rewriting them, and this is the prompt whose failure mode is an
+     * invented qualification inside a document a judge reads.
+     *
+     * The arithmetic does not justify that risk. Everything above the dossier
+     * caches already; only the rules below it are re-prefilled, about 2.5k tokens,
+     * which is ~1.6s against the thirty-odd seconds this agent spends composing a
+     * whole pleading, once per finalisation. A hot loop would change the answer.
+     * This is not one.
+     *
+     *
      * @param  string  $dossier  the pleading around the narrative, as LegalCaseDossier::forDrafting() writes it
      */
     public function __construct(private readonly string $dossier) {}
+
+    /**
+     * Prose keeps the model's own deliberation.
+     *
+     * The siblings that read and choose run at `low`, where the reasoning was
+     * measured to be buying variance rather than quality. This one composes,
+     * and composing is where the extra seconds earn themselves: the failure to
+     * avoid here is a fact that was not in the relato, and that is a judgement
+     * the model makes while thinking, not while emitting.
+     *
+     * The return type is `null` and not `?string` on purpose: this agent has no
+     * effort to declare, and saying so in the signature keeps a later `low`
+     * from being slipped in without reading the paragraph above.
+     */
+    protected function reasoningEffort(): null
+    {
+        return null;
+    }
 
     public function instructions(): string
     {
