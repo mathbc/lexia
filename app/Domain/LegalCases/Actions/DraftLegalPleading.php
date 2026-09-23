@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace App\Domain\LegalCases\Actions;
 
 use App\Ai\Agents\PleadingDraftingAgent;
+use App\Domain\CourtDecisions\Models\CourtDecision;
 use App\Domain\LegalCases\Data\PleadingDraftData;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalCases\Support\LegalCaseDossier;
 use App\Domain\LegalPleadings\Actions\StoreLegalPleadingVersion;
 use App\Domain\LegalPleadings\Models\LegalPleading;
+use App\Domain\LegalPleadings\Support\PleadingJurisprudence;
 use App\Domain\LegalPleadings\Support\PleadingSignature;
 use App\Domain\Requirements\Models\Requirement;
 use App\Domain\Users\Models\User;
@@ -27,23 +29,33 @@ use RuntimeException;
  * theses decide the DO DIREITO section, and the requests are copied out
  * verbatim and numbered.
  *
+ * The rulings are the ones the seventh step kept, read here and not passed in:
+ * FinalizeLegalCase deletes what the lawyer unticked before calling this, so the
+ * relation *is* the list they chose, and the dossier and the quotation both
+ * number that one list.
+ *
  * `$author` is the lawyer who signs. Optional rather than required, because the
  * signature is the only thing here that needs one and a missing author is a
  * legitimate state: the block comes out with `[Nome do advogado]` and `[OAB]`,
  * which is the same answer the agent gives for everything else it does not know.
  * A queued run has no actor at all, and this is what lets one exist.
  *
- * Two things happen after the agent answers, and neither is the agent's to do:
+ * Three things happen after the agent answers, and none is the agent's to do:
  *
- * 1. **The signature is appended**, composed by PleadingSignature. The reason it
+ * 1. **The rulings are quoted**, by PleadingJurisprudence: each `[[JULGADO n]]`
+ *    the agent placed becomes the ementa and its reference, copied from the
+ *    LexML record and indented. The reason the model places a ruling and never
+ *    writes one is in that class.
+ * 2. **The signature is appended**, composed by PleadingSignature. The reason it
  *    is not written by the model is in that class.
- * 2. **The row is written by StoreLegalPleadingVersion**, which is also what the
+ * 3. **The row is written by StoreLegalPleadingVersion**, which is also what the
  *    lawyer's own edits go through — so the version numbering has exactly one
  *    implementation whether the text came from a model or from a keyboard.
  *
  * No `asController()`: nothing routes here directly. FinalizeLegalCase calls it
- * when the sixth step is concluded, and GenerateLegalPleading calls it when that
- * attempt failed and the lawyer asks again.
+ * when the last step is concluded, and GenerateLegalPleading calls it when that
+ * attempt failed or the lawyer asks for the document again — in both cases the
+ * result is the next version, never a rewrite of the current one.
  */
 final class DraftLegalPleading
 {
@@ -57,9 +69,10 @@ final class DraftLegalPleading
             throw new RuntimeException('Não há fatos para redigir a minuta.');
         }
 
-        // O dossiê de redação lê seis relações; quem chegou por route-model
-        // binding não tem nenhuma carregada e um teste que montou a peça à mão
-        // tem todas. `loadMissing` é o que faz os dois custarem o mesmo.
+        // O dossiê de redação, a citação e a assinatura leem oito relações; quem
+        // chegou por route-model binding não tem nenhuma carregada e um teste que
+        // montou a peça à mão tem todas. `loadMissing` é o que faz os dois
+        // custarem o mesmo.
         $legalCase->loadMissing([
             'account',
             'customer',
@@ -67,6 +80,7 @@ final class DraftLegalPleading
             'proceduralClass',
             'requirements',
             'theses',
+            'courtDecisions',
             'documents',
         ]);
 
@@ -97,9 +111,12 @@ final class DraftLegalPleading
             throw new RuntimeException('O agente devolveu uma minuta vazia.');
         }
 
+        // A guarda de cifra acima leu só o que o modelo escreveu; a ementa entra
+        // depois, porque não é dele — é cópia do registro, feita em PHP.
         $stored = StoreLegalPleadingVersion::run(
             $legalCase,
-            $draft->content.PHP_EOL.PHP_EOL.PleadingSignature::for($legalCase, $author),
+            PleadingJurisprudence::expand($draft->content, $legalCase->courtDecisions)
+                .PHP_EOL.PHP_EOL.PleadingSignature::for($legalCase, $author),
         );
 
         // Null ali quer dizer uma coisa só: o texto saiu idêntico ao da última
@@ -117,6 +134,11 @@ final class DraftLegalPleading
      * requests — those are in the `amount` column in decimal notation, and the
      * guard parses both sides through one reader, so "50000.00" here matches
      * "R$ 50.000,00" there.
+     *
+     * And the ementas of the rulings about to be quoted. A sentence that
+     * introduces a ruling may repeat the figure it fixed — "que manteve a
+     * indenização de R$ 8.000,00" — and that figure is the court's, written in
+     * the record, not one the model composed.
      */
     private function sources(LegalCase $legalCase, string $narrative): string
     {
@@ -127,6 +149,10 @@ final class DraftLegalPleading
             ->filter()
             ->implode(' ');
 
-        return $narrative.' '.$claimed;
+        $quoted = $legalCase->courtDecisions
+            ->map(static fn (CourtDecision $decision): string => PleadingJurisprudence::ementa($decision->summary))
+            ->implode(' ');
+
+        return $narrative.' '.$claimed.' '.$quoted;
     }
 }

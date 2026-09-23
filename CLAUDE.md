@@ -573,7 +573,8 @@ precise aprender a outra:
   rodada é o botão "Pesquisar novamente".
 - **Tudo chega marcado, e o gesto é tirar.** As caixas de `CourtDecisionFields` vivem em
   estado local, como o `keep` das teses, e só viram gravação no "Concluir" — onde
-  desmarcar vira **remoção**, pelo `whereNotIn` da Action irmã.
+  desmarcar vira **remoção**, pelo `whereNotIn` da Action irmã. O que ficou marcado é o
+  que a minuta cita (ver "A minuta").
 
 O nome das Actions segue uma regra que as duas etapas compartilham: a Action **da etapa**
 leva o nome da etapa (`ResearchLegalCaseForensicReview`, `ResearchLegalCaseJurisprudence`)
@@ -599,8 +600,11 @@ transação**, porque são uma afirmação só sobre a peça: são estes os argu
 julgados, e ela está pronta. A redação fica **fora**, com `try/catch` e `report()` — é a
 única parte que sai da máquina e a única que uma cota esgotada pode levar embora.
 Falhando, a peça continua registrada e a aba Minuta abre vazia oferecendo o botão de
-gerar, que é a única porta para o agente depois da etapa 7 e fecha assim que existe uma
-versão.
+gerar. Com uma versão na mão, o mesmo `GenerateLegalPleading` é o **"Gerar novamente"**:
+redige sobre a peça como ela está agora e grava a versão seguinte. Ele já foi recusado
+aqui, quando regerar parecia escrever por cima do advogado; o append-only desfez a
+objeção — a correção fica na tabela como versão anterior —, e a tela confirma antes
+porque ela sai da aba mesmo sem sair do banco.
 
 A peça passa a ter **duas abas**, URLs de verdade como as da conta: `/pecas/{id}/editar`
 e `/pecas/{id}/minuta`. A segunda é um cabeçalho fixo com o timbre do escritório e um
@@ -616,7 +620,19 @@ não grava nada — senão abrir e clicar em Salvar encheria o histórico de ver
 diferem só no timestamp. `StoreLegalPleadingVersion` é o único lugar que cunha uma
 versão, com `lockForUpdate()`, e o `unique(legal_case_id, version)` é o que torna a
 numeração um fato. **Editar não chama agente nenhum**: corrigir um parágrafo não custa
-inferência, e regenerar em volta jogaria a correção fora.
+inferência; regerar é um gesto separado e explícito.
+
+A aba exporta **PDF** (`ExportLegalPleadingPdf`, dompdf) e **DOCX**
+(`ExportLegalPleadingDocx`, PhpWord), ambos com o timbre e a régua ABNT da tela, e
+ambos da **última versão salva** — a tela desliga o botão com alteração pendente, para
+que o arquivo seja sempre uma versão que o histórico conhece. O timbre é recomposto na
+exportação por `PleadingLetterhead::lines()`, que é o único lugar em PHP com as máscaras
+de telefone e CEP; no DOCX ele vai para o cabeçalho da seção, onde o Word o repete e a
+edição do corpo não o alcança. Qual parágrafo é citação é decidido por
+`PleadingBlocks`, **gêmeo** do `blocksOf()` de `pleading-document.tsx`: mexer num é mexer
+no outro. Duas armadilhas do PhpWord, ambas geram arquivo que o Word chama de corrompido:
+ele não escapa `&` sem `Settings::setOutputEscapingEnabled(true)`, e o `Converter` devolve
+twips fracionados onde o schema só aceita inteiros.
 
 A guarda central do agente não é a cifra, é a **lacuna**. A qualificação das partes
 exige estado civil e profissão; um modelo escreve "brasileiro, casado, comerciante"
@@ -651,9 +667,30 @@ com idade negativa.
 
 `LegalCaseDossier::forDrafting()` é a terceira projeção, e a mais larga: qualifica as
 duas partes com endereço inteiro, mascara o documento (vai copiado para um parágrafo
-que um juiz lê) e leva as teses. **Não leva os precedentes**, de propósito — a seção de
-jurisprudência é trabalho de outro momento, e é essa ausência que torna verificável a
-instrução negativa do prompt. `LegalCaseDossierTest` fixa as duas coisas.
+que um juiz lê), leva as teses e leva os **julgados da etapa 7**. **Não leva os
+precedentes**: são achados sobre uma tese, e não os documentos que o advogado escolheu
+citar. A instrução negativa do prompt ("nada se cita que o dossiê não traga") se apoia no
+dossiê carregar uma lista só de julgados. `LegalCaseDossierTest` fixa as duas coisas.
+
+**O agente põe o julgado, mas não o escreve.** Cada julgado chega ao dossiê com um
+marcador — `[[JULGADO 1]]` — e o agente escreve o marcador sozinho num parágrafo, no fim
+da tese que o julgado corrobora, dentro de `DO DIREITO`, depois de uma frase que o
+apresenta ("Nesse sentido, é o entendimento do Superior Tribunal de Justiça:").
+`PleadingJurisprudence::expand()`, chamado por `DraftLegalPleading`, troca o marcador pela
+ementa entre aspas e pela referência entre parênteses, os dois como parágrafos `>` — que
+`PleadingBlocks` e `blocksOf()` já recuam 4 cm, na tela, no PDF e no DOCX. É o argumento
+do timbre aplicado à citação: a ementa é cópia do registro do LexML, e uma ementa
+reescrita de memória tem a forma exata de uma verdadeira. A referência para onde o
+registro para — o LexML não traz relator nem DJe, então ela termina no órgão julgador e
+na data. O campo Ementa do LexML traz a certidão do julgamento colada ao fim ("Decisão
+Vistos e relatados…"), e `PleadingJurisprudence::ementa()` a corta: a petição cita a
+ementa. Colchete duplo não é lacuna, colchete simples é. Um marcador escrito no meio de
+uma frase, ou que aponta para um julgado que não existe, fica no texto, e o
+`PleadingDraftData` o conta como lacuna.
+
+A numeração é a posição na relação `courtDecisions`, e o dossiê e a expansão leem a
+**mesma** coleção. Como `FinalizeLegalCase` apaga o que o advogado desmarcou *antes* de
+redigir, a relação é exatamente a lista que ele manteve.
 
 ## Ainda não implementado
 

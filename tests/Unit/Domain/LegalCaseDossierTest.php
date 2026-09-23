@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Domain;
 
 use App\Domain\Accounts\Enums\BrazilianState;
+use App\Domain\CourtDecisions\Models\CourtDecision;
 use App\Domain\Customers\Enums\CustomerType;
 use App\Domain\Customers\Enums\MaritalStatus;
 use App\Domain\Customers\Models\Customer;
@@ -174,10 +175,10 @@ final class LegalCaseDossierTest extends TestCase
     /**
      * As teses entram; os precedentes, não.
      *
-     * É uma decisão do produto e não um esquecimento: a seção de jurisprudência
-     * é trabalho de outro momento, e um agente que recebesse julgados escreveria
-     * uma seção que ninguém pediu. A instrução negativa do prompt se apoia nesta
-     * ausência — é ela que torna a instrução verificável.
+     * Os precedentes são achados sobre uma tese, e não os documentos que o
+     * advogado escolheu citar — esses são os julgados da etapa 7, abaixo. A
+     * instrução negativa do prompt ("nada se cita que o dossiê não traga") se
+     * apoia no dossiê carregar uma lista só de julgados.
      */
     #[Test]
     public function the_drafting_dossier_carries_the_theses_and_not_the_precedents(): void
@@ -189,6 +190,55 @@ final class LegalCaseDossierTest extends TestCase
 
         $this->assertStringNotContainsString('Súmula 479', $dossier);
         $this->assertStringNotContainsString('Apelação Cível', $dossier);
+    }
+
+    /**
+     * Os julgados que o advogado manteve na etapa 7 entram, cada um com o seu
+     * marcador — é o que o agente escreve onde o julgado deve ser citado.
+     *
+     * A ementa que viaja é a que vai ser citada: sem a certidão do julgamento
+     * que o LexML cola depois dela. E o endereço do registro não viaja, porque
+     * para o modelo é ruído ao lado da ementa.
+     */
+    #[Test]
+    public function the_drafting_dossier_numbers_the_kept_rulings_by_their_markers(): void
+    {
+        $dossier = LegalCaseDossier::forDrafting($this->fullPleading(decisions: [
+            new CourtDecision([
+                'title' => 'REsp 2125459 / SP',
+                'authority' => 'Superior Tribunal de Justiça. 3ª Turma',
+                'summary' => 'DIREITO DE VIZINHANÇA. RESPONSABILIDADE CIVIL OBJETIVA. Recurso especial não provido. Decisão Vistos e relatados estes autos.',
+                'source_url' => 'https://www.lexml.gov.br/urn/urn:lex:br:superior.tribunal.justica;turma.3:acordao;resp:2024-04-02;2125459',
+                'decided_at' => '2024-04-02',
+            ]),
+            new CourtDecision([
+                'title' => 'REsp 1096639 / DF',
+                'authority' => 'Superior Tribunal de Justiça. 3ª Turma',
+                'summary' => 'DIREITO CIVIL. VIZINHANÇA. INDENIZAÇÃO DEVIDA.',
+                'source_url' => 'https://www.lexml.gov.br/urn/urn:lex:br:superior.tribunal.justica;turma.3:acordao;resp:2008-12-09;1096639',
+            ]),
+        ]));
+
+        $this->assertStringContainsString(implode(PHP_EOL, [
+            '## Os julgados da análise de jurisprudência',
+            '',
+            '- Marcador: [[JULGADO 1]]',
+            '- Tribunal: Superior Tribunal de Justiça. 3ª Turma',
+            '- Julgado: REsp 2125459 / SP',
+            '- Data do julgamento: 02/04/2024',
+            '- Ementa: DIREITO DE VIZINHANÇA. RESPONSABILIDADE CIVIL OBJETIVA. Recurso especial não provido.',
+            '- Marcador: [[JULGADO 2]]',
+        ]), $dossier);
+
+        $this->assertStringNotContainsString('Vistos e relatados', $dossier);
+        $this->assertStringNotContainsString('lexml.gov.br', $dossier);
+
+        // Sem julgado nenhum, a seção diz isso em palavras — e é essa frase que
+        // o prompt lê como "a peça não cita julgado nenhum".
+        $this->assertStringContainsString(
+            '## Os julgados da análise de jurisprudência'.PHP_EOL.PHP_EOL.'Nada registrado nesta peça até aqui.',
+            LegalCaseDossier::forDrafting($this->fullPleading()),
+        );
     }
 
     /**
@@ -218,8 +268,9 @@ final class LegalCaseDossierTest extends TestCase
      *
      * @param  list<Document>|null  $documents
      * @param  array<string, mixed>  $customerAttributes
+     * @param  list<CourtDecision>  $decisions
      */
-    private function fullPleading(?array $documents = null, array $customerAttributes = []): LegalCase
+    private function fullPleading(?array $documents = null, array $customerAttributes = [], array $decisions = []): LegalCase
     {
         $pleading = $this->pleading(
             new ProceduralClass(['code' => 7, 'name' => 'Procedimento Comum Cível']),
@@ -267,6 +318,7 @@ final class LegalCaseDossierTest extends TestCase
             ]),
         ]));
 
+        $pleading->setRelation('courtDecisions', new Collection($decisions));
         $pleading->setRelation('documents', new Collection($documents ?? []));
 
         return $pleading;

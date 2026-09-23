@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Domain\LegalCases\Support;
 
 use App\Domain\Accounts\Enums\BrazilianState;
+use App\Domain\CourtDecisions\Models\CourtDecision;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\Documents\Models\Document;
 use App\Domain\LegalCases\Models\LegalCase;
+use App\Domain\LegalPleadings\Support\PleadingJurisprudence;
 use App\Domain\LegalTheses\Models\LegalThesis;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
 use App\Domain\Requirements\Models\Requirement;
@@ -113,19 +115,21 @@ final class LegalCaseDossier
      * because research is about the law, this one widens because the document
      * *qualifies the parties*. The narrative alone cannot open a petição
      * inicial: it has to name the Autor with their full address, name the Réu
-     * the same way, argue the theses the forensic review settled on, and close
-     * with the requests, numbered.
+     * the same way, argue the theses the forensic review settled on, quote the
+     * rulings the lawyer kept, and close with the requests, numbered.
      *
      * Three differences from `of()`, each of them load-bearing:
      *
      * 1. **The parties are written in full.** `of()` sends the client's city
      *    because a narrative only needs to know how to name them; a pleading
      *    opens by qualifying them, so the seven address columns go.
-     * 2. **The theses go, and the precedents do not.** That is a decision of
-     *    the product and not an oversight: the drafting of the jurisprudence
-     *    section is a later piece of work, and an agent given rulings would
-     *    write a section nobody asked for. The absence is what the prompt's
-     *    negative instruction rests on.
+     * 2. **The theses go, and so do the seventh step's rulings.** Each ruling
+     *    travels under the marker the agent writes where it is to be quoted —
+     *    see `courtDecisions()` and PleadingJurisprudence. The precedents of the
+     *    forensic review still do not: they are findings about a thesis, not
+     *    the documents the lawyer chose to cite, and the prompt's negative
+     *    instruction — nothing is cited that the dossier does not carry — rests
+     *    on the dossier carrying exactly one list of rulings.
      * 3. **The documents go, when there are any.** Today the relation is always
      *    empty — nothing persists an upload yet — and the section drops itself,
      *    because `section()` writes "Nada registrado" and `written()` discards
@@ -142,6 +146,7 @@ final class LegalCaseDossier
             self::section('O réu — contra quem a ação é proposta', self::defendantInFull($legalCase)),
             self::section('Os pedidos', self::requirements($legalCase)),
             self::section('As teses da revisão forense', self::theses($legalCase)),
+            self::section('Os julgados da análise de jurisprudência', self::courtDecisions($legalCase)),
             self::section('Os documentos que instruem a peça', self::documents($legalCase)),
         ]);
     }
@@ -426,8 +431,8 @@ final class LegalCaseDossier
      *
      * The fundamentação comes through `citedLegalBases()`, which is the chip as
      * the screen reads it — "Súmula 393 do STJ", already assembled. The agent
-     * cites these and nothing else, which is what keeps a document with no
-     * jurisprudence section from growing one out of habit.
+     * cites these and the rulings below and nothing else, which is what keeps
+     * a document from growing an acórdão nobody chose out of habit.
      *
      * @return list<string>
      */
@@ -440,6 +445,37 @@ final class LegalCaseDossier
                 'O que se argumenta' => $thesis->description,
                 'O que a tese garante' => $thesis->impact,
                 'Fundamentos a citar' => implode('; ', $thesis->citedLegalBases()) ?: null,
+            ])))
+            ->all();
+    }
+
+    /**
+     * The rulings the lawyer kept on the seventh step, each under its marker.
+     *
+     * What the agent needs to *place* a ruling, and nothing more: the marker it
+     * writes, the court it names in the sentence that introduces the quotation,
+     * and the ementa it reads to decide which thesis the ruling corroborates.
+     * The quotation itself is put in afterwards by PleadingJurisprudence, from
+     * these same rows in this same order — the position is the marker, so both
+     * sides number the one list.
+     *
+     * The ementa is the one that will be quoted, without the judgment record
+     * the LexML field carries after it. No URL and no URN: they identify the
+     * record for a person checking it, and to a model they are noise beside
+     * the ementa.
+     *
+     * @return list<string>
+     */
+    private static function courtDecisions(LegalCase $legalCase): array
+    {
+        return $legalCase->courtDecisions
+            ->values()
+            ->map(static fn (CourtDecision $decision, int $index): string => implode(PHP_EOL, self::written([
+                'Marcador' => PleadingJurisprudence::marker($index + 1),
+                'Tribunal' => $decision->authority,
+                'Julgado' => $decision->title,
+                'Data do julgamento' => $decision->decided_at?->format('d/m/Y'),
+                'Ementa' => PleadingJurisprudence::ementa($decision->summary),
             ])))
             ->all();
     }

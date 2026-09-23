@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace Tests\Feature\LegalPleadings;
 
 use App\Domain\Accounts\Models\Account;
+use App\Domain\LegalCases\Actions\DraftLegalPleading;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalPleadings\Models\LegalPleading;
 use App\Domain\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Mockery;
+use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\Test;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -22,9 +26,10 @@ use Tests\TestCase;
  * opening a draft and pressing Salvar would fill the history with versions that
  * differ only in their timestamp.
  *
- * No agent is involved anywhere here, and that is the point of the screen:
- * correcting a paragraph must not cost an inference, and must certainly not
- * throw the correction away to regenerate around it.
+ * Saving involves no agent, and that is the point of the screen: correcting a
+ * paragraph must not cost an inference. Regenerating does, and is pinned here to
+ * the same rule as a save — it writes the next version and leaves the lawyer's
+ * text in the table. The agent is mocked; it runs for real in tests/Agents.
  */
 final class SaveLegalPleadingTest extends TestCase
 {
@@ -130,13 +135,15 @@ final class SaveLegalPleadingTest extends TestCase
                 ->where('pleading.placeholders', ['[estado civil]'])
                 ->where('letterhead.firm', $account->displayName())
                 ->where('letterhead.lawyer', $owner->name)
-                ->where('can.generate', false));
+                ->where('can.generate', true)
+                ->where('can.export', true));
     }
 
     /**
      * A peça cuja redação falhou: a aba abre vazia e oferece o agente.
      *
-     * É a única porta para ele depois da etapa 6 — ver GenerateLegalPleading.
+     * A mesma porta que, com uma minuta na mão, vira "Gerar novamente" — ver
+     * GenerateLegalPleading.
      */
     #[Test]
     public function a_pleading_with_no_draft_offers_to_generate_one(): void
@@ -148,22 +155,55 @@ final class SaveLegalPleadingTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->component('legal-cases/pleading')
                 ->where('pleading', null)
-                ->where('can.generate', true));
+                ->where('can.generate', true)
+                ->where('can.export', false));
     }
 
+    /**
+     * Gerar de novo é gravar a versão seguinte: o texto do advogado continua
+     * na tabela como a versão anterior.
+     */
     #[Test]
-    public function generating_over_an_existing_draft_is_refused(): void
+    public function generating_over_an_existing_draft_writes_the_next_version(): void
     {
         [, $owner, $case] = $this->pleading();
 
-        LegalPleading::factory()->forLegalCase($case)->withContent('O que o advogado escreveu.')->create();
+        $edited = LegalPleading::factory()->forLegalCase($case)->withContent('O que o advogado escreveu.')->create();
+
+        $this->fakeDrafting()
+            ->shouldReceive('handle')
+            ->once()
+            ->andReturnUsing(fn (LegalCase $legalCase): LegalPleading => LegalPleading::factory()
+                ->forLegalCase($legalCase)
+                ->version(2)
+                ->withContent('A redação nova do agente.')
+                ->create());
+
+        $this->actingAs($owner)
+            ->post(route('legal-cases.pleading.generate', $case))
+            ->assertRedirect(route('legal-cases.pleading', $case))
+            ->assertSessionHas('success', 'Nova versão da minuta gerada.');
+
+        $this->assertSame(2, $case->pleadings()->count());
+        $this->assertSame('A redação nova do agente.', $case->pleadings()->first()->content);
+        $this->assertSame('O que o advogado escreveu.', $edited->refresh()->content);
+    }
+
+    /** O provedor falhou: a versão atual fica onde estava, e a tela diz por quê. */
+    #[Test]
+    public function a_failed_regeneration_keeps_the_current_version(): void
+    {
+        [, $owner, $case] = $this->pleading();
+
+        LegalPleading::factory()->forLegalCase($case)->withContent('A versão atual.')->create();
+
+        $this->fakeDrafting()->shouldReceive('handle')->once()->andThrow(new RuntimeException('cota esgotada'));
 
         $this->actingAs($owner)
             ->post(route('legal-cases.pleading.generate', $case))
             ->assertSessionHas('error');
 
-        $this->assertSame(1, $case->pleadings()->count());
-        $this->assertSame('O que o advogado escreveu.', $case->pleadings()->sole()->content);
+        $this->assertSame('A versão atual.', $case->pleadings()->sole()->content);
     }
 
     /**
@@ -208,6 +248,19 @@ final class SaveLegalPleadingTest extends TestCase
             ->assertForbidden();
 
         $this->assertSame(0, $theirs->pleadings()->count());
+    }
+
+    /**
+     * O dublê da redação — mesmo arranjo de FinalizeLegalCaseTest: as Actions
+     * são `final`, então o mock parte de uma instância já construída.
+     */
+    private function fakeDrafting(): MockInterface
+    {
+        $fake = Mockery::mock(app(DraftLegalPleading::class));
+
+        app()->instance('LaravelActions:AsFake:'.DraftLegalPleading::class, $fake);
+
+        return $fake;
     }
 
     /**

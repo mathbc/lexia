@@ -1,12 +1,29 @@
 import { Head, router, useForm } from '@inertiajs/react'
-import { CircleAlert, Eye, FileText, Pencil, Scale, Sparkles } from 'lucide-react'
-import { useState } from 'react'
+import {
+    ChevronDown,
+    CircleAlert,
+    Download,
+    Eye,
+    FileText,
+    FileType,
+    Pencil,
+    RefreshCw,
+    Scale,
+    Sparkles,
+} from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { AnalysisDialog } from '@/components/analysis-dialog'
 import { LegalCaseTabs } from '@/components/legal-case-tabs'
 import { PleadingDocument } from '@/components/pleading-document'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { AppLayout } from '@/layouts/app-layout'
 import { formatDate, formatPhone, formatPostalCode } from '@/lib/format'
 import type { LegalPleading, PleadingLetterhead } from '@/types'
@@ -36,7 +53,7 @@ interface Props {
     /** A última versão, ou nulo quando a geração falhou. */
     pleading: LegalPleading | null
     letterhead: PleadingLetterhead
-    can: { update: boolean; generate: boolean }
+    can: { update: boolean; generate: boolean; export: boolean }
 }
 
 /**
@@ -73,11 +90,29 @@ interface Props {
  * tipografia valem nos dois — o que se digita já quebra a linha onde vai
  * quebrar no documento —, e o recuo é o que só a leitura mostra. Gravar volta
  * para o documento: a versão nova é para ser lida.
+ *
+ * ## Exportar e gerar de novo
+ *
+ * O PDF e o DOCX saem do servidor com o timbre e a mesma régua ABNT, e imprimem
+ * a **última versão salva** — por isso ficam desligados enquanto há alteração não
+ * salva: o arquivo baixado tem de ser uma versão que o histórico conhece.
+ *
+ * "Gerar novamente" chama o agente redator sobre a peça como ela está agora e
+ * grava a versão seguinte. Nada é sobrescrito, mas a correção do advogado sai
+ * da tela, e é isso que a confirmação pergunta.
  */
 export default function LegalCasePleading({ legalCase, pleading, letterhead, can }: Props) {
     const form = useForm({ content: pleading?.content ?? '' })
     const [generating, setGenerating] = useState(false)
     const [editing, setEditing] = useState(false)
+
+    // Uma versão nova chegou por fora do formulário — a primeira redação ou a
+    // de novo —, e o `useForm` guarda o valor inicial para sempre. Sem isto a
+    // tela mostraria o texto antigo marcado como "alterações não salvas".
+    useEffect(() => {
+        form.setData('content', pleading?.content ?? '')
+        setEditing(false)
+    }, [pleading?.id])
 
     const changed = form.data.content !== (pleading?.content ?? '')
     const gaps = pleading?.placeholders.length ?? 0
@@ -213,32 +248,88 @@ export default function LegalCasePleading({ legalCase, pleading, letterhead, can
                                 )}
                             </div>
 
-                            {can.update && (
-                                <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                                {can.export && (
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                disabled={changed || form.processing}
+                                                title={
+                                                    changed
+                                                        ? 'Salve as alterações antes de exportar'
+                                                        : undefined
+                                                }
+                                            >
+                                                <Download />
+                                                Exportar
+                                                <ChevronDown />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+
+                                        <DropdownMenuContent align="end">
+                                            {/* `<a>` de verdade e não visita do Inertia:
+                                                a resposta é um arquivo, não uma página. */}
+                                            <DropdownMenuItem asChild>
+                                                <a href={`/pecas/${legalCase.id}/minuta/pdf`} download>
+                                                    <FileText />
+                                                    PDF
+                                                </a>
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem asChild>
+                                                <a href={`/pecas/${legalCase.id}/minuta/docx`} download>
+                                                    <FileType />
+                                                    Word (DOCX)
+                                                </a>
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                )}
+
+                                {can.generate && (
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        disabled={form.processing}
-                                        onClick={() => setEditing((on) => !on)}
+                                        disabled={form.processing || generating}
+                                        onClick={() => {
+                                            if (window.confirm(regenerateWarning(pleading.version, changed))) {
+                                                generate()
+                                            }
+                                        }}
                                     >
-                                        {editing ? <Eye /> : <Pencil />}
-                                        {editing ? 'Ver documento' : 'Editar texto'}
+                                        <RefreshCw />
+                                        Gerar novamente
                                     </Button>
+                                )}
 
-                                    <Button
-                                        type="button"
-                                        disabled={!changed || form.processing}
-                                        onClick={() =>
-                                            form.put(`/pecas/${legalCase.id}/minuta`, {
-                                                preserveScroll: true,
-                                                onSuccess: () => setEditing(false),
-                                            })
-                                        }
-                                    >
-                                        {form.processing ? 'Salvando…' : 'Salvar nova versão'}
-                                    </Button>
-                                </div>
-                            )}
+                                {can.update && (
+                                    <>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            disabled={form.processing}
+                                            onClick={() => setEditing((on) => !on)}
+                                        >
+                                            {editing ? <Eye /> : <Pencil />}
+                                            {editing ? 'Ver documento' : 'Editar texto'}
+                                        </Button>
+
+                                        <Button
+                                            type="button"
+                                            disabled={!changed || form.processing}
+                                            onClick={() =>
+                                                form.put(`/pecas/${legalCase.id}/minuta`, {
+                                                    preserveScroll: true,
+                                                    onSuccess: () => setEditing(false),
+                                                })
+                                            }
+                                        >
+                                            {form.processing ? 'Salvando…' : 'Salvar nova versão'}
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
                         </footer>
                     </Card>
                 </div>
@@ -253,6 +344,22 @@ export default function LegalCasePleading({ legalCase, pleading, letterhead, can
         </AppLayout>
     )
 }
+
+/**
+ * A pergunta antes de chamar o agente por cima de uma minuta que existe.
+ *
+ * Diz o que acontece com o que está na tela, que é o que se perde de vista: a
+ * versão atual continua gravada, mas deixa de ser a que a aba mostra — e uma
+ * edição não salva não está gravada em lugar nenhum.
+ */
+const regenerateWarning = (version: number, unsaved: boolean): string =>
+    [
+        `Gerar a minuta novamente? O agente redige a versão ${version + 1} a partir da peça como ela está agora.`,
+        `A versão ${version} continua guardada no histórico, mas deixa de ser a exibida.`,
+        unsaved && 'As alterações não salvas serão perdidas.',
+    ]
+        .filter(Boolean)
+        .join('\n\n')
 
 /**
  * "Av. Paulista, 1000, Conjunto 1402, Bela Vista, São Paulo/SP, CEP 01310-100".

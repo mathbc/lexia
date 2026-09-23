@@ -7,12 +7,15 @@ namespace Tests\Agents;
 use App\Ai\Agents\PleadingDraftingAgent;
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Accounts\Models\Account;
+use App\Domain\CourtDecisions\Models\CourtDecision;
 use App\Domain\Customers\Enums\CustomerType;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\LegalCases\Actions\DraftLegalPleading;
 use App\Domain\LegalCases\Data\PleadingDraftData;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalCases\Support\LegalCaseDossier;
+use App\Domain\LegalPleadings\Support\PleadingBlocks;
+use App\Domain\LegalPleadings\Support\PleadingJurisprudence;
 use App\Domain\LegalPleadings\Support\PleadingSignature;
 use App\Domain\LegalTheses\Models\LegalThesis;
 use App\Domain\PracticeAreas\Models\PracticeArea;
@@ -40,8 +43,12 @@ use Tests\TestCase;
  *    are the single most likely invention in this project — grammatically
  *    required, utterly ordinary, and wrong about a real person in a document
  *    filed under a lawyer's number. The right answer is a bracket.
- * 2. **A jurisprudence section.** The dossier carries no rulings, deliberately,
- *    and a model that has read a thousand petições opens one out of sheer form.
+ * 2. **A ruling the dossier does not carry.** A model that has read a thousand
+ *    petições opens a "Jurisprudência:" block out of sheer form. The rulings the
+ *    lawyer kept are in the dossier under markers, and the agent's whole part
+ *    in them is placing each marker once, alone in a paragraph, inside DO
+ *    DIREITO — the ementa itself is PHP's to write, so any case law in the
+ *    agent's own prose was invented.
  * 3. **A total.** Five numbered requests with figures invite a closing line that
  *    adds them up, which is arithmetic rather than anything anyone claimed.
  *
@@ -145,6 +152,86 @@ final class PleadingDraftingTest extends TestCase
     }
 
     /**
+     * Os julgados que o advogado manteve entram pelo marcador, e só eles.
+     *
+     * Dois acórdãos do STJ sobre acidente de trânsito, que é o caso do relato. O
+     * que se pina é o que é estrutura: cada marcador uma vez, sozinho na linha,
+     * dentro de DO DIREITO — e, depois da expansão, cada ementa uma vez, como
+     * citação recuada. Em que tese cada um entra, e com que frase, é juízo, e
+     * fica para quem lê o `show()`.
+     */
+    #[Test]
+    public function it_places_each_kept_ruling_once_inside_the_argument(): void
+    {
+        $facts = <<<'TXT'
+        Doutor, no dia 10 de setembro de 2026, por volta das 21h, um carro bateu no meu
+        muro. O motorista, o Pedro Henrique, tava visivelmente bêbado e fugiu. O carro
+        era do pai dele. O muro caiu e o portão entortou. Os orçamentos que peguei pro
+        conserto deram R$ 18.400,00.
+        TXT;
+
+        $decisions = new Collection([
+            new CourtDecision([
+                'title' => 'AgInt no REsp 2091428 / MA',
+                'locality' => 'Brasil',
+                'authority' => 'Superior Tribunal de Justiça. 3ª Turma',
+                'summary' => 'PROCESSUAL CIVIL. AGRAVO INTERNO NO RECURSO ESPECIAL. AÇÃO DE INDENIZAÇÃO POR DANOS MORAIS. ACIDENTE DE TRÂNSITO. MORTE DE VÍTIMA. JUIZO DE ORIGEM QUE CONCLUIU PELA EXISTÊNCIA DE CONDUTA, DANO, NEXO DE CAUSALIDADE E CULPA. DIREÇÃO PERIGOSA. PROPRIETÁRIO DO VEÍCULO. RESPONSABILIDADE SOLIDÁRIA. JULGADOS DESTA CORTE. 1. Ação de indenização por danos morais em razão de acidente de trânsito que causou a morte da vítima. 2. A absolvição no juízo criminal, diante da relativa independência entre as instâncias cível e criminal, apenas vincula o juízo cível quando for reconhecida a inexistência do fato ou ficar demonstrado que o demandado não foi seu autor. Julgados desta Corte. 3. O proprietário do veículo responde solidariamente pelos danos decorrentes de acidente de trânsito causado por culpa do condutor. Julgados. 4. Agravo interno não provido. Decis?o Vistos e relatados estes autos em que são partes as acima indicadas, acordam os Ministros da TERCEIRA TURMA do Superior Tribunal de Justiça, por unanimidade, negar provimento ao recurso.',
+                'source_url' => 'https://www.lexml.gov.br/urn/urn:lex:br:superior.tribunal.justica;turma.3:acordao;resp:2023-11-13;2091428-2368856',
+                'decided_at' => '2023-11-13',
+            ]),
+            new CourtDecision([
+                'title' => 'REsp 1106086 / MA',
+                'locality' => 'Brasil',
+                'authority' => 'Superior Tribunal de Justiça. 1ª Turma',
+                'summary' => 'ADMINISTRATIVO. PROCESSUAL CIVIL. RECURSO ESPECIAL. RESPONSABILIDADE CIVIL DO ESTADO. AÇÃO DE INDENIZAÇÃO. ACIDENTE DE TRÂNSITO CAUSADO POR SERVIDOR DA POLÍCIA MILITAR. DANOS MATERIAIS. AÇÃO AJUIZADA PELO PROPRIETÁRIO DO VEÍCULO LESIONADO. LEGITIMIDADE ATIVA DO CONDUTOR OU DO PROPRIETÁRIO. 1. Hipótese em que se alega ilegitimidade ativa do recorrido, por não ser o condutor do veículo lesionado no momento do acidente. 2. Na ação de indenização por danos materiais decorrentes de acidente de trânsito, é legitimada ativamente a pessoa que suportou o prejuízo com a reparação do dano. 3. Recurso especial não provido.',
+                'source_url' => 'https://www.lexml.gov.br/urn/urn:lex:br:superior.tribunal.justica;turma.1:acordao;resp:2009-10-01;1106086',
+                'decided_at' => '2009-10-01',
+            ]),
+        ]);
+
+        $draft = $this->draft($facts, decisions: $decisions);
+        $document = PleadingJurisprudence::expand($draft->content, $decisions);
+
+        $this->show($facts, $draft, $document);
+
+        // Um marcador que sobrou é um que o agente escreveu no meio de uma
+        // frase, ou um que não existe: a expansão não o alcança.
+        $this->assertStringNotContainsString('[[', $document);
+
+        // Cada ementa uma vez, dentro de DO DIREITO. É a asserção que pega o
+        // julgado esquecido (zero) e o repetido (dois), sem pinar a grafia do
+        // marcador, que a expansão já tolera.
+        $law = mb_strpos($document, 'DO DIREITO');
+        $requests = mb_strpos($document, 'DOS PEDIDOS');
+        $this->assertNotFalse($law);
+        $this->assertNotFalse($requests);
+
+        foreach ($decisions as $decision) {
+            $ementa = PleadingJurisprudence::ementa($decision->summary);
+
+            $this->assertSame(1, mb_substr_count($document, $ementa));
+            $this->assertGreaterThan($law, mb_strpos($document, $ementa));
+            $this->assertLessThan($requests, mb_strpos($document, $ementa));
+        }
+
+        $this->assertCount(4, array_filter(
+            PleadingBlocks::of($document),
+            static fn (array $block): bool => $block['citation'],
+        ));
+
+        // A prosa do agente não transcreve nem inventa: todo julgado da peça é
+        // um dos dois, e nenhum é chamado do que um acórdão de turma não é.
+        $this->assertStringNotContainsStringIgnoringCase('vinculante', $draft->content);
+        $this->assertStringNotContainsStringIgnoringCase('súmula', $draft->content);
+        $this->assertDoesNotMatchRegularExpression('/^\s*Jurisprudência:?\s*$/mu', $draft->content);
+        $this->assertDoesNotMatchRegularExpression('/\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/u', $draft->content);
+
+        $this->assertSame([], $draft->unsupportedAmounts);
+        $this->assertNoInventedQualification($draft);
+        $this->assertNoSignature($draft);
+    }
+
+    /**
      * A qualificação não é inventada.
      *
      * Os estados civis e as profissões mais prováveis são nomeados um a um em
@@ -165,8 +252,8 @@ final class PleadingDraftingTest extends TestCase
     /**
      * Nenhum julgado, e nenhuma seção que peça um.
      *
-     * O dossiê de redação não carrega precedente nenhum — ver
-     * LegalCaseDossierTest —, então tudo o que aparecesse aqui teria sido
+     * Para os casos em que o dossiê não traz julgado nenhum — a seção diz
+     * "Nada registrado" —, então tudo o que aparecesse aqui teria sido
      * inventado, com número de processo verossímil e inexistente.
      */
     private function assertNoCaseLaw(PleadingDraftData $draft): void
@@ -205,10 +292,15 @@ final class PleadingDraftingTest extends TestCase
      * `assertNoSignature` consegue afirmar.
      *
      * @param  list<Requirement>|null  $requirements
+     * @param  Collection<int, CourtDecision>|null  $decisions
      */
-    private function draft(string $facts, ?array $requirements = null, ?LegalThesis $thesis = null): PleadingDraftData
-    {
-        $legalCase = $this->pleading($facts, $requirements, $thesis);
+    private function draft(
+        string $facts,
+        ?array $requirements = null,
+        ?LegalThesis $thesis = null,
+        ?Collection $decisions = null,
+    ): PleadingDraftData {
+        $legalCase = $this->pleading($facts, $requirements, $thesis, $decisions);
 
         $response = (new PleadingDraftingAgent(
             dossier: LegalCaseDossier::forDrafting($legalCase),
@@ -216,7 +308,13 @@ final class PleadingDraftingTest extends TestCase
 
         $this->assertInstanceOf(StructuredAgentResponse::class, $response);
 
-        return PleadingDraftData::fromAgent($response->toArray(), $facts.' R$ 24000.00 R$ 6200.00');
+        // As mesmas fontes que DraftLegalPleading::sources() junta: o relato, as
+        // cifras dos pedidos e as ementas que a peça vai citar.
+        $quoted = $legalCase->courtDecisions
+            ->map(static fn (CourtDecision $decision): string => PleadingJurisprudence::ementa($decision->summary))
+            ->implode(' ');
+
+        return PleadingDraftData::fromAgent($response->toArray(), $facts.' R$ 24000.00 R$ 6200.00 R$ 18400.00 '.$quoted);
     }
 
     /**
@@ -230,9 +328,14 @@ final class PleadingDraftingTest extends TestCase
      * mede — é dele que sai a lacuna entre colchetes.
      *
      * @param  list<Requirement>|null  $requirements
+     * @param  Collection<int, CourtDecision>|null  $decisions
      */
-    private function pleading(string $facts, ?array $requirements = null, ?LegalThesis $thesis = null): LegalCase
-    {
+    private function pleading(
+        string $facts,
+        ?array $requirements = null,
+        ?LegalThesis $thesis = null,
+        ?Collection $decisions = null,
+    ): LegalCase {
         $legalCase = new LegalCase([
             'facts' => $facts,
             'court_addressing' => 'Ao Juízo de Direito da Vara Cível da Comarca de Balneário Camboriú/SC',
@@ -283,6 +386,7 @@ final class PleadingDraftingTest extends TestCase
         ]));
 
         $legalCase->setRelation('precedents', new Collection);
+        $legalCase->setRelation('courtDecisions', $decisions ?? new Collection);
         $legalCase->setRelation('documents', new Collection);
 
         return $legalCase;
@@ -292,12 +396,14 @@ final class PleadingDraftingTest extends TestCase
      * The point of an agent test is to read the answer, and PHPUnit swallows
      * stdout — STDERR is what actually reaches the terminal.
      */
-    private function show(string $facts, PleadingDraftData $draft): void
+    private function show(string $facts, PleadingDraftData $draft, ?string $document = null): void
     {
         fwrite(STDERR, PHP_EOL.json_encode([
             'relato' => $facts,
-            'minuta' => $draft->content,
-            'lacunas' => $draft->placeholders,
+            'minuta' => $document ?? $draft->content,
+            // Lidas do documento expandido quando há um, como a tela as lê da
+            // versão gravada: antes da expansão o marcador parece lacuna.
+            'lacunas' => $document === null ? $draft->placeholders : PleadingDraftData::gapsIn($document),
             'cifras_sem_fonte' => $draft->unsupportedAmounts,
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES).PHP_EOL.PHP_EOL);
     }

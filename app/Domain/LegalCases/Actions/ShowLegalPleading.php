@@ -27,10 +27,12 @@ use Lorisleiva\Actions\Concerns\AsAction;
  *
  * `pleading` is null when the drafting failed — see FinalizeLegalCase, which
  * lets that happen rather than losing the forensic review with it. The screen
- * says so and offers to try again, which is why `can.generate` exists: it is the
- * only door to the agent after the sixth step, and it closes as soon as there is
- * a version, because regenerating over the lawyer's own edits is not a gesture
- * this product offers.
+ * says so and offers to try again. With a version in hand `can.generate` is the
+ * "Gerar novamente" button instead: the agent writes the next version, and the
+ * lawyer's edits stay in the table as the previous one — see
+ * GenerateLegalPleading. `can.export` is simply "there is a version": the PDF
+ * and the DOCX print the latest saved one, and viewing the tab already required
+ * the `view` their routes check.
  */
 final class ShowLegalPleading
 {
@@ -67,10 +69,10 @@ final class ShowLegalPleading
             'letterhead' => PleadingLetterhead::for($legalCase->account, $request->user()),
             'can' => [
                 'update' => $request->user()->can('update', $legalCase),
-                // A porta do agente, e ela fecha sozinha: com uma minuta na mão
-                // não há gesto de regerar.
-                'generate' => ! $pleading instanceof LegalPleading
-                    && $request->user()->can('update', $legalCase),
+                // A porta do agente: gerar a primeira, ou gerar de novo por cima
+                // — que grava a versão seguinte e não apaga nada.
+                'generate' => $request->user()->can('update', $legalCase),
+                'export' => $pleading instanceof LegalPleading,
             ],
         ]);
     }

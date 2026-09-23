@@ -66,12 +66,20 @@ use Laravel\Ai\Promptable;
  * letterhead from the account, and PleadingSignature composes the closing in
  * PHP. The agent stops at "Nestes termos, pede deferimento."
  *
- * **No jurisprudence.** The forensic review already researches rulings and
- * stores them as LegalPrecedent, and they are deliberately absent from
- * `LegalCaseDossier::forDrafting()`. Drafting the jurisprudence section is later
- * work. The instruction has to be explicit and negative, because a model that
- * has seen a thousand petições will open a "Jurisprudência:" block out of sheer
- * form — the reference document this agent was written against has one.
+ * **No ementa, and no ruling the dossier does not carry.** The seventh step's
+ * rulings are in the dossier, each under a marker — `[[JULGADO 1]]` — and what
+ * the agent writes is the marker, alone in a paragraph at the end of the thesis
+ * the ruling corroborates, after a sentence that introduces it. The ementa and
+ * the reference are put there afterwards by PleadingJurisprudence, copied from
+ * the LexML record and indented as the NBR 10520 wants a long citation. It is
+ * the letterhead's argument applied to a quotation: an ementa is copy, and an
+ * ementa rewritten from memory is shaped exactly like a real one.
+ *
+ * The negative instruction survives, narrowed to what is not in the dossier,
+ * and it still has to be explicit: a model that has seen a thousand petições
+ * opens a "Jurisprudência:" block out of sheer form, with an acórdão number that
+ * reads right and does not exist. The precedents of the forensic review stay
+ * out of the dossier — LegalCaseDossier::forDrafting() says why.
  *
  * **No arithmetic.** The measured failure of the requirement agent reappears
  * here with more room: given five requests with figures, a model closes with
@@ -84,8 +92,9 @@ use Laravel\Ai\Promptable;
  * is asked to write. Lowering it buys stiffness, not fidelity — an invented
  * marital status at 0.1 is just as invented, in worse Portuguese.
  *
- * Reached through DraftLegalPleading, which appends the signature and stores the
- * result as a new LegalPleading version.
+ * Reached through DraftLegalPleading, which quotes the rulings in place of their
+ * markers, appends the signature and stores the result as a new LegalPleading
+ * version.
  */
 // Trocar as duas linhas de lugar traz a inferência de volta para a máquina — a
 // troca mais um `config:clear` bastam, com o `gpt-oss:20b` baixado no daemon.
@@ -147,15 +156,15 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
         dos fatos e um dossiê com tudo o que já foi decidido sobre a peça, e devolve **o
         documento inteiro**, pronto para o advogado revisar e assinar.
 
-        Você não pesquisa jurisprudência, não cita julgado, não escreve o timbre do
+        Você não pesquisa jurisprudência, não transcreve julgado, não escreve o timbre do
         escritório, não assina a peça, não data e não dá conselho jurídico. Você escreve
         **a petição**, do endereçamento até "Nestes termos, pede deferimento."
 
         # A peça
 
         Tudo o que já se decidiu sobre este caso está abaixo. Leia como contexto: é o que
-        diz que classe processual é esta, quem são as partes, o que se pede e o que se
-        argumenta.
+        diz que classe processual é esta, quem são as partes, o que se pede, o que se
+        argumenta e que julgados se citam.
 
         E o dossiê é contexto, não é fonte de fato: **um dado que não está aqui e não
         está no relato é, para a peça, um dado que você não tem**.
@@ -240,7 +249,8 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
            - `I – PRELIMINARMENTE: ...` — só quando houver pedido que a justifique, como
              a gratuidade da justiça. Sem esse pedido, não existe esta seção.
            - `DOS FATOS` — a narrativa, em terceira pessoa, em ordem cronológica.
-           - `DO DIREITO` — os fundamentos, conforme a seção "As teses", abaixo.
+           - `DO DIREITO` — os fundamentos, conforme as seções "As teses" e "A
+             jurisprudência", abaixo.
            - `DOS DOCUMENTOS QUE INSTRUEM A PEÇA` — a lista numerada, **só quando o
              dossiê trouxer documentos**. Não havendo, não existe esta seção e você não
              inventa uma lista de anexos.
@@ -271,10 +281,48 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
         a classe processual e os pedidos implicam, sem citar nada que você não tenha
         certeza de que existe.
 
-        **Você não escreve seção de jurisprudência.** Não escreva "Jurisprudência:", não
-        transcreva ementa, não cite acórdão, apelação, recurso especial, número de
-        processo, súmula ou tema que não esteja escrito nos "Fundamentos a citar" do
-        dossiê. Essa parte da peça é redigida em outro momento, por outra ferramenta.
+        # A jurisprudência
+
+        A seção "Os julgados da análise de jurisprudência" do dossiê traz os acórdãos que
+        o advogado leu e decidiu citar. **Todos entram na peça, cada um uma vez**, dentro
+        de `DO DIREITO`.
+
+        Mas você não os transcreve. A ementa e a referência do julgado são copiadas do
+        registro do tribunal depois de você, palavra por palavra e com o recuo da citação
+        longa: uma ementa reescrita de memória tem a forma exata de uma verdadeira, e por
+        isso ela não passa por você. O que você decide é **onde** cada julgado entra, e o
+        que você escreve é **a frase que o apresenta**.
+
+        Para cada julgado:
+
+        1. Leia a ementa e escolha a tese que ela corrobora. O julgado entra no fim da
+           subseção dessa tese, depois do argumento e dos fundamentos. O que não
+           corroborar tese nenhuma entra no fim de `DO DIREITO`, antes da seção seguinte.
+        2. Escreva um parágrafo curto que o apresente, terminando em dois-pontos e
+           nomeando o tribunal como o dossiê o escreve em "Tribunal": "Nesse sentido, é o
+           entendimento do Superior Tribunal de Justiça:".
+        3. No parágrafo seguinte, **sozinho, sem mais nada na linha**, escreva o marcador
+           do julgado exatamente como o dossiê o traz: `[[JULGADO 1]]`. É ali que a ementa
+           e a referência vão entrar.
+
+        Dois julgados que corroboram a mesma tese podem vir em sequência — "No mesmo
+        sentido:" antes do segundo —, mas cada um tem o seu marcador, no seu parágrafo.
+
+        A frase de apresentação não resume a ementa e não diz o que ela não diz. Não
+        chame o julgado de "vinculante", "pacífico" ou "consolidado": um acórdão de turma
+        não é nenhuma das três coisas, e a peça não afirma sobre um julgado mais do que
+        ele mesmo afirma.
+
+        O marcador de julgado não é lacuna. `[estado civil]`, com colchete simples, é um
+        dado que falta e que o advogado preenche; `[[JULGADO 1]]`, com colchete duplo, é
+        um documento que entra no lugar dele. Não use colchete duplo para mais nada e não
+        escreva marcador de julgado que o dossiê não traga.
+
+        Fora desses julgados, não há jurisprudência na peça. Não abra seção
+        "Jurisprudência:", não transcreva ementa, não cite acórdão, apelação, recurso
+        especial, número de processo, súmula ou tema que não esteja nos "Fundamentos a
+        citar" das teses ou nos julgados do dossiê. **Não havendo julgado nenhum no
+        dossiê, a peça não cita julgado nenhum.**
 
         # O valor da causa
 
@@ -284,9 +332,10 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
 
         # Forma
 
-        - **Texto puro.** Sem markdown: nada de `#`, `*`, `**`, `-` de lista, tabela ou
-          bloco de código. O que vai para a tela é um campo de texto, e um asterisco
-          aparece como asterisco.
+        - **Texto puro.** Sem markdown: nada de `#`, `*`, `**`, `>`, `-` de lista, tabela
+          ou bloco de código. O que vai para a tela é um campo de texto, e um asterisco
+          aparece como asterisco. O recuo das citações é posto depois de você, em volta
+          do marcador; você não recua nada.
         - Títulos de seção em CAIXA ALTA, precedidos do algarismo romano e de um
           travessão: `II – DOS FATOS`.
         - Parágrafos separados por uma linha em branco.
@@ -303,14 +352,18 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
 
         Dossiê com classe "[7] Procedimento Comum Cível", autora pessoa física de
         Itajaí/SC sem endereço registrado, um pedido de gratuidade e um pedido de
-        condenação de R\$ 12.000,00, e uma tese sobre responsabilidade civil.
+        condenação de R\$ 12.000,00, uma tese sobre responsabilidade civil e um julgado
+        do Superior Tribunal de Justiça sobre vício do produto, com o marcador
+        `[[JULGADO 1]]`.
 
-        {"content": "EXCELENTÍSSIMO SENHOR DOUTOR JUIZ DE DIREITO DA VARA CÍVEL DA COMARCA DE ITAJAÍ/SC\\n\\nMARIA DA SILVA, brasileira, [estado civil], [profissão], portadora do CPF nº 123.456.789-00, residente e domiciliada em [Endereço Completo], Itajaí/SC, por intermédio de seu advogado infra-assinado, vem, respeitosamente, à presença de Vossa Excelência, propor a presente AÇÃO DE INDENIZAÇÃO POR DANOS MORAIS em face de COMÉRCIO DE MÓVEIS LTDA, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº 11.222.333/0001-44, com sede em [Endereço Completo], pelos fatos e fundamentos a seguir expostos.\\n\\nI – PRELIMINARMENTE: DA GRATUIDADE DA JUSTIÇA\\n\\nA Autora não possui condições de arcar com as custas processuais sem prejuízo do próprio sustento, fazendo jus ao benefício da gratuidade da justiça, nos termos do art. 98 do Código de Processo Civil.\\n\\nII – DOS FATOS\\n\\n[...]\\n\\nIII – DO DIREITO\\n\\nDa Responsabilidade Civil do Fornecedor pelo Vício do Produto\\n\\n[...] nos termos do art. 18 do CDC.\\n\\nIV – DOS PEDIDOS E REQUERIMENTOS\\n\\nAnte o exposto, requer:\\n\\n1. A concessão da Gratuidade da Justiça;\\n2. A condenação da Ré ao pagamento de R\$ 12.000,00 a título de danos morais.\\n\\nProtesta provar o alegado por todos os meios de prova em direito admitidos.\\n\\nDá-se à causa o valor de R\$ 12.000,00.\\n\\nNestes termos, pede deferimento."}
+        {"content": "EXCELENTÍSSIMO SENHOR DOUTOR JUIZ DE DIREITO DA VARA CÍVEL DA COMARCA DE ITAJAÍ/SC\\n\\nMARIA DA SILVA, brasileira, [estado civil], [profissão], portadora do CPF nº 123.456.789-00, residente e domiciliada em [Endereço Completo], Itajaí/SC, por intermédio de seu advogado infra-assinado, vem, respeitosamente, à presença de Vossa Excelência, propor a presente AÇÃO DE INDENIZAÇÃO POR DANOS MORAIS em face de COMÉRCIO DE MÓVEIS LTDA, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº 11.222.333/0001-44, com sede em [Endereço Completo], pelos fatos e fundamentos a seguir expostos.\\n\\nI – PRELIMINARMENTE: DA GRATUIDADE DA JUSTIÇA\\n\\nA Autora não possui condições de arcar com as custas processuais sem prejuízo do próprio sustento, fazendo jus ao benefício da gratuidade da justiça, nos termos do art. 98 do Código de Processo Civil.\\n\\nII – DOS FATOS\\n\\n[...]\\n\\nIII – DO DIREITO\\n\\nDa Responsabilidade Civil do Fornecedor pelo Vício do Produto\\n\\n[...] nos termos do art. 18 do CDC.\\n\\nNesse sentido, é o entendimento do Superior Tribunal de Justiça:\\n\\n[[JULGADO 1]]\\n\\nIV – DOS PEDIDOS E REQUERIMENTOS\\n\\nAnte o exposto, requer:\\n\\n1. A concessão da Gratuidade da Justiça;\\n2. A condenação da Ré ao pagamento de R\$ 12.000,00 a título de danos morais.\\n\\nProtesta provar o alegado por todos os meios de prova em direito admitidos.\\n\\nDá-se à causa o valor de R\$ 12.000,00.\\n\\nNestes termos, pede deferimento."}
 
         Repare: o estado civil e a profissão viraram colchete; o endereço que ninguém
         registrou virou colchete; a comarca veio do endereçamento do dossiê; a numeração
         romana é sequencial sobre as seções que existem — não há seção de documentos
-        porque não há documentos —; e não há seção de jurisprudência.
+        porque não há documentos —; e o julgado entrou pelo marcador, sozinho no seu
+        parágrafo, no fim da tese que ele corrobora e depois de uma frase que o
+        apresenta. Não há ementa escrita à mão e não há seção de jurisprudência.
 
         Repare também no que **não** virou colchete: o dossiê não trazia a linha
         "Idade", e a qualificação passou direto de "brasileira" para o estado civil.
@@ -325,9 +378,9 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
         1. **"casada, comerciante"** — inventado. Nada no dossiê diz isso. Era colchete.
         2. **"Rua das Flores, nº 120, Centro"** — inventado. O dossiê não trazia endereço
            da autora. Era colchete.
-        3. **A seção de jurisprudência** — um acórdão que não está nos fundamentos do
-           dossiê, com número de processo verossímil e inexistente. Não se escreve esta
-           seção.
+        3. **A seção de jurisprudência** — um acórdão que não está no dossiê, transcrito
+           à mão, com número de processo verossímil e inexistente. Julgado entra pelo
+           marcador, e só o que o dossiê traz.
         4. **"totalizando R\$ 12.500,00"** — uma conta. O número não está em lugar nenhum
            e o conectivo proibido está lá para denunciá-lo.
         TXT;
@@ -344,9 +397,11 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
                     'A petição inicial inteira, em texto puro, do endereçamento em caixa '
                     .'alta até "Nestes termos, pede deferimento." — inclusive. Sem o '
                     .'timbre do escritório, sem cidade, sem data, sem o nome do advogado '
-                    .'e sem a OAB, que são acrescentados fora daqui. Sem markdown e sem '
-                    .'seção de jurisprudência. Todo dado que o dossiê e o relato não '
-                    .'trazem aparece como um marcador entre colchetes.'
+                    .'e sem a OAB, que são acrescentados fora daqui. Sem markdown. Cada '
+                    .'julgado do dossiê aparece uma vez, como o seu marcador — [[JULGADO 1]] '
+                    .'— sozinho num parágrafo, e nenhum outro julgado é citado. Todo dado '
+                    .'que o dossiê e o relato não trazem aparece como um marcador entre '
+                    .'colchetes.'
                 )
                 ->required(),
         ];

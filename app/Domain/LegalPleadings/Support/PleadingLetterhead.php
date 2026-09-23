@@ -50,6 +50,74 @@ final class PleadingLetterhead
     }
 
     /**
+     * The three lines of the printed letterhead, with whatever is missing left out.
+     *
+     *     ESCRITÓRIO SILVA ADVOGADOS
+     *     Maria Silva · OAB/SC 438912
+     *     Rua X, 100, Centro, Itajaí/SC, CEP 88301-000 · (47) 99999-0000 · contato@…
+     *
+     * @return array{firm: string|null, signer: string|null, contact: string|null}
+     */
+    public static function lines(?Account $account, ?User $author): array
+    {
+        $letterhead = self::for($account, $author);
+
+        return [
+            'firm' => $letterhead['firm'] === null ? null : mb_strtoupper($letterhead['firm']),
+            'signer' => self::joined([$letterhead['lawyer'], $letterhead['oab']]),
+            'contact' => self::joined([
+                self::addressLine($account),
+                $account?->phone === null ? null : self::phone($account->phone),
+                $letterhead['email'],
+            ]),
+        ];
+    }
+
+    /**
+     * @param  list<string|null>  $parts
+     */
+    private static function joined(array $parts, string $glue = ' · '): ?string
+    {
+        $parts = array_filter($parts, static fn (?string $part): bool => trim((string) $part) !== '');
+
+        return $parts === [] ? null : implode($glue, $parts);
+    }
+
+    /**
+     * "Av. Paulista, 1000, Bela Vista, São Paulo/SP, CEP 01310-100" — the
+     * `addressLine` of the screen.
+     */
+    private static function addressLine(?Account $account): ?string
+    {
+        if ($account === null) {
+            return null;
+        }
+
+        $digits = preg_replace('/\D/', '', (string) $account->postal_code) ?? '';
+
+        return self::joined([
+            $account->street,
+            $account->number,
+            $account->complement,
+            $account->district,
+            self::joined([$account->city, $account->state->value], '/'),
+            $digits === '' ? null : 'CEP '.(strlen($digits) === 8 ? substr($digits, 0, 5).'-'.substr($digits, 5) : $digits),
+        ], ', ');
+    }
+
+    /** "(47) 3344-5566" or "(47) 99988-7766", as `formatPhone` writes them. */
+    private static function phone(string $value): string
+    {
+        $digits = preg_replace('/\D/', '', $value) ?? '';
+
+        return match (strlen($digits)) {
+            10 => sprintf('(%s) %s-%s', substr($digits, 0, 2), substr($digits, 2, 4), substr($digits, 6)),
+            11 => sprintf('(%s) %s-%s', substr($digits, 0, 2), substr($digits, 2, 5), substr($digits, 7)),
+            default => $value,
+        };
+    }
+
+    /**
      * The seven address columns, unformatted.
      *
      * @return array<string, string|null>|null

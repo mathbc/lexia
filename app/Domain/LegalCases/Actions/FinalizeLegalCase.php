@@ -57,9 +57,11 @@ use Throwable;
  * share it: it is one statement about the pleading, and a conclusion that
  * pruned the theses but not the case law would be half a decision.
  *
- * The rulings are **not** sent to the drafting agent, deliberately. The document
- * gets the theses and not the precedents — `LegalCaseDossier::forDrafting()`
- * says why — and the jurisprudence section is the same later piece of work.
+ * The order matters for the document too: the drafting runs after the
+ * transaction, on a refreshed pleading, so the rulings the document quotes are
+ * exactly the ones this conclusion kept — an unticked ruling is already deleted
+ * when `LegalCaseDossier::forDrafting()` reads the relation. The precedents of
+ * the forensic review stay out of the document; the dossier says why.
  */
 final class FinalizeLegalCase
 {

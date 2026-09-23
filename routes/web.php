@@ -32,6 +32,8 @@ use App\Domain\LegalCases\Actions\ShowLegalPleading;
 use App\Domain\LegalCases\Actions\UpdateLegalCaseBasics;
 use App\Domain\LegalCases\Actions\UpdateLegalCaseDefendant;
 use App\Domain\LegalCases\Actions\UpdateLegalCaseFacts;
+use App\Domain\LegalPleadings\Actions\ExportLegalPleadingDocx;
+use App\Domain\LegalPleadings\Actions\ExportLegalPleadingPdf;
 use App\Domain\LegalPleadings\Actions\GenerateLegalPleading;
 use App\Domain\LegalPleadings\Actions\SaveLegalPleadingContent;
 use App\Domain\Users\Actions\CreateUser;
@@ -164,9 +166,14 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::get('/minuta', ShowLegalPleading::class)->name('legal-cases.pleading');
         Route::put('/minuta', SaveLegalPleadingContent::class)->name('legal-cases.pleading.save');
 
-        // Só a recuperação de falha: a Action recusa quando já existe versão.
+        // A primeira redação que falhou e a redação de novo: as duas gravam a
+        // versão seguinte, então a anterior nunca é sobrescrita.
         Route::post('/minuta/gerar', GenerateLegalPleading::class)
             ->middleware('inference')
             ->name('legal-cases.pleading.generate');
+
+        // A última versão salva com o timbre, como arquivo. Ler, não gravar.
+        Route::get('/minuta/pdf', ExportLegalPleadingPdf::class)->name('legal-cases.pleading.pdf');
+        Route::get('/minuta/docx', ExportLegalPleadingDocx::class)->name('legal-cases.pleading.docx');
     });
 });
