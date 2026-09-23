@@ -39,9 +39,10 @@ use Laravel\Ai\Promptable;
  *
  * 1. Never send `think: false` to a thinking model. `gpt-oss:20b` came back
  *    with empty content when told to skip it, and the qwen3 line reasons by
- *    default too. Live for this agent again: the attribute below points at the
- *    daemon, the option is Ollama's spelling and does reach the wire, and
- *    `gpt-oss:20b` is both the configured model and the one that measured it.
+ *    default too. Dormant for this agent while the attribute below points at
+ *    Gemini — `ConfiguresOllamaRuntime` emits nothing outside the daemon — and
+ *    live again the moment the two provider lines are swapped back, because
+ *    `gpt-oss:20b` is the configured local model and the one that measured it.
  * 2. The justification needs its `description()`. Without one the model
  *    answers with a slug-shaped fragment instead of a sentence. True under
  *    either provider — both read per-property descriptions out of the schema.
@@ -59,12 +60,12 @@ use Laravel\Ai\Promptable;
  * here. It cannot be one call: the classes it chooses between are the ones this
  * answer selects.
  */
-// Trocar as duas linhas de lugar manda a inferência para o Gemini — o bloco
-// `gemini` do config/ai.php já está ativo, então a troca mais um `config:clear`
-// bastam. Foi onde este agente esteve enquanto se pagava a latência da primeira
-// inferência da cadeia em cota; hoje ele volta a pagá-la em segundos.
-// #[Provider('gemini')]
-#[Provider('ollama')]
+// Trocar as duas linhas de lugar traz a inferência de volta para a máquina — a
+// troca mais um `config:clear` bastam, com o `gpt-oss:20b` baixado no daemon.
+// Esta é a primeira inferência da cadeia de `POST /pecas/classificar`, e é por
+// ela que se paga em cota o que se ganha em latência.
+#[Provider('gemini')]
+// #[Provider('ollama')]
 #[Timeout(360)]
 #[Temperature(0.2)]
 final class PracticeAreaClassificationAgent implements Agent, HasProviderOptions, HasStructuredOutput

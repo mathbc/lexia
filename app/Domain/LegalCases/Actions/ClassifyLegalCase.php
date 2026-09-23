@@ -81,9 +81,18 @@ use Throwable;
  *    filho não teria nenhum dos três.
  *
  * O que se paga em troca da espera: as requisições agora saem em rajada, e uma
- * cota de provedor esgotada atinge as três ao mesmo tempo. `CONCURRENCY_DRIVER`
- * é a saída — em `sync` tudo volta a correr em série, no mesmo processo, sem
- * tocar numa linha daqui.
+ * cota de provedor esgotada atinge as três ao mesmo tempo. Isso deixou de ser
+ * hipótese — as quatro etapas apontam para o Gemini, então a rajada é de cota de
+ * verdade. `CONCURRENCY_DRIVER` é a saída — em `sync` tudo volta a correr em
+ * série, no mesmo processo, sem tocar numa linha daqui.
+ *
+ * ## A fronteira do escritório
+ *
+ * Com os quatro agentes na nuvem, **o relato do cliente sai do escritório aqui**,
+ * e sai inteiro: quem estreita é `LegalCaseDossier::forResearch()`, que é da
+ * pesquisa de teses e não desta rota. Voltar atrás é trocar o `#[Provider]` dos
+ * quatro agentes pela linha comentada logo acima de cada um, mais um
+ * `config:clear`.
  *
  * ## A pesquisa de teses não está mais aqui
  *
@@ -94,8 +103,8 @@ use Throwable;
  *
  * Duas coisas derrubaram esse arranjo, e a segunda é a que decide.
  *
- * A primeira é o tempo. A pesquisa sai da máquina, abre as páginas dos portais
- * antes de responder, e é de longe a inferência mais lenta do projeto. Ficando
+ * A primeira é o tempo. A pesquisa abre as páginas dos portais antes de
+ * responder, e é de longe a inferência mais lenta do projeto. Ficando
  * aqui, ela anulava o bloco concorrente: encurtar as quatro primeiras não
  * encurta a quinta, e o advogado esperava por ela antes de ver o primeiro campo
  * preenchido.
@@ -108,7 +117,7 @@ use Throwable;
  * que a etapa 1 do assistente precisa ser salva antes de qualquer navegação.
  *
  * O que sobra aqui é o que o preenchimento inteligente realmente é: tudo o que
- * um relato pode dar **sem sair da máquina e sem precisar de uma peça gravada**.
+ * um relato pode dar **sem abrir uma página e sem precisar de uma peça gravada**.
  *
  * ## Onde uma etapa pode faltar
  *
@@ -133,8 +142,8 @@ use Throwable;
  *
  * O preço continua sendo a latência, mas encolheu duas vezes. O bloco trocou a
  * soma das etapas pela mais longa delas; a saída da pesquisa tirou da conta a
- * única que saía da máquina. O que resta são quatro inferências locais, e o teto
- * é a mais lenta das três tasks.
+ * mais lenta de todas. O que resta são quatro inferências na nuvem, e o teto é a
+ * mais lenta das três tasks.
  *
  * A dívida da fila continua de pé e o lugar dela é aqui: quando a espera virar
  * fila de verdade, é este `asController()` que devolve um identificador em vez

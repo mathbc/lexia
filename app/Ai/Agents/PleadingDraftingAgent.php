@@ -87,11 +87,10 @@ use Laravel\Ai\Promptable;
  * Reached through DraftLegalPleading, which appends the signature and stores the
  * result as a new LegalPleading version.
  */
-// Trocar as duas linhas de lugar manda a inferência para o Gemini — o bloco
-// `gemini` do config/ai.php já está ativo, então a troca mais um `config:clear`
-// bastam.
-// #[Provider('gemini')]
-#[Provider('ollama')]
+// Trocar as duas linhas de lugar traz a inferência de volta para a máquina — a
+// troca mais um `config:clear` bastam, com o `gpt-oss:20b` baixado no daemon.
+#[Provider('gemini')]
+// #[Provider('ollama')]
 #[Timeout(360)]
 #[Temperature(0.3)]
 final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStructuredOutput

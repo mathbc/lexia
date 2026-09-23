@@ -57,21 +57,23 @@ use Laravel\Ai\Promptable;
  * classification. Everything constant now comes first and the two variable
  * blocks — the area and the ranked candidates — come last, together, where they
  * cost only themselves. Moving either one back up is a silent performance
- * regression, which is the only kind this file can have.
+ * regression, which is the only kind this file can have. A medida é do daemon,
+ * e o desenho não custa nada no Gemini: o cache implícito da nuvem premia o
+ * mesmo prefixo constante, e a volta para a máquina reencontra o arranjo certo.
  *
  * The traps the sibling agent documents apply here unchanged: never send
- * `think: false` to an Ollama that reasons — and the provider is Ollama again —
- * never drop the `description()` on the justification, and leave the model to
- * `config/ai.php` rather than naming one in a `#[Model]`. So does the note on
- * where the `enum` guarantee comes from: Ollama's grammar today, a cloud
- * `response_json_schema` under the commented provider, which matters here
- * because this agent's `enum` is a list of integers.
+ * `think: false` to an Ollama that reasons — dormant while the attribute below
+ * points at Gemini, live again on the swap back — never drop the
+ * `description()` on the justification, and leave the model to `config/ai.php`
+ * rather than naming one in a `#[Model]`. So does the note on where the `enum`
+ * guarantee comes from: a cloud `response_json_schema` today, Ollama's grammar
+ * under the commented provider, which matters here because this agent's `enum`
+ * is a list of integers.
  */
-// Trocar as duas linhas de lugar manda a inferência para o Gemini — o bloco
-// `gemini` do config/ai.php já está ativo, então a troca mais um `config:clear`
-// bastam.
-// #[Provider('gemini')]
-#[Provider('ollama')]
+// Trocar as duas linhas de lugar traz a inferência de volta para a máquina — a
+// troca mais um `config:clear` bastam, com o `gpt-oss:20b` baixado no daemon.
+#[Provider('gemini')]
+// #[Provider('ollama')]
 #[Timeout(360)]
 #[Temperature(0.2)]
 final class ProceduralClassSelectionAgent implements Agent, HasProviderOptions, HasStructuredOutput

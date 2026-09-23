@@ -1,5 +1,6 @@
 import {
     CalendarDays,
+    ChevronDown,
     ExternalLink,
     Gavel,
     Landmark,
@@ -7,7 +8,7 @@ import {
     RefreshCw,
     ShieldAlert,
 } from "lucide-react";
-import { useId } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,8 +72,8 @@ interface Props {
  * frase sobre o que ele faz por este caso. Aqui não há nem uma coisa nem outra:
  * um julgado é o **documento**, transcrito do registro do LexML, e o que ele
  * vale para esta peça é leitura do advogado. Por isso cada linha mostra a
- * ementa por inteiro e o link para a página de onde ela foi lida, e nenhum
- * número ao lado.
+ * ementa — recolhida, com o "Ver mais" que a abre — e o link para a página de
+ * onde ela foi lida, e nenhum número ao lado.
  *
  * Três blocos fecham a tela, como na etapa 6 e pelos mesmos motivos. **As
  * fontes** dizem quais registros foram de fato abertos. **O pendente** é o que
@@ -210,9 +211,12 @@ export function CourtDecisionFields({
  * esmaece o que ele diz, e não o controle que o traz de volta — o mesmo arranjo
  * de `ThesisItem`.
  *
- * A ementa vai inteira, sem corte e sem "ver mais". É o texto que o tribunal
- * publicou e é a única coisa aqui que decide se o julgado serve: escondê-la
- * atrás de um clique economizaria altura numa etapa cuja leitura é o trabalho.
+ * A ementa chega recolhida, com o "Ver mais" ao lado. Ela é a única coisa aqui
+ * que decide se o julgado serve, mas é também o texto mais longo da tela, e
+ * uma lista de dez julgados publicada por inteiro vira uma etapa que se
+ * percorre por rolagem em vez de leitura. O corte é só visual — o texto está
+ * todo no DOM, o que recolhe é um `line-clamp` — e por isso nada some da busca
+ * da página nem do que a gravação envia.
  */
 function CourtDecisionItem({
     draft,
@@ -276,12 +280,7 @@ function CourtDecisionItem({
                         </div>
                     </div>
 
-                    <div>
-                        <p className="text-xs font-medium">Ementa</p>
-                        <p className="mt-1 text-sm whitespace-pre-line text-muted-foreground">
-                            {decision.summary}
-                        </p>
-                    </div>
+                    <DecisionSummary text={decision.summary} />
 
                     {decision.subject && (
                         <div>
@@ -309,6 +308,89 @@ function CourtDecisionItem({
                 </div>
             </div>
         </li>
+    );
+}
+
+/**
+ * Quantas linhas da ementa ficam à vista antes do "Ver mais".
+ *
+ * A classe é escrita por extenso porque o Tailwind 4 varre o código à procura
+ * dela: `line-clamp-${n}` não compila para utilitário nenhum.
+ */
+const SUMMARY_CLAMP = "line-clamp-6";
+
+/**
+ * A ementa recolhida, com o botão que a abre.
+ *
+ * **O botão só existe quando há o que revelar**, e isso não se decide pelo
+ * tamanho da string: a ementa vem com as quebras de linha do registro, então
+ * duzentos caracteres podem ocupar dez linhas e mil podem ocupar três. Quem
+ * sabe é o layout, e por isso a decisão é uma medição — refeita quando a coluna
+ * muda de largura, já que a mesma ementa transborda no celular e cabe no
+ * desktop.
+ *
+ * A medição só roda **recolhido**: aberta, a caixa cresce até o texto e
+ * `scrollHeight` volta a igualar `clientHeight`, o que apagaria o "Ver menos"
+ * no primeiro clique.
+ */
+function DecisionSummary({ text }: { text: string }) {
+    const id = useId();
+    const [expanded, setExpanded] = useState(false);
+    const [clipped, setClipped] = useState(false);
+    const ref = useRef<HTMLParagraphElement>(null);
+
+    useLayoutEffect(() => {
+        const node = ref.current;
+
+        if (!node || expanded) {
+            return;
+        }
+
+        const measure = () =>
+            setClipped(node.scrollHeight > node.clientHeight + 1);
+
+        measure();
+
+        const observer = new ResizeObserver(measure);
+        observer.observe(node);
+
+        return () => observer.disconnect();
+    }, [expanded, text]);
+
+    return (
+        <div>
+            <p className="text-xs font-medium">Ementa</p>
+            <p
+                ref={ref}
+                id={id}
+                className={cn(
+                    "mt-1 text-sm whitespace-pre-line text-muted-foreground",
+                    !expanded && SUMMARY_CLAMP,
+                )}
+            >
+                {text}
+            </p>
+
+            {(clipped || expanded) && (
+                <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    aria-expanded={expanded}
+                    aria-controls={id}
+                    className="mt-1 h-auto px-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => setExpanded((open) => !open)}
+                >
+                    {expanded ? "Ver menos" : "Ver mais"}
+                    <ChevronDown
+                        className={cn(
+                            "transition-transform",
+                            expanded && "rotate-180",
+                        )}
+                    />
+                </Button>
+            )}
+        </div>
     );
 }
 
