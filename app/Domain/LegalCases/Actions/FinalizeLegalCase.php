@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\LegalCases\Actions;
 
+use App\Domain\CourtDecisions\Data\CourtDecisionListData;
 use App\Domain\LegalCases\Data\ForensicReviewData;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\Users\Models\User;
@@ -44,18 +45,41 @@ use Throwable;
  * without finishing the pleading, which is a different use case — this one calls
  * it rather than reimplementing the map of posted ids to persisted ones that
  * makes it work.
+ *
+ * ## The seventh step travels with it
+ *
+ * Since "Análise de Jurisprudência" arrived, the button that finishes a pleading
+ * sits on *that* step rather than on the forensic review, and it carries two
+ * lists rather than one: the theses the lawyer kept, and the rulings they kept.
+ * Both are already rows — the two research runs wrote them — and what the
+ * conclusion posts is the reading, so both saves are diffs and both unticks are
+ * deletions. They share the transaction for the reason the first two effects
+ * share it: it is one statement about the pleading, and a conclusion that
+ * pruned the theses but not the case law would be half a decision.
+ *
+ * The rulings are **not** sent to the drafting agent, deliberately. The document
+ * gets the theses and not the precedents — `LegalCaseDossier::forDrafting()`
+ * says why — and the jurisprudence section is the same later piece of work.
  */
 final class FinalizeLegalCase
 {
     use AsAction;
 
-    public function handle(LegalCase $legalCase, ForensicReviewData $data, ?User $author = null): LegalCase
-    {
-        DB::transaction(function () use ($legalCase, $data): void {
+    public function handle(
+        LegalCase $legalCase,
+        ForensicReviewData $data,
+        CourtDecisionListData $decisions,
+        ?User $author = null,
+    ): LegalCase {
+        DB::transaction(function () use ($legalCase, $data, $decisions): void {
             // A Action irmã, e não uma cópia dela: é ela que guarda o mapa do id
             // postado para o id persistido, sem o qual um precedente aponta para
             // uma tese que ainda não tinha chave.
             SaveLegalCaseForensicReview::run($legalCase, $data);
+
+            // E a da etapa 7, pelo mesmo motivo: o diff que apaga o que o
+            // advogado desmarcou mora lá, com a marca d'água que ele move.
+            SaveLegalCaseCourtDecisions::run($legalCase, $decisions);
 
             $legalCase->update(['is_draft' => false]);
         });
@@ -77,18 +101,26 @@ final class FinalizeLegalCase
     }
 
     /**
-     * The sixth step's payload, unchanged.
+     * The sixth and seventh steps' payloads, unchanged.
      *
-     * Delegated to the Action that saves it rather than restated, so the two
-     * routes cannot drift into disagreeing about what a thesis looks like. The
-     * reasoning behind each rule — why `theses.*.id` is a hint and never a key,
-     * why `legal_thesis_id` carries no `exists` — lives there.
+     * Delegated to the Actions that save them rather than restated, so the
+     * routes cannot drift into disagreeing about what a thesis or a ruling looks
+     * like. The reasoning behind each rule — why `theses.*.id` is a hint and
+     * never a key, why `legal_thesis_id` carries no `exists`, why the portal
+     * guard is not a validation rule — lives there.
+     *
+     * Both lists are `present`: the wizard's last step holds them both, and a
+     * conclusion that omitted one would be saying "leave those rows alone",
+     * which is a sentence no screen here means.
      *
      * @return array<string, mixed>
      */
     public function rules(): array
     {
-        return SaveLegalCaseForensicReview::make()->rules();
+        return [
+            ...SaveLegalCaseForensicReview::make()->rules(),
+            ...SaveLegalCaseCourtDecisions::make()->rules(),
+        ];
     }
 
     /**
@@ -96,7 +128,10 @@ final class FinalizeLegalCase
      */
     public function getValidationAttributes(): array
     {
-        return SaveLegalCaseForensicReview::make()->getValidationAttributes();
+        return [
+            ...SaveLegalCaseForensicReview::make()->getValidationAttributes(),
+            ...SaveLegalCaseCourtDecisions::make()->getValidationAttributes(),
+        ];
     }
 
     /**
@@ -104,13 +139,14 @@ final class FinalizeLegalCase
      *
      * Concluding is the one save in this flow that changes which screen the
      * lawyer belongs on: every other step redirects to the next step, and there
-     * is no step after the sixth. The document is what they came for.
+     * is no step after the seventh. The document is what they came for.
      */
     public function asController(LegalCase $legalCase, ActionRequest $request): RedirectResponse
     {
         $this->handle(
             $legalCase,
             ForensicReviewData::fromArray($request->validated()),
+            CourtDecisionListData::fromArray($request->validated()),
             $request->user(),
         );
 

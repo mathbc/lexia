@@ -47,11 +47,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * LegalThesis gives: it is what lets the global scope narrow the table without
  * a join on every read.
  *
- * Nothing writes these rows yet. The research pair
- * (ResearchLegalCaseCourtDecisions) answers with CourtDecisionData, and the
- * Action that persists it arrives with the screen — the same order
- * CreateLegalThesis was born in, and the same reason: a save with no caller is
- * a guess about a payload nobody has posted.
+ * Written in exactly one place: SaveLegalCaseCourtDecisions, which reconciles
+ * the whole list as a diff. Two callers reach it —
+ * ResearchLegalCaseJurisprudence, with what the LexML confirmed, and
+ * FinalizeLegalCase, with what survived the lawyer's reading. There is no
+ * per-row Action and no route binding one decision, which is why the policy
+ * below has no `update` and no `delete`: unticking a ruling on the seventh step
+ * is the list being posted without it.
  *
  * @property string $id
  * @property string $account_id

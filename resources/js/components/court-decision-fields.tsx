@@ -1,5 +1,15 @@
-import { FileText, Gavel, Info, Scale, Tags } from "lucide-react";
+import {
+    CalendarDays,
+    ExternalLink,
+    Gavel,
+    Landmark,
+    MapPin,
+    RefreshCw,
+    ShieldAlert,
+} from "lucide-react";
+import { useId } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
     Card,
     CardContent,
@@ -7,120 +17,390 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import {
+    decidedAtLabel,
+    keptCourtDecisions,
+    type CourtDecisionDraft,
+} from "@/lib/court-decisions";
+// O rótulo de uma fonte é o domínio dela, e a regra não muda de etapa para
+// etapa: mora onde foi escrita primeiro, em vez de existir em duas cópias.
+import { sourceLabel } from "@/lib/forensic-review";
+import { cn } from "@/lib/utils";
+import type { CourtDecisionFindings } from "@/types";
+
+interface Props {
+    /**
+     * O relato da pesquisa já gravada, ou nulo quando nunca se pesquisou.
+     *
+     * O nulo é o estado transitório: a etapa dispara a pesquisa ao abrir, então
+     * ele dura o tempo do diálogo. Presente com tudo vazio é o outro caso — uma
+     * rodada que abriu o LexML e nada confirmou —, e essa não se repete.
+     */
+    research: CourtDecisionFindings | null;
+    /** O agente está respondendo agora: a etapa mostra a espera. */
+    researching: boolean;
+    /** A rodada falhou — portal fora do ar, cota esgotada — e nada foi gravado. */
+    failed: boolean;
+    /** Refaz a pesquisa, descartando a anterior. Um gesto do advogado, nunca automático. */
+    onResearch: () => void;
+    /** Os julgados com a decisão do advogado ao lado — ver `@/lib/court-decisions`. */
+    decisions: CourtDecisionDraft[];
+    onToggle: (id: string, keep: boolean) => void;
+}
 
 /**
- * O que a busca lê para achar o que achar. São os três campos que a peça já
- * tem quando esta etapa abre — e é por isso que ela vem depois da revisão
- * forense, e não antes: nenhum deles existe na etapa 1.
+ * A sétima etapa: o que os tribunais já decidiram em casos como este.
+ *
+ * A irmã de `ForensicReviewFields`, um passo adiante, e desenhada na mesma
+ * forma de propósito: a etapa abre **preenchida por uma pesquisa** e não por um
+ * relato, todo achado chega marcado, e a decisão que a tela pede é **tirar**.
+ * Um advogado que aprendeu a etapa 6 não precisa aprender esta.
+ *
+ * O disparo é **uma vez por peça**, e quem decide é `research` ser nulo, nunca a
+ * lista de julgados estar vazia: uma rodada que nada confirma é uma resposta
+ * cara e legítima que grava zero linhas, e repeti-la a cada visita gastaria cota
+ * e apagaria o que o advogado já curou — a gravação reconcilia por diff. Uma
+ * segunda rodada é o botão "Pesquisar novamente".
+ *
+ * O que ela **não** repete é o conteúdo, e a diferença é a que separa as duas
+ * tabelas. A etapa 6 pesquisa **teses** — o que a peça argumenta, com a súmula
+ * ou o tema que a fundamenta — e cada precedente vem com uma aderência e uma
+ * frase sobre o que ele faz por este caso. Aqui não há nem uma coisa nem outra:
+ * um julgado é o **documento**, transcrito do registro do LexML, e o que ele
+ * vale para esta peça é leitura do advogado. Por isso cada linha mostra a
+ * ementa por inteiro e o link para a página de onde ela foi lida, e nenhum
+ * número ao lado.
+ *
+ * Três blocos fecham a tela, como na etapa 6 e pelos mesmos motivos. **As
+ * fontes** dizem quais registros foram de fato abertos. **O pendente** é o que
+ * ficou em aberto. **As citações sem registro** são as que a guarda removeu, e
+ * existem porque uma etapa vazia tem duas causas opostas — não se achou nada,
+ * ou se achou e não se confirmou — que produzem a mesma lista vazia.
  */
-const INPUTS = [
-    {
-        icon: Tags,
-        label: "Área de atuação",
-        description: "O ramo do direito em que o caso se enquadra.",
-    },
-    {
-        icon: Scale,
-        label: "Classe processual",
-        description: "A classe de ajuizamento escolhida no enquadramento.",
-    },
-    {
-        icon: FileText,
-        label: "Descrição dos fatos",
-        description: "O relato que sustenta os fundamentos e os pedidos.",
-    },
-] as const;
+export function CourtDecisionFields({
+    research,
+    researching,
+    failed,
+    onResearch,
+    decisions,
+    onToggle,
+}: Props) {
+    const kept = keptCourtDecisions(decisions).length;
 
-/**
- * A sétima etapa: os julgados que os tribunais já proferiram em casos como
- * este.
- *
- * Por ora é **só a tela**. Não há agente por trás, não há coluna para gravar e
- * não há botão que dispare coisa alguma — o que existe é o lugar onde a análise
- * vai morar e a explicação do que ela fará quando existir, para que a etapa não
- * apareça na trilha como um passo em branco.
- *
- * Note que ela não repete a revisão forense. A etapa 6 pesquisa **teses** — o
- * que a peça argumenta, com a súmula ou o tema que a fundamenta — e chega pelo
- * `LegalThesisResearchAgent`. Esta pesquisa **decisões**: o acórdão de um caso
- * parecido, que se cita para mostrar como aquele tribunal já resolveu a questão.
- * No sistema a jurisprudência se chama `CourtDecision`, e é esse o nome que a
- * tabela, o model e o agente vão usar quando chegarem.
- *
- * O componente não recebe props de propósito: enquanto nada é buscado e nada é
- * gravado, qualquer dado que ele aceitasse seria enfeite — e um enfeite que o
- * dia da implementação teria de desfazer.
- */
-export function CourtDecisionFields() {
     return (
         <Card>
-            <CardHeader>
-                <CardTitle>Análise de Jurisprudência</CardTitle>
-                <CardDescription>
-                    O que os tribunais já decidiram em casos como este.
-                </CardDescription>
+            <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
+                <div className="space-y-1.5">
+                    <CardTitle>Análise de Jurisprudência</CardTitle>
+                    <CardDescription>
+                        {decisions.length === 0
+                            ? "O que os tribunais já decidiram em casos como este."
+                            : `${decisions.length} ${
+                                  decisions.length === 1
+                                      ? "julgado encontrado"
+                                      : "julgados encontrados"
+                              } · ${kept} ${
+                                  kept === 1
+                                      ? "mantido na peça"
+                                      : "mantidos na peça"
+                              }`}
+                    </CardDescription>
+                </div>
+
+                {/* Depois de uma rodada ter acontecido, ou de uma ter falhado:
+                    a primeira falha deixa `research` nulo, e o alerta abaixo
+                    manda usar este botão. Antes disso a etapa já está
+                    pesquisando sozinha, e um botão ali convidaria a uma segunda
+                    chamada simultânea. */}
+                {(research !== null || failed) && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={researching}
+                        onClick={onResearch}
+                    >
+                        <RefreshCw />
+                        Pesquisar novamente
+                    </Button>
+                )}
             </CardHeader>
 
             <CardContent className="space-y-6">
-                <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-4 py-10 text-center">
-                    <Gavel className="size-6 text-muted-foreground" />
-
-                    <p className="max-w-prose text-sm text-muted-foreground">
-                        Nesta etapa o agente de IA buscará{" "}
-                        <span className="font-medium text-foreground">
-                            três jurisprudências
-                        </span>{" "}
-                        nos portais oficiais — os domínios{" "}
-                        <span className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-foreground">
-                            .jus.br
-                        </span>{" "}
-                        e{" "}
-                        <span className="rounded bg-muted px-1 py-0.5 font-mono text-xs text-foreground">
-                            .gov.br
-                        </span>{" "}
-                        —, lendo cada página antes de responder.
+                {researching ? (
+                    // O diálogo modal de `form.tsx` é quem conta o que está
+                    // acontecendo; aqui basta não afirmar que não há nada — e
+                    // repetir a demora, porque é o que esta caixa mostra se o
+                    // diálogo já tiver se fechado e a rodada for a do botão.
+                    <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-balance text-muted-foreground">
+                        Pesquisando a jurisprudência no LexML… Leva alguns
+                        minutos: o agente lê o registro de cada julgado antes de
+                        transcrever a ementa.
                     </p>
-
-                    <p className="max-w-prose text-sm text-muted-foreground">
-                        A busca parte do que a peça já registrou:
+                ) : failed ? (
+                    // A falha não gravou marcador nenhum, então a etapa não
+                    // tenta de novo sozinha — e é preciso dizer isso, senão a
+                    // tela parece uma pesquisa que não achou nada.
+                    <Alert variant="destructive">
+                        <ShieldAlert />
+                        <AlertTitle>
+                            A pesquisa não pôde ser concluída
+                        </AlertTitle>
+                        <AlertDescription>
+                            Nada foi gravado. A pesquisa depende do portal do
+                            LexML: ele fora do ar basta para derrubá-la. Use
+                            "Pesquisar novamente" para tentar outra vez, ou
+                            conclua sem jurisprudência — a minuta é redigida
+                            normalmente, com as teses da revisão forense.
+                        </AlertDescription>
+                    </Alert>
+                ) : research === null ? (
+                    // Estado de partida numa peça que nunca pesquisou e cuja
+                    // etapa ainda não disparou — um piscar, na prática.
+                    <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+                        Ainda não há pesquisa de jurisprudência nesta peça.
                     </p>
-                </div>
-
-                <ul className="grid gap-3 sm:grid-cols-3">
-                    {INPUTS.map((input) => (
-                        <li
-                            key={input.label}
-                            className="rounded-lg border bg-muted/30 p-4"
-                        >
-                            <div className="flex items-center gap-2">
-                                <input.icon className="size-4 text-muted-foreground" />
-                                <span className="text-sm font-medium text-foreground">
-                                    {input.label}
-                                </span>
+                ) : (
+                    <>
+                        {research.legal_question && (
+                            <div className="rounded-lg bg-muted/50 p-4">
+                                <p className="text-xs font-medium">
+                                    Questão pesquisada
+                                </p>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    {research.legal_question}
+                                </p>
                             </div>
+                        )}
 
-                            <p className="mt-1.5 text-xs text-muted-foreground">
-                                {input.description}
+                        {decisions.length === 0 ? (
+                            <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+                                A pesquisa não confirmou nenhum julgado no
+                                registro do LexML. O que ficou em aberto está
+                                abaixo.
                             </p>
-                        </li>
-                    ))}
-                </ul>
+                        ) : (
+                            <ol className="space-y-4">
+                                {decisions.map((draft, index) => (
+                                    <CourtDecisionItem
+                                        key={draft.id}
+                                        draft={draft}
+                                        position={index + 1}
+                                        onToggle={onToggle}
+                                    />
+                                ))}
+                            </ol>
+                        )}
 
-                {/* Dizer que nada roda ainda é obrigação da tela: uma etapa que
-                    abre, não pesquisa e não mostra resultado nenhum é lida como
-                    defeito, e o advogado fica recarregando à espera do que não
-                    vem. */}
-                <Alert>
-                    <Info />
-                    <AlertTitle>A busca ainda não está ligada</AlertTitle>
-                    <AlertDescription>
-                        Por ora esta etapa é apenas a tela: nenhuma consulta é
-                        feita e nada é gravado. Siga para concluir a peça — a
-                        minuta é redigida normalmente, com as teses da revisão
-                        forense.
-                    </AlertDescription>
-                </Alert>
+                        <Findings research={research} />
+                    </>
+                )}
             </CardContent>
         </Card>
+    );
+}
+
+/**
+ * Um julgado, com a caixa que decide se ele fica.
+ *
+ * A caixa fica fora do corpo e não é apagada com ele: desmarcar um julgado
+ * esmaece o que ele diz, e não o controle que o traz de volta — o mesmo arranjo
+ * de `ThesisItem`.
+ *
+ * A ementa vai inteira, sem corte e sem "ver mais". É o texto que o tribunal
+ * publicou e é a única coisa aqui que decide se o julgado serve: escondê-la
+ * atrás de um clique economizaria altura numa etapa cuja leitura é o trabalho.
+ */
+function CourtDecisionItem({
+    draft,
+    position,
+    onToggle,
+}: {
+    draft: CourtDecisionDraft;
+    position: number;
+    onToggle: (id: string, keep: boolean) => void;
+}) {
+    const id = useId();
+    const { decision } = draft;
+    const decidedAt = decidedAtLabel(decision.decided_at);
+
+    return (
+        <li className="rounded-lg border p-4">
+            <div className="flex items-start gap-3">
+                <Checkbox
+                    id={id}
+                    checked={draft.keep}
+                    onCheckedChange={(checked) =>
+                        onToggle(draft.id, checked === true)
+                    }
+                    className="mt-1"
+                />
+
+                <div
+                    className={cn(
+                        "min-w-0 flex-1 space-y-4",
+                        !draft.keep && "opacity-50",
+                    )}
+                >
+                    <div className="space-y-2">
+                        <Label htmlFor={id} className="text-base">
+                            {position}. {decision.title}
+                        </Label>
+
+                        {/* Autoridade, localidade e data são o cabeçalho do
+                            registro, e é por eles que um advogado reconhece o
+                            julgado antes de ler a ementa. Cada um some quando o
+                            registro não o trouxe. */}
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+                            {decision.authority && (
+                                <span className="inline-flex items-center gap-1.5">
+                                    <Landmark className="size-3.5" />
+                                    {decision.authority}
+                                </span>
+                            )}
+                            {decision.locality && (
+                                <span className="inline-flex items-center gap-1.5">
+                                    <MapPin className="size-3.5" />
+                                    {decision.locality}
+                                </span>
+                            )}
+                            {decidedAt && (
+                                <span className="inline-flex items-center gap-1.5">
+                                    <CalendarDays className="size-3.5" />
+                                    {decidedAt}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+
+                    <div>
+                        <p className="text-xs font-medium">Ementa</p>
+                        <p className="mt-1 text-sm whitespace-pre-line text-muted-foreground">
+                            {decision.summary}
+                        </p>
+                    </div>
+
+                    {decision.subject && (
+                        <div>
+                            <p className="text-xs font-medium">Assuntos</p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                {decision.subject}
+                            </p>
+                        </div>
+                    )}
+
+                    {decision.source_url && (
+                        // Aba nova: a etapa não está salva, e levar o advogado
+                        // para fora perderia o que ele acabou de decidir nas
+                        // caixas acima.
+                        <a
+                            href={decision.source_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                        >
+                            Ler o registro no {sourceLabel(decision.source_url)}
+                            <ExternalLink className="size-3.5" />
+                        </a>
+                    )}
+                </div>
+            </div>
+        </li>
+    );
+}
+
+/**
+ * O relato da pesquisa: onde ela esteve, o que não resolveu e o que recusou.
+ *
+ * Não descreve a peça, descreve a rodada — por isso fica depois dos julgados e
+ * separado deles. As três listas somem quando estão vazias.
+ */
+function Findings({ research }: { research: CourtDecisionFindings }) {
+    const hasFindings =
+        research.pending.length > 0 ||
+        research.unverified_citations.length > 0 ||
+        research.sources.length > 0;
+
+    if (!hasFindings) {
+        return null;
+    }
+
+    return (
+        <>
+            <Separator />
+
+            <div className="space-y-4">
+                {research.pending.length > 0 && (
+                    <Alert>
+                        <Gavel />
+                        <AlertTitle>O que ficou em aberto</AlertTitle>
+                        <AlertDescription>
+                            <ul className="list-disc space-y-1 pl-4">
+                                {research.pending.map((item) => (
+                                    <li key={item}>{item}</li>
+                                ))}
+                            </ul>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {research.unverified_citations.length > 0 && (
+                    <Alert variant="destructive">
+                        <ShieldAlert />
+                        <AlertTitle>
+                            Julgados removidos por falta de registro
+                        </AlertTitle>
+                        <AlertDescription className="space-y-2">
+                            <p>
+                                A pesquisa os trouxe, mas nenhum registro do
+                                LexML os confirmou. Não cite nenhum deles sem
+                                conferir na fonte.
+                            </p>
+                            <ul className="list-disc space-y-1 pl-4">
+                                {research.unverified_citations.map(
+                                    (citation) => (
+                                        <li key={citation}>{citation}</li>
+                                    ),
+                                )}
+                            </ul>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {research.sources.length > 0 && (
+                    <div>
+                        <p className="text-xs font-medium">
+                            Registros consultados
+                        </p>
+                        {/* O endereço inteiro, e não o domínio como na etapa 6:
+                            aqui todas as fontes são o mesmo portal, e
+                            "lexml.gov.br" repetido cinco vezes não distinguiria
+                            um registro do outro. O que distingue é a URN, que
+                            está no fim da URL — daí o `truncate` em vez de um
+                            corte no meio. */}
+                        <ul className="mt-2 space-y-1">
+                            {research.sources.map((source) => (
+                                <li key={source}>
+                                    <a
+                                        href={source}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex max-w-full items-center gap-1.5 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                                    >
+                                        <span className="truncate">
+                                            {source}
+                                        </span>
+                                        <ExternalLink className="size-3.5 shrink-0" />
+                                    </a>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+            </div>
+        </>
     );
 }

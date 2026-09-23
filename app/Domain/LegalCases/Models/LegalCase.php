@@ -6,6 +6,7 @@ namespace App\Domain\LegalCases\Models;
 
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Accounts\Models\Account;
+use App\Domain\CourtDecisions\Models\CourtDecision;
 use App\Domain\Customers\Enums\CustomerType;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\Documents\Models\Document;
@@ -96,6 +97,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property LegalCaseStep $current_step
  * @property bool $is_draft
  * @property array<string, mixed>|null $research_findings
+ * @property array<string, mixed>|null $court_decision_findings
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property CarbonImmutable|null $deleted_at
@@ -107,6 +109,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property-read Collection<int, Requirement> $requirements
  * @property-read Collection<int, LegalThesis> $theses
  * @property-read Collection<int, LegalPrecedent> $precedents
+ * @property-read Collection<int, CourtDecision> $courtDecisions
  * @property-read Collection<int, LegalPleading> $pleadings
  */
 #[UsePolicy(LegalCasePolicy::class)]
@@ -134,6 +137,7 @@ class LegalCase extends Model
             'current_step' => LegalCaseStep::class,
             'is_draft' => 'boolean',
             'research_findings' => 'array',
+            'court_decision_findings' => 'array',
         ];
     }
 
@@ -213,6 +217,26 @@ class LegalCase extends Model
     public function precedents(): HasMany
     {
         return $this->hasMany(LegalPrecedent::class)->oldest();
+    }
+
+    /**
+     * The rulings the courts have already handed down in cases like this one.
+     *
+     * Oldest first, like the theses and the requirements: insertion order is
+     * the order the research returned them, which is the order the screen
+     * numbers them in, and there is no position column until something offers
+     * reordering.
+     *
+     * Note what it does *not* hang off: a thesis. That is the whole difference
+     * from `precedents()` — a precedent is a finding about an argument, while a
+     * court decision is the document itself, cited before anybody has decided
+     * what it will be used for. See the CourtDecision model.
+     *
+     * @return HasMany<CourtDecision, $this>
+     */
+    public function courtDecisions(): HasMany
+    {
+        return $this->hasMany(CourtDecision::class)->oldest();
     }
 
     /**

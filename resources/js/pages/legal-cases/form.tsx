@@ -29,6 +29,11 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/field";
+import {
+    toCourtDecisionDrafts,
+    toCourtDecisionPayload,
+    type CourtDecisionDraft,
+} from "@/lib/court-decisions";
 import { toDocumentDrafts, type DocumentDraft } from "@/lib/documents";
 import {
     toForensicReviewPayload,
@@ -47,6 +52,7 @@ import type {
     LegalCaseStepValue,
     Option,
     ProceduralClassOption,
+    ResearchedCourtDecision,
     ResearchedPrecedent,
     ResearchedThesis,
 } from "@/types";
@@ -102,13 +108,31 @@ const RESEARCH_STEPS = [
 ] as const;
 
 /**
+ * O que a pesquisa de jurisprudência está fazendo enquanto a etapa 7 espera.
+ *
+ * A segunda espera que sai da máquina, e a segunda mais longa: dois agentes em
+ * série e, depois deles, a leitura do registro de cada julgado confirmado. As
+ * frases descrevem esse trabalho — inclusive a última, que é a que explica por
+ * que a ementa da tela é a do tribunal e não a do modelo.
+ */
+const COURT_DECISION_STEPS = [
+    "Lendo a área de atuação e a classe processual da peça.",
+    "Formulando a questão que os tribunais já responderam.",
+    "Procurando no LexML os acórdãos que decidiram uma questão como esta.",
+    "Conferindo se cada julgado tem registro próprio no catálogo.",
+    "Descartando o que não aponta para um registro do LexML.",
+    "Abrindo cada registro e transcrevendo a ementa que o tribunal publicou.",
+] as const;
+
+/**
  * O que acontece ao concluir o assistente, para a espera dizer alguma coisa.
  *
- * Concluir é a única etapa que custa uma inferência: grava as teses, registra a
- * peça e manda o agente redigir a minuta inteira. Ver `FinalizeLegalCase`.
+ * Concluir é a única etapa que custa uma inferência sem pesquisar: grava as
+ * teses e os julgados que sobreviveram à leitura do advogado, registra a peça e
+ * manda o agente redigir a minuta inteira. Ver `FinalizeLegalCase`.
  */
 const FINALISING_STEPS = [
-    "Gravando as teses e os precedentes…",
+    "Gravando as teses, os precedentes e a jurisprudência…",
     "Registrando a peça…",
     "Redigindo a qualificação das partes…",
     "Escrevendo a narrativa dos fatos…",
@@ -203,12 +227,13 @@ interface Props {
  * da página, então os quatro enxergam todos os erros. É inofensivo aqui porque
  * nenhuma etapa compartilha nome de campo com outra.
  *
- * Os documentos e a revisão forense continuam em estado local, e pelo mesmo
- * motivo: o "Continuar" delas não grava nada. O rascunho de um documento
- * carrega o próprio `File`, que não sobrevive a um reload; a decisão de manter
- * ou tirar uma tese só vira gravação no "Concluir". As duas avançam a etapa e
- * nada mais, que é informação verdadeira sobre a peça — e a sétima, sendo a
- * última, é quem carrega o botão que fecha tudo.
+ * Os documentos, a revisão forense e a jurisprudência continuam em estado
+ * local, e pelo mesmo motivo: o "Continuar" delas não grava nada. O rascunho de
+ * um documento carrega o próprio `File`, que não sobrevive a um reload; a
+ * decisão de manter ou tirar uma tese ou um julgado só vira gravação no
+ * "Concluir". As duas do meio avançam a etapa e nada mais, que é informação
+ * verdadeira sobre a peça — e a sétima, sendo a última, é quem carrega o botão
+ * que fecha tudo.
  *
  * Uma peça nova pode chegar aqui preenchida: quem vem do preenchimento
  * inteligente traz o cliente, a classe, o relato, os dados do réu, os pedidos e
@@ -220,11 +245,16 @@ interface Props {
  * sugestões antes de aceitá-las, que é o ponto de devolvê-las ao assistente em
  * vez de abrir a minuta direto.
  *
- * A etapa 7 — a análise de jurisprudência — é por ora só a tela: não busca
- * nada, não grava nada e não recebe prop nenhuma. Ver `CourtDecisionFields`.
- * O que ela mudou no assistente foi o fim dele: o "Concluir e gerar minuta"
- * saiu da revisão forense e passou a ser dela, e a revisão ganhou o
- * "Continuar" comum de toda etapa que não é a última.
+ * As etapas 6 e 7 são as duas que abrem **pesquisando**, e são a mesma tela
+ * duas vezes: a revisão forense procura as teses nos portais oficiais, a
+ * análise de jurisprudência procura os julgados no LexML, as duas disparam ao
+ * abrir e **uma vez só** — o marcador é a coluna de relato da rodada e nunca a
+ * lista estar vazia —, as duas chegam com tudo marcado e as duas pedem que o
+ * advogado **tire** o que não serve. Ver `ForensicReviewFields` e
+ * `CourtDecisionFields`, e os dois efeitos mais abaixo.
+ *
+ * A etapa 7, sendo a última, é também quem carrega o "Concluir e gerar minuta",
+ * e é por isso que ele leva as duas decisões de uma vez.
  */
 export default function LegalCaseForm({
     legalCase,
@@ -354,15 +384,52 @@ export default function LegalCaseForm({
     }, [thesisSignature]);
 
     /**
+     * A jurisprudência da etapa 7, em estado local pelo mesmo arranjo das teses.
+     *
+     * Com uma simplificação: aqui a origem é uma só. Não há `handoff` — o
+     * preenchimento inteligente nunca pesquisou jurisprudência —, então o que
+     * chega vem sempre do banco, gravado pela pesquisa que a etapa dispara. O
+     * que vive aqui é só a **decisão**: o `keep` de cada julgado, que vira
+     * gravação no "Concluir e gerar minuta".
+     */
+    const [courtDecisions, setCourtDecisions] = useState<CourtDecisionDraft[]>(
+        () => toCourtDecisionDrafts(legalCase?.court_decisions),
+    );
+
+    /**
+     * O mesmo efeito das teses, e pelo mesmo motivo: a pesquisa da etapa 7
+     * grava e o Inertia re-renderiza com props novas sem remontar a página, de
+     * modo que o `useState` acima continuaria mostrando a lista vazia que
+     * existia quando a etapa abriu.
+     *
+     * A dependência é a assinatura dos ids e não o array: depender da
+     * referência faria qualquer re-render remarcar tudo, desfazendo em silêncio
+     * o que o advogado acabou de desmarcar.
+     */
+    const courtDecisionSignature = (legalCase?.court_decisions ?? [])
+        .map((decision) => decision.id)
+        .join(",");
+
+    useEffect(() => {
+        if (!legalCase) {
+            return;
+        }
+
+        setCourtDecisions(toCourtDecisionDrafts(legalCase.court_decisions));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [courtDecisionSignature]);
+
+    /**
      * A conclusão é um `useForm` como as quatro etapas que gravam, e não um
      * `router.post` solto: é ele que dá o `processing` que tranca o botão, e é
-     * ele que aceita as duas listas sem que cada tese precise de uma assinatura
+     * ele que aceita as três listas sem que cada tese precise de uma assinatura
      * de índice para satisfazer o tipo de payload do Inertia.
      */
     const review = useForm<{
         theses: ResearchedThesis[];
         precedents: ResearchedPrecedent[];
-    }>({ theses: [], precedents: [] });
+        court_decisions: ResearchedCourtDecision[];
+    }>({ theses: [], precedents: [], court_decisions: [] });
 
     const trail: StepItem[] = steps.map((option) => ({
         label: option.label,
@@ -462,10 +529,12 @@ export default function LegalCaseForm({
             return requirements.put(`/pecas/${id}/pedidos`, openSavedStep);
         }
 
-        // As duas etapas que não gravam nada — os documentos, cujos `File`
-        // ainda não têm onde ser salvos, e a análise de jurisprudência, que por
-        // ora é só tela — dizem a única coisa verdadeira que têm a dizer: a
-        // peça chegou até aqui.
+        // As duas etapas cujo "Continuar" não grava nada — os documentos, cujos
+        // `File` ainda não têm onde ser salvos, e a revisão forense, cujas
+        // teses já são linhas e cujo `keep` só vira gravação no "Concluir" —
+        // dizem a única coisa verdadeira que têm a dizer: a peça chegou até
+        // aqui. E é esse `patch` que destrava a etapa 7, sem o qual a pesquisa
+        // de jurisprudência não teria marca d'água que a autorizasse.
         //
         // `preserveState` é o que separa este `router.patch` do que ele era.
         // Sem ele a visita remonta a página, e o `useState` das teses volta a
@@ -483,34 +552,45 @@ export default function LegalCaseForm({
     /**
      * O fim do assistente.
      *
-     * Um gesto só, e três efeitos: grava as teses que sobreviveram à revisão,
-     * tira a peça do rascunho e manda o agente redigir a minuta. O servidor
-     * redireciona para a aba do documento, e por isso aqui não há `openSavedStep`
-     * — não há próxima etapa para abrir.
+     * Um gesto só, e três efeitos: grava o que sobreviveu à leitura do advogado
+     * nas etapas 6 e 7, tira a peça do rascunho e manda o agente redigir a
+     * minuta. O servidor redireciona para a aba do documento, e por isso aqui
+     * não há `openSavedStep` — não há próxima etapa para abrir.
      *
      * A espera é de verdade: é uma inferência de minutos, e a falha dela não
      * desfaz a gravação — ver `FinalizeLegalCase`. Se o agente cair, a peça
      * chega registrada na aba da minuta, que oferece tentar de novo.
      */
     const finalise = () => {
-        // As teses vivem em estado local, então o payload é montado na hora do
-        // envio — `transform` é o mesmo mecanismo que leva o relato junto da
-        // criação na etapa 1.
-        review.transform(() => toForensicReviewPayload(theses));
+        // As duas decisões vivem em estado local, então o payload é montado na
+        // hora do envio — `transform` é o mesmo mecanismo que leva o relato
+        // junto da criação na etapa 1. O que não estiver nestas listas é
+        // apagado pelo diff do servidor: é assim que desmarcar vira remoção.
+        review.transform(() => ({
+            ...toForensicReviewPayload(theses),
+            court_decisions: toCourtDecisionPayload(courtDecisions),
+        }));
 
         review.post(`/pecas/${id}/concluir`);
     };
 
     /**
-     * A pesquisa de teses, que preenche a etapa 6.
+     * As duas pesquisas do assistente, que preenchem as etapas 6 e 7.
      *
      * `router.post` solto e não um `useForm`: não há payload nenhum — a peça
-     * está na URL e tudo o que o agente lê já está no banco. O `researching`
-     * é local porque é ele que abre o diálogo, e o `preserveState` impede que
-     * a volta remonte a página e o apague sozinho.
+     * está na URL e tudo o que os agentes leem já está no banco. O `researching`
+     * é local porque é ele que abre o diálogo, e o `preserveState` impede que a
+     * volta remonte a página e o apague sozinho.
+     *
+     * Um estado por etapa, e não um compartilhado: as duas rodadas falham por
+     * motivos diferentes — o STJ fora do ar, o LexML fora do ar — e uma falha na
+     * etapa 6 não pode impedir a etapa 7 de tentar, nem o contrário.
      */
     const [researching, setResearching] = useState(false);
     const [researchFailed, setResearchFailed] = useState(false);
+
+    const [researchingDecisions, setResearchingDecisions] = useState(false);
+    const [decisionResearchFailed, setDecisionResearchFailed] = useState(false);
 
     const research = () => {
         if (!id || researching) {
@@ -530,6 +610,26 @@ export default function LegalCaseForm({
                 // é o efeito das teses, com as props novas.
                 onError: () => setResearchFailed(true),
                 onFinish: () => setResearching(false),
+            },
+        );
+    };
+
+    /** A mesma coisa uma etapa adiante — ver `ResearchLegalCaseJurisprudence`. */
+    const researchCourtDecisions = () => {
+        if (!id || researchingDecisions) {
+            return;
+        }
+
+        setResearchingDecisions(true);
+        setDecisionResearchFailed(false);
+
+        router.post(
+            `/pecas/${id}/jurisprudencia/pesquisar`,
+            {},
+            {
+                preserveScroll: true,
+                onError: () => setDecisionResearchFailed(true),
+                onFinish: () => setResearchingDecisions(false),
             },
         );
     };
@@ -565,6 +665,29 @@ export default function LegalCaseForm({
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [step, id, legalCase?.research, researchFailed]);
+
+    /**
+     * O mesmo disparo na etapa 7, com o marcador que é dela.
+     *
+     * `court_decision_research` e não `court_decisions.length`, pelo motivo que
+     * o efeito acima explica por extenso — e aqui ele é ainda mais visível: um
+     * relato sobre o qual os tribunais nada decidiram grava zero julgados, e
+     * conferir a lista faria esta peça pagar a pesquisa em toda visita.
+     *
+     * As duas nunca correm juntas: são etapas diferentes e só uma está na tela.
+     */
+    useEffect(() => {
+        if (
+            step === 6 &&
+            id &&
+            legalCase?.court_decision_research == null &&
+            !researchingDecisions &&
+            !decisionResearchFailed
+        ) {
+            researchCourtDecisions();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [step, id, legalCase?.court_decision_research, decisionResearchFailed]);
 
     const title = legalCase ? "Editar peça" : "Nova peça";
 
@@ -862,7 +985,26 @@ export default function LegalCaseForm({
                         />
                     )}
 
-                    {step === 6 && <CourtDecisionFields />}
+                    {step === 6 && (
+                        <CourtDecisionFields
+                            research={
+                                legalCase?.court_decision_research ?? null
+                            }
+                            researching={researchingDecisions}
+                            failed={decisionResearchFailed}
+                            onResearch={researchCourtDecisions}
+                            decisions={courtDecisions}
+                            onToggle={(decisionId, keep) =>
+                                setCourtDecisions((current) =>
+                                    current.map((draft) =>
+                                        draft.id === decisionId
+                                            ? { ...draft, keep }
+                                            : draft,
+                                    ),
+                                )
+                            }
+                        />
+                    )}
 
                     {/* Cancelar só no primeiro passo, onde ainda não se andou
                         nada; dali em diante o par é Voltar/Continuar. Voltar é
@@ -930,6 +1072,19 @@ export default function LegalCaseForm({
                 title="Pesquisando as teses — leva alguns minutos"
                 hint="É a etapa mais demorada da peça, e a espera é normal: o agente consulta o Planalto, o STJ e o STF e lê cada página antes de responder, o que costuma levar alguns minutos. Mantenha esta aba aberta e não recarregue a página — ao terminar, as teses ficam gravadas na peça e a pesquisa não se repete."
                 messages={RESEARCH_STEPS}
+                interval={6500}
+            />
+
+            {/* A segunda espera que sai da máquina, e a mesma escolha de
+                diálogo modal: sair da tela joga fora a inferência inteira sem
+                avisar. O texto diz o que esta faz de diferente — ela lê o
+                registro de cada julgado depois de achá-lo, e é essa leitura que
+                torna a ementa da tela a do tribunal. */}
+            <AnalysisDialog
+                open={researchingDecisions}
+                title="Pesquisando a jurisprudência — leva alguns minutos"
+                hint="O agente procura no LexML os acórdãos que decidiram uma questão como a desta peça e abre o registro de cada um para transcrever a ementa que o tribunal publicou. Mantenha esta aba aberta e não recarregue a página — ao terminar, os julgados ficam gravados na peça e a pesquisa não se repete."
+                messages={COURT_DECISION_STEPS}
                 interval={6500}
             />
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\LegalCases;
 
 use App\Domain\Accounts\Models\Account;
+use App\Domain\CourtDecisions\Models\CourtDecision;
 use App\Domain\LegalCases\Actions\DraftLegalPleading;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Models\LegalCase;
@@ -25,8 +26,13 @@ use Tests\TestCase;
  * `is_draft` had a column, an index, a filter, a badge and a factory state
  * before anything could write `false` to it. What is pinned here is the three
  * effects of that gesture and, above all, **the boundary between them**: the
- * review and the flag are one transaction, and the drafting is deliberately
+ * two lists and the flag are one transaction, and the drafting is deliberately
  * outside it, so a provider being down cannot undo minutes of research.
+ *
+ * The two lists, since step 7 arrived, are the theses of the forensic review
+ * and the rulings of the jurisprudence analysis. Both are already rows by the
+ * time this runs — the two research runs wrote them — so what the conclusion
+ * posts is the lawyer's reading, and both saves are diffs.
  *
  * The agent is mocked throughout. It is exercised for real in
  * `tests/Agents/PleadingDraftingTest`, which costs inference; what this file is
@@ -54,7 +60,9 @@ final class FinalizeLegalCaseTest extends TestCase
 
         $this->assertSame('Da Prescrição Intercorrente', $case->theses()->sole()->name);
         $this->assertFalse($case->refresh()->is_draft);
-        $this->assertSame(LegalCaseStep::Review, $case->refresh()->current_step);
+        // A marca d'água chega na última etapa, e não na sexta: concluir é o
+        // gesto da etapa 7, e é a gravação da jurisprudência que a move.
+        $this->assertSame(LegalCaseStep::CourtDecisions, $case->refresh()->current_step);
 
         $pleading = $case->pleadings()->sole();
         $this->assertSame(1, $pleading->version);
@@ -129,11 +137,58 @@ final class FinalizeLegalCaseTest extends TestCase
 
         $this->actingAs($owner)->post(
             route('legal-cases.finalize', $case),
-            ['theses' => [], 'precedents' => []],
+            ['theses' => [], 'precedents' => [], 'court_decisions' => []],
         );
 
         $this->assertSame(0, $case->theses()->count());
         $this->assertFalse($case->refresh()->is_draft);
+    }
+
+    /**
+     * A etapa 7 no gesto que a fecha: o que foi desmarcado sai da peça.
+     *
+     * Os julgados já são linhas quando esta tela abre — a pesquisa os gravou —,
+     * então desmarcar não é "não gravar", é **apagar**, e quem apaga é o diff de
+     * `SaveLegalCaseCourtDecisions`. É a mesma mecânica das teses, e o motivo de
+     * a decisão do advogado poder viver no navegador até aqui.
+     */
+    #[Test]
+    public function a_ruling_the_lawyer_unticked_is_removed_when_the_pleading_closes(): void
+    {
+        [, $owner, $case] = $this->pleading();
+
+        $kept = CourtDecision::factory()->forLegalCase($case)->nth(1)->create();
+        $unticked = CourtDecision::factory()->forLegalCase($case)->nth(2)->create();
+
+        $this->fakeDrafting()->shouldReceive('handle')->once()->andReturn($this->draft($case));
+
+        $this->finalize($owner, $case, [$this->postedRuling($kept)])
+            ->assertRedirect(route('legal-cases.pleading', $case));
+
+        $this->assertSame([$kept->id], $case->courtDecisions()->pluck('id')->all());
+        $this->assertSoftDeleted($unticked);
+        $this->assertFalse($case->refresh()->is_draft);
+    }
+
+    /**
+     * Uma linha gravada, projetada exatamente como `LegalCaseFormProps` a manda
+     * para a tela — que é a forma em que ela volta.
+     *
+     * @return array<string, mixed>
+     */
+    private function postedRuling(CourtDecision $decision): array
+    {
+        return [
+            'id' => $decision->id,
+            'title' => $decision->title,
+            'locality' => $decision->locality,
+            'authority' => $decision->authority,
+            'summary' => $decision->summary,
+            'subject' => $decision->subject,
+            'source_url' => $decision->source_url,
+            'urn' => $decision->urn,
+            'decided_at' => $decision->decided_at?->toDateString(),
+        ];
     }
 
     /**
@@ -199,13 +254,21 @@ final class FinalizeLegalCaseTest extends TestCase
     }
 
     /**
-     * One thesis and the ruling that sustains it, posted the way the sixth step
-     * posts them: the precedent names its thesis by the id the browser minted.
+     * One thesis with the ruling that sustains it and one court decision,
+     * posted the way the wizard's last step posts them: the precedent names its
+     * thesis by the id the browser minted, and the decision names the row it
+     * already is.
      *
+     * `$decisions` is empty by default, which is what a pleading whose
+     * jurisprudence run confirmed nothing posts — and what every test here that
+     * is not about step 7 wants. The one that is about it passes rows.
+     *
+     * @param  list<array<string, mixed>>  $decisions
      * @return TestResponse<Response>
      */
-    private function finalize(User $owner, LegalCase $case): TestResponse
+    private function finalize(User $owner, LegalCase $case, array $decisions = []): TestResponse
     {
+
         return $this->actingAs($owner)->post(route('legal-cases.finalize', $case), [
             'theses' => [[
                 'id' => self::UUID_A,
@@ -227,6 +290,9 @@ final class FinalizeLegalCaseTest extends TestCase
                 'grounding' => 'Fundamenta a contagem do prazo.',
                 'adherence' => '90',
             ]],
+            // A etapa 7 viaja junto: os julgados já são linhas, e o que a
+            // conclusão posta é a leitura do advogado — ver `$decisions`.
+            'court_decisions' => $decisions,
         ]);
     }
 }

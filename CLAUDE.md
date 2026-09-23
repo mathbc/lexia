@@ -449,14 +449,17 @@ As Actions de cadastro por linha (`CreateLegalThesis`, `UpdateLegalPrecedent`,
 `DeleteLegalThesis`…) existem para a edição por linha que virá, e não têm
 `asController()` enquanto nada apontar para elas — o agente de revisão forense
 já chegou, e escreve a etapa inteira de uma vez pela dupla da pesquisa. A gravação
-também chegou: quem a dispara é o "Concluir e gerar minuta" da etapa 6, por
-`FinalizeLegalCase` — ver "A minuta", no fim deste arquivo. As de precedente recebem a
+também chegou: quem a dispara é o "Concluir e gerar minuta", que desde a chegada da
+etapa 7 mora nela e não na 6, por `FinalizeLegalCase` — ver "A minuta", no fim deste
+arquivo. As de precedente recebem a
 tese como **model e não como id**, que é a mesma regra noutra forma: um id
 postado seria um buraco que nenhum teste da classe enxergaria.
 
 ## A pesquisa de teses
 
-A segunda metade da etapa 6, e o único lugar do projeto que **sai da máquina**. Um agente
+A segunda metade da etapa 6, e um dos dois lugares do projeto que **saem da máquina** — o
+outro é a pesquisa de jurisprudência da etapa 7, que é este mesmo desenho contra outro
+portal. Um agente
 de pesquisa que não consegue abrir o `stj.jus.br` é um modelo recitando súmula de memória,
 que é exatamente o que o prompt inteiro existe para impedir — e buscar e ler página são
 ferramentas do lado do provedor, que o `OllamaProvider` recusa antes de montar requisição.
@@ -536,27 +539,68 @@ que dispara porque o normal não consegue interromper um `curl_exec()` bloqueado
 exceção, é o processo abatido, sem gravar nada e sem nada a capturar. Subir o `#[Timeout]`
 do agente não move isso um segundo — são coisas independentes, e vence o interpretador.
 Quem levanta é o middleware `AllowLongInference` (`ai.request_time_limit`, 900 s, o pior
-caso destes dois agentes em série), pelo alias `inference` nas **quatro** rotas que
-esperam por uma inferência: classificar, pesquisar, concluir e gerar a minuta. Ele só
+caso destes dois agentes em série), pelo alias `inference` nas **cinco** rotas que
+esperam por uma inferência: classificar, pesquisar as teses, pesquisar a jurisprudência,
+concluir e gerar a minuta. Ele só
 levanta — zero é ilimitado, que é o que a CLI e o `artisan serve` entregam, e escrever um
 número ali construiria a parede em vez de derrubá-la. Num servidor de verdade o corte
 volta de fora (`fastcgi_read_timeout`, `request_terminate_timeout`), onde nenhum
 `set_time_limit()` alcança, e aí a saída é mesmo a fila.
 
+## A análise de jurisprudência
+
+A sétima etapa, e a segunda que abre **pesquisando**. A etapa 6 procura *teses* — o que a
+peça argumenta — nos portais oficiais; esta procura *julgados* no LexML: o acórdão de um
+caso parecido, que se cita para mostrar como aquele tribunal já resolveu a questão. No
+sistema a jurisprudência se chama `CourtDecision`, e a distinção com `LegalPrecedent` é o
+que justifica as duas tabelas — um precedente é uma **afirmação sobre esta peça** (pende
+de uma tese, carrega aderência e fundamentação), um julgado é o **documento**, transcrito
+do registro, sem nenhuma pontuação ao lado. A leitura é do advogado, e é por isso que a
+linha não tem `legal_thesis_id`, nem `adherence`, nem `grounding`.
+
+A mecânica é a da etapa 6, deliberadamente repetida para que quem aprendeu uma não
+precise aprender a outra:
+
+- **Abrir a etapa dispara a pesquisa**, por `ResearchLegalCaseJurisprudence`
+  (`POST /pecas/{id}/jurisprudencia/pesquisar`, com o `inference`). Ela chama
+  `ResearchLegalCaseCourtDecisions` — os dois agentes mais o `LexmlRecordReader` —, grava
+  as linhas por `SaveLegalCaseCourtDecisions` e o envelope em
+  `legal_cases.court_decision_findings`. A inferência fica **fora** da transação.
+- **O gatilho é a coluna ser nula, e nunca a lista estar vazia.** Mesma armadilha, mesma
+  saída: uma rodada que abriu o portal e nada confirmou é resposta cara e legítima que
+  grava zero linhas, e um gatilho pela lista repesquisaria a cada visita — substituindo
+  em silêncio o que o advogado já curou, porque a gravação reconcilia por diff. A segunda
+  rodada é o botão "Pesquisar novamente".
+- **Tudo chega marcado, e o gesto é tirar.** As caixas de `CourtDecisionFields` vivem em
+  estado local, como o `keep` das teses, e só viram gravação no "Concluir" — onde
+  desmarcar vira **remoção**, pelo `whereNotIn` da Action irmã.
+
+O nome das Actions segue uma regra que as duas etapas compartilham: a Action **da etapa**
+leva o nome da etapa (`ResearchLegalCaseForensicReview`, `ResearchLegalCaseJurisprudence`)
+e a que ela chama leva o nome do que os agentes acham (`...Theses`, `...CourtDecisions`).
+
+`SaveLegalCaseCourtDecisions` não tem `asController()` — nada aponta para ela —, e não tem
+mapa de ids: um julgado não é pai de nada, então não há chave que alguém esteja esperando.
+O que ela repete de propósito é a guarda do portal: `CourtDecisionListData` descarta a
+linha sem ementa e a que não aponta para um registro `/urn/`, porque no caminho de volta —
+o payload do navegador — não há ninguém a quem relatar a recusa, e `source_url` é a única
+razão pela qual uma ementa desta tabela pode ser conferida.
+
 ## A minuta
 
-A sétima etapa que não é etapa. Concluir a revisão forense é o **primeiro gesto do
-projeto que termina uma peça**: `FinalizeLegalCase` grava as teses pela Action irmã,
-vira `is_draft` para `false` — até aqui nada escrevia essa coluna, e a
+A oitava etapa que não é etapa. Concluir a análise de jurisprudência é o **primeiro gesto
+do projeto que termina uma peça**: `FinalizeLegalCase` grava as teses e os julgados pelas
+duas Actions irmãs, vira `is_draft` para `false` — até aqui nada escrevia essa coluna, e a
 `LegalCasePolicy` documentava a ausência — e manda `PleadingDraftingAgent` redigir a
 petição inteira.
 
-A fronteira entre esses três efeitos é o desenho. Os dois primeiros são **uma
-transação**, porque são uma afirmação só sobre a peça: são estes os argumentos, e ela
-está pronta. A redação fica **fora**, com `try/catch` e `report()` — é a única parte
-que sai da máquina e a única que uma cota esgotada pode levar embora. Falhando, a peça
-continua registrada e a aba Minuta abre vazia oferecendo o botão de gerar, que é a
-única porta para o agente depois da etapa 6 e fecha assim que existe uma versão.
+A fronteira entre esses efeitos é o desenho. As duas gravações e a bandeira são **uma
+transação**, porque são uma afirmação só sobre a peça: são estes os argumentos e estes os
+julgados, e ela está pronta. A redação fica **fora**, com `try/catch` e `report()` — é a
+única parte que sai da máquina e a única que uma cota esgotada pode levar embora.
+Falhando, a peça continua registrada e a aba Minuta abre vazia oferecendo o botão de
+gerar, que é a única porta para o agente depois da etapa 7 e fecha assim que existe uma
+versão.
 
 A peça passa a ter **duas abas**, URLs de verdade como as da conta: `/pecas/{id}/editar`
 e `/pecas/{id}/minuta`. A segunda é um cabeçalho fixo com o timbre do escritório e um

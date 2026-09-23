@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\LegalCases\Support;
 
 use App\Domain\Accounts\Enums\BrazilianState;
+use App\Domain\CourtDecisions\Models\CourtDecision;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalPrecedents\Models\LegalPrecedent;
 use App\Domain\LegalTheses\Models\LegalThesis;
@@ -46,6 +47,8 @@ final class LegalCaseFormProps
             'theses' => self::theses($legalCase),
             'precedents' => self::precedents($legalCase),
             'research' => self::research($legalCase),
+            'court_decisions' => self::courtDecisions($legalCase),
+            'court_decision_research' => self::findings($legalCase->court_decision_findings),
         ];
     }
 
@@ -73,9 +76,56 @@ final class LegalCaseFormProps
      */
     private static function research(LegalCase $legalCase): ?array
     {
-        $findings = $legalCase->research_findings;
+        return self::findings($legalCase->research_findings);
+    }
 
+    /**
+     * One research run's account, or null when there has never been one.
+     *
+     * Shared by the two steps that research, because the rule is the same and
+     * it is the whole of it: **null is the signal**, and the screen keys the
+     * trigger on it rather than on the list being empty. The guard is against a
+     * row written before the column existed, where the cast hands back
+     * something that is not an array.
+     *
+     * @param  array<string, mixed>|null  $findings
+     * @return array<string, mixed>|null
+     */
+    private static function findings(?array $findings): ?array
+    {
         return is_array($findings) && $findings !== [] ? $findings : null;
+    }
+
+    /**
+     * The case law of the seventh step, with the real ids.
+     *
+     * The rows as the LexML record wrote them, in the shape
+     * `CourtDecisionData::toArray()` publishes and `SaveLegalCaseCourtDecisions`
+     * accepts — so a run that has just happened and a pleading reopened a week
+     * later hydrate through the same code, exactly as the theses do.
+     *
+     * The ids are the persisted ones, which is what makes concluding update the
+     * rows instead of replacing them, and `decided_at` goes out as `Y-m-d`
+     * rather than as a Carbon: the screen formats it, and a serialised
+     * timestamp would arrive with an hour a judgment does not have.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function courtDecisions(LegalCase $legalCase): array
+    {
+        return $legalCase->courtDecisions
+            ->map(static fn (CourtDecision $decision): array => [
+                'id' => $decision->id,
+                'title' => $decision->title,
+                'locality' => $decision->locality,
+                'authority' => $decision->authority,
+                'summary' => $decision->summary,
+                'subject' => $decision->subject,
+                'source_url' => $decision->source_url,
+                'urn' => $decision->urn,
+                'decided_at' => $decision->decided_at?->toDateString(),
+            ])
+            ->all();
     }
 
     /**

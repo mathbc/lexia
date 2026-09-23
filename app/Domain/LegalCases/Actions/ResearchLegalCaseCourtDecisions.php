@@ -87,12 +87,13 @@ use RuntimeException;
  *
  * ## Who calls it, and what that costs
  *
- * Nothing, yet. There is no `asController()` while no route points here — the
- * project's rule — and the screen that will call it is still the placeholder in
- * `court-decision-fields.tsx`. When the route arrives it needs the `inference`
- * middleware, like its four siblings: two serial `Timeout(360)` are far past
- * the 30 seconds a stock `php.ini` allows, and the request would be killed
- * inside cURL with nothing to catch.
+ * `ResearchLegalCaseJurisprudence`, which is the seventh step opening — and
+ * nobody else. There is still no `asController()` here, because no route points
+ * at this Action: what the route points at is the step, which decides whether
+ * the run is worth paying for and writes down what comes back. That route
+ * carries the `inference` middleware, like its four siblings: two serial
+ * `Timeout(360)` are far past the 30 seconds a stock `php.ini` allows, and the
+ * request would be killed inside cURL with nothing to catch.
  *
  * The pleading it receives need not be saved. `forCourtDecisions()` only ever
  * touches the model it is handed, so the two relations set by hand are the

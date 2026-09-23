@@ -289,6 +289,24 @@ export interface LegalCaseDraft {
      * advogado já tivesse curado, porque a gravação reconcilia por diff.
      */
     research: LegalResearchFindings | null;
+    /**
+     * A jurisprudência já gravada — a sétima etapa, com os ids reais.
+     *
+     * Vazia numa peça que ainda não chegou à etapa 7, e vazia também numa em
+     * que a pesquisa rodou e nada confirmou: quem distingue as duas é o campo
+     * abaixo, e não o tamanho desta lista.
+     */
+    court_decisions: ResearchedCourtDecision[];
+    /**
+     * O relato da pesquisa que produziu os julgados acima, ou nulo se nunca se
+     * pesquisou jurisprudência nesta peça.
+     *
+     * O nulo é o gatilho, pelo mesmo motivo que em `research`: uma rodada que
+     * abriu o LexML e nada confirmou é resposta cara e legítima, e conferir
+     * `court_decisions.length` a repetiria a cada visita — apagando, de quebra,
+     * o que o advogado já tivesse curado, porque a gravação reconcilia por diff.
+     */
+    court_decision_research: CourtDecisionFindings | null;
 }
 
 /**
@@ -461,6 +479,57 @@ export interface ResearchedPrecedent {
  * rodou e nada confirmou, e essa não se repete sozinha.
  */
 export interface LegalResearchFindings {
+    legal_question: string | null;
+    sources: string[];
+    pending: string[];
+    unverified_citations: string[];
+    researched_at: string;
+}
+
+/**
+ * Um julgado que a pesquisa de jurisprudência confirmou — espelha o que
+ * `CourtDecisionData::toArray()` grava, mais o `id` da linha.
+ *
+ * Os oito campos são o registro do LexML, um a um: Localidade, Autoridade,
+ * Título, Data, Ementa, Assuntos e o Nome Uniforme. Seguir o vocabulário do
+ * catálogo é o que permite conferir a transcrição contra a página de onde ela
+ * veio — e `source_url` é essa página, o único campo que a guarda consulta.
+ *
+ * Note o que **não** existe aqui, e é o que o separa de `ResearchedPrecedent`:
+ * não há `adherence` nem `grounding`, e não há tese à qual ele se prenda. Um
+ * precedente é uma afirmação sobre esta peça; um julgado é o documento, e a
+ * leitura é do advogado.
+ *
+ * `id` é sempre o do banco: a pesquisa grava antes de a tela desenhar, então
+ * não há id de correlação nenhum nesta etapa.
+ *
+ * `decided_at` chega como "1998-04-28" e nulo quer dizer que o registro não
+ * trouxe data — não uma data desconhecida que valha zero.
+ */
+export interface ResearchedCourtDecision {
+    id: string | null;
+    title: string;
+    locality: string | null;
+    authority: string | null;
+    summary: string;
+    subject: string | null;
+    source_url: string | null;
+    urn: string | null;
+    decided_at: string | null;
+}
+
+/**
+ * O relato de uma rodada de jurisprudência — espelha
+ * `CourtDecisionResearchData::findings()`, que é o que a coluna
+ * `legal_cases.court_decision_findings` guarda.
+ *
+ * Tem os mesmos campos do relato da pesquisa de teses, e por isso não os
+ * herda: as duas rodadas são independentes, e um campo que um dia sirva a uma
+ * não serve necessariamente à outra. O que `sources` lista aqui são registros
+ * do LexML, e `unverified_citations` são os julgados que a guarda removeu por
+ * não apontarem para um deles.
+ */
+export interface CourtDecisionFindings {
     legal_question: string | null;
     sources: string[];
     pending: string[];

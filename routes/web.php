@@ -23,6 +23,7 @@ use App\Domain\LegalCases\Actions\CreateLegalCase;
 use App\Domain\LegalCases\Actions\FinalizeLegalCase;
 use App\Domain\LegalCases\Actions\ListLegalCases;
 use App\Domain\LegalCases\Actions\ResearchLegalCaseForensicReview;
+use App\Domain\LegalCases\Actions\ResearchLegalCaseJurisprudence;
 use App\Domain\LegalCases\Actions\SaveLegalCaseForensicReview;
 use App\Domain\LegalCases\Actions\SaveLegalCaseRequirements;
 use App\Domain\LegalCases\Actions\ShowAssistedLegalCaseForm;
@@ -137,12 +138,23 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->middleware('inference')
             ->name('legal-cases.forensic-review.research');
 
+        // A etapa 7, e a segunda pesquisa do assistente. Mesmo arranjo da de
+        // cima e pelos mesmos motivos: dispara ao abrir a etapa, uma vez só —
+        // `court_decision_findings` é o marcador —, grava o que confirma e
+        // responde com um redirect para a própria etapa. `inference` outra vez,
+        // porque são dois agentes em série mais a leitura de um registro do
+        // LexML por julgado. Ver ResearchLegalCaseJurisprudence.
+        Route::post('/jurisprudencia/pesquisar', ResearchLegalCaseJurisprudence::class)
+            ->middleware('inference')
+            ->name('legal-cases.jurisprudence.research');
+
         // Os documentos ainda não persistem, mas o Continuar deles diz uma
         // verdade sobre a peça: ela chegou até ali.
         Route::patch('/etapa', AdvanceLegalCaseStep::class)->name('legal-cases.step');
 
         // O fim do assistente, e a única rota que fecha uma peça: grava a
-        // revisão forense, tira do rascunho e manda o agente redigir a minuta.
+        // revisão forense e a jurisprudência, tira do rascunho e manda o agente
+        // redigir a minuta.
         Route::post('/concluir', FinalizeLegalCase::class)
             ->middleware('inference')
             ->name('legal-cases.finalize');

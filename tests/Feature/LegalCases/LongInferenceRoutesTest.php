@@ -35,6 +35,7 @@ final class LongInferenceRoutesTest extends TestCase
         return [
             'o enquadramento' => ['legal-cases.classify'],
             'a pesquisa de teses' => ['legal-cases.forensic-review.research'],
+            'a pesquisa de jurisprudência' => ['legal-cases.jurisprudence.research'],
             'a conclusão da peça' => ['legal-cases.finalize'],
             'a minuta gerada de novo' => ['legal-cases.pleading.generate'],
         ];
