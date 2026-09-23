@@ -24,8 +24,8 @@ use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 
 /**
- * The six-step form for drafting a pleading — opening a new one, and reopening
- * one already saved.
+ * The seven-step form for drafting a pleading — opening a new one, and
+ * reopening one already saved.
  *
  * Both routes land here, as they do for users on ShowUserForm, and both render
  * the same page: the two screens differ by one prop, not by their shape. The

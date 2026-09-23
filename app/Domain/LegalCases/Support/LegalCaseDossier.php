@@ -80,6 +80,33 @@ final class LegalCaseDossier
     }
 
     /**
+     * The framing alone, for the agent that looks for case law.
+     *
+     * The narrowest projection of the four, and the narrowing is the point. The
+     * jurisprudence search asks "what have the courts decided about a question
+     * like this one?", and what makes a ruling relevant is the area of law, the
+     * class the matter is filed under, and the question the facts raise. The
+     * facts are the prompt, as always.
+     *
+     * It drops the requests, which is the one line where it differs from
+     * `forResearch()` and the difference is not an economy. A thesis has to
+     * sustain something, so a request that nothing argues for is the hole worth
+     * seeing; an acórdão sustains nothing here — it is a document that decided a
+     * question, and it is cited before anybody has decided what it will be used
+     * for. Sending the requests would invite the model to score rulings against
+     * them, which is the reading this step deliberately leaves to the lawyer.
+     *
+     * Like `forResearch()`, it has no client and no defendant, and for the
+     * stronger version of the same reason: this is the second agent whose input
+     * leaves the office. The narrative travels because a ruling cannot be
+     * matched to a case without the question the facts raise. The names do not.
+     */
+    public static function forCourtDecisions(LegalCase $legalCase): string
+    {
+        return self::section('O enquadramento', self::pleading($legalCase));
+    }
+
+    /**
      * The whole pleading, for the agent that writes the document.
      *
      * The third projection, and the widest — where `forResearch()` narrows

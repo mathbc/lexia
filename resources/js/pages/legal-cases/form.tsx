@@ -3,6 +3,7 @@ import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/layouts/app-layout";
 import { AnalysisDialog } from "@/components/analysis-dialog";
+import { CourtDecisionFields } from "@/components/court-decision-fields";
 import { CustomerCreateDialog } from "@/components/customer-create-dialog";
 import {
     DefendantFormFields,
@@ -61,6 +62,7 @@ const STEP_ORDER: LegalCaseStepValue[] = [
     "requirements",
     "documents",
     "review",
+    "court-decisions",
 ];
 
 /**
@@ -76,6 +78,7 @@ const STEP_DESCRIPTIONS: Record<LegalCaseStepValue, string> = {
         "O que se pede ao juízo, e quanto vale cada pedido que tem cifra",
     documents: "Os anexos que instruem a peça",
     review: "As teses que a peça sustenta e os julgados que as fundamentam",
+    "court-decisions": "O que os tribunais já decidiram em casos como este",
 };
 
 /**
@@ -99,7 +102,7 @@ const RESEARCH_STEPS = [
 ] as const;
 
 /**
- * O que acontece ao concluir a etapa 6, para a espera dizer alguma coisa.
+ * O que acontece ao concluir o assistente, para a espera dizer alguma coisa.
  *
  * Concluir é a única etapa que custa uma inferência: grava as teses, registra a
  * peça e manda o agente redigir a minuta inteira. Ver `FinalizeLegalCase`.
@@ -200,12 +203,12 @@ interface Props {
  * da página, então os quatro enxergam todos os erros. É inofensivo aqui porque
  * nenhuma etapa compartilha nome de campo com outra.
  *
- * Os documentos e a revisão forense são as duas exceções que continuam em
- * estado local, e pelo mesmo motivo: nada as grava ainda. O rascunho de um
- * documento carrega o próprio `File`, que não sobrevive a um reload; a revisão
- * forense veio da pesquisa e não tem tabela preenchida. O "Continuar" dos
- * documentos não salva nada — só avança a etapa, que é informação verdadeira
- * sobre a peça — e a etapa 6, sendo a última, nem botão de avançar tem.
+ * Os documentos e a revisão forense continuam em estado local, e pelo mesmo
+ * motivo: o "Continuar" delas não grava nada. O rascunho de um documento
+ * carrega o próprio `File`, que não sobrevive a um reload; a decisão de manter
+ * ou tirar uma tese só vira gravação no "Concluir". As duas avançam a etapa e
+ * nada mais, que é informação verdadeira sobre a peça — e a sétima, sendo a
+ * última, é quem carrega o botão que fecha tudo.
  *
  * Uma peça nova pode chegar aqui preenchida: quem vem do preenchimento
  * inteligente traz o cliente, a classe, o relato, os dados do réu, os pedidos e
@@ -217,10 +220,11 @@ interface Props {
  * sugestões antes de aceitá-las, que é o ponto de devolvê-las ao assistente em
  * vez de abrir a minuta direto.
  *
- * A etapa 6 é a que ainda não tem a sua metade: as teses chegam, são lidas e
- * são marcadas ou desmarcadas, e a decisão morre com a aba. É deliberado — a
- * tela vem antes da gravação —, mas é a única etapa do assistente em que
- * recarregar a página custa trabalho já feito.
+ * A etapa 7 — a análise de jurisprudência — é por ora só a tela: não busca
+ * nada, não grava nada e não recebe prop nenhuma. Ver `CourtDecisionFields`.
+ * O que ela mudou no assistente foi o fim dele: o "Concluir e gerar minuta"
+ * saiu da revisão forense e passou a ser dela, e a revisão ganhou o
+ * "Continuar" comum de toda etapa que não é a última.
  */
 export default function LegalCaseForm({
     legalCase,
@@ -458,11 +462,21 @@ export default function LegalCaseForm({
             return requirements.put(`/pecas/${id}/pedidos`, openSavedStep);
         }
 
-        // Os documentos não persistem nada: só dizem até onde a peça chegou.
+        // As duas etapas que não gravam nada — os documentos, cujos `File`
+        // ainda não têm onde ser salvos, e a análise de jurisprudência, que por
+        // ora é só tela — dizem a única coisa verdadeira que têm a dizer: a
+        // peça chegou até aqui.
+        //
+        // `preserveState` é o que separa este `router.patch` do que ele era.
+        // Sem ele a visita remonta a página, e o `useState` das teses volta a
+        // ler as props: a tese que o advogado acabou de desmarcar na etapa 6
+        // reapareceria marcada, e o "Concluir" da etapa 7 gravaria de volta o
+        // que ele tinha acabado de tirar. Um `useForm` já preservaria sozinho
+        // — aqui não há formulário nenhum para preservar.
         return router.patch(
             `/pecas/${id}/etapa`,
-            { step: STEP_ORDER[step + 1] ?? "review" },
-            openSavedStep,
+            { step: STEP_ORDER[step + 1] ?? STEP_ORDER[STEP_ORDER.length - 1] },
+            { ...openSavedStep, preserveState: true },
         );
     };
 
@@ -848,6 +862,8 @@ export default function LegalCaseForm({
                         />
                     )}
 
+                    {step === 6 && <CourtDecisionFields />}
+
                     {/* Cancelar só no primeiro passo, onde ainda não se andou
                         nada; dali em diante o par é Voltar/Continuar. Voltar é
                         estado local: o que ficou para trás já está salvo. */}
@@ -875,9 +891,10 @@ export default function LegalCaseForm({
                                 {saving ? "Salvando…" : "Continuar"}
                             </Button>
                         ) : (
-                            /* A etapa 6 era um beco sem saída: desenhava as teses
-                               e não tinha botão nenhum. É aqui que a peça acaba —
-                               e o rótulo diz as duas coisas que vão acontecer. */
+                            /* A última etapa é onde a peça acaba, e o rótulo
+                               diz as duas coisas que vão acontecer. As teses
+                               que ele grava são as da etapa 6, que seguem em
+                               estado local até aqui — ver `finalise`. */
                             <Button
                                 type="button"
                                 disabled={!complete || review.processing}

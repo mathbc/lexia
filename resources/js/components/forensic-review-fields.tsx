@@ -96,8 +96,10 @@ interface Props {
  * teses.
  *
  * O que ainda vive em estado local é só a **decisão** — o `keep` de cada tese —,
- * que vira gravação no "Concluir e gerar minuta" da etapa. Desmarcar e sair sem
- * concluir não desmarca nada no banco.
+ * que vira gravação no "Concluir e gerar minuta" — hoje na etapa 7, logo
+ * adiante. Desmarcar e sair sem concluir não desmarca nada no banco, e o
+ * "Continuar" daqui atravessa a decisão intacta porque a visita preserva o
+ * estado da página; ver `submit()` em `pages/legal-cases/form`.
  */
 export function ForensicReviewFields({
     research,

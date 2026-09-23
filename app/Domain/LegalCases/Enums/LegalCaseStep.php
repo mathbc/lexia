@@ -10,9 +10,9 @@ use App\Domain\Shared\Contracts\HasLabel;
 /**
  * Where the drafting of a pleading stands.
  *
- * The six steps of the assembly form, in the order they are filled: who the
+ * The seven steps of the assembly form, in the order they are filled: who the
  * pleading is for, who it is against, what happened, what is asked, what
- * instructs it, and the final read-through.
+ * instructs it, the read-through, and the case law the argument leans on.
  *
  * Stored on `legal_cases.current_step` as a high-water mark — the furthest step
  * reached, never the last one edited. That is what lets the listing say where a
@@ -33,6 +33,7 @@ enum LegalCaseStep: string implements HasLabel
     case Requirements = 'requirements';
     case Documents = 'documents';
     case Review = 'review';
+    case CourtDecisions = 'court-decisions';
 
     public function label(): string
     {
@@ -43,6 +44,7 @@ enum LegalCaseStep: string implements HasLabel
             self::Requirements => 'Pedidos e requerimentos',
             self::Documents => 'Documentos',
             self::Review => 'Revisão forense',
+            self::CourtDecisions => 'Análise de Jurisprudência',
         };
     }
 

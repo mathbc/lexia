@@ -222,7 +222,13 @@ export interface ProceduralClassOption {
 
 /** Espelha App\Domain\LegalCases\Enums\LegalCaseStep. */
 export type LegalCaseStepValue =
-    "basics" | "defendant" | "facts" | "requirements" | "documents" | "review";
+    | "basics"
+    | "defendant"
+    | "facts"
+    | "requirements"
+    | "documents"
+    | "review"
+    | "court-decisions";
 
 /** A pleading as LegalCaseIndexQuery projects it for a card. */
 export interface LegalCaseCard {

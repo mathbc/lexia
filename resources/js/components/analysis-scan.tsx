@@ -6,10 +6,10 @@ import { usePrefersReducedMotion } from '@/hooks/use-prefers-reduced-motion'
  * Dois anéis de pontos varridos por um feixe — o desenho de uma leitura em
  * curso.
  *
- * É o vocabulário do anel da home (`DottedRing`) usado para outra coisa. Lá os
- * pontos respondem ao cursor, porque o que a marca quer dizer é que há matéria
- * ali; aqui não há ninguém para responder — a espera é justamente o momento em
- * que o usuário não pode fazer nada —, então o que move os pontos é o tempo.
+ * É o vocabulário de pontos do fundo da home usado para outra coisa. Lá os
+ * pontos orbitam por conta própria, decorando uma tela onde não se espera por
+ * nada; aqui a espera é justamente o momento em que o usuário não pode fazer
+ * nada, e o que move os pontos precisa dizer que algo corre enquanto isso.
  *
  * Um giro sozinho seria um carrossel: diz "aguarde" e nada mais. O que diz
  * *análise* é o feixe. Ele dá voltas mais rápido do que os anéis, acende o

@@ -47,7 +47,14 @@ final class LegalCaseStepTest extends TestCase
     {
         // Satura em vez de transbordar, que é o que dispensa `furthest()` de
         // guardar o fim da lista.
-        $this->assertSame(LegalCaseStep::Review, LegalCaseStep::Review->next());
+        $this->assertSame(
+            LegalCaseStep::CourtDecisions,
+            LegalCaseStep::CourtDecisions->next(),
+        );
+
+        // E a revisão forense deixou de ser o fim: é ela que abre a análise de
+        // jurisprudência.
+        $this->assertSame(LegalCaseStep::CourtDecisions, LegalCaseStep::Review->next());
     }
 
     #[Test]
