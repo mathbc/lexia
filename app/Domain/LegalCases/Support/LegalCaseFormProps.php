@@ -8,6 +8,10 @@ use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\CourtDecisions\Models\CourtDecision;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalPrecedents\Models\LegalPrecedent;
+use App\Domain\LegalThemes\Enums\LegalThemeType;
+use App\Domain\LegalThemes\Models\GeneralRepercussion;
+use App\Domain\LegalThemes\Models\LegalCaseTheme;
+use App\Domain\LegalThemes\Models\LegalTheme;
 use App\Domain\LegalTheses\Models\LegalThesis;
 use App\Domain\Requirements\Models\Requirement;
 
@@ -47,6 +51,8 @@ final class LegalCaseFormProps
             'theses' => self::theses($legalCase),
             'precedents' => self::precedents($legalCase),
             'research' => self::research($legalCase),
+            'themes' => self::themes($legalCase),
+            'theme_research' => self::findings($legalCase->theme_findings),
             'court_decisions' => self::courtDecisions($legalCase),
             'court_decision_research' => self::findings($legalCase->court_decision_findings),
         ];
@@ -94,6 +100,74 @@ final class LegalCaseFormProps
     private static function findings(?array $findings): ?array
     {
         return is_array($findings) && $findings !== [] ? $findings : null;
+    }
+
+    /**
+     * The STJ themes the pleading leans on — the sixth step's second tab.
+     *
+     * Read-only catalogue beside the one claim that is ours, the pivot's
+     * `reason`. That is why the labels go out already in Portuguese, from the
+     * enums, rather than as values beside an options prop the way the theses'
+     * types do: nothing on the screen edits a theme's type, and the tab only
+     * draws it.
+     *
+     * The `id` is the theme's, not the link's: it is what the "Concluir" posts
+     * back as `legal_theme_id`, and what `sync()` keys the links by. The vector
+     * is never selected — 768 floats per row for a screen that reads text.
+     *
+     * Ordered by kind in the enum's order — the binding Temas Repetitivos first
+     * — and then by number, which is how a lawyer reads a list of precedents.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function themes(LegalCase $legalCase): array
+    {
+        $kinds = array_flip(array_column(LegalThemeType::cases(), 'value'));
+
+        return $legalCase->themes()
+            ->select([
+                'legal_themes.id',
+                'legal_themes.type',
+                'legal_themes.number',
+                'legal_themes.status',
+                'legal_themes.judging_body',
+                'legal_themes.question',
+                'legal_themes.settled_thesis',
+                'legal_themes.judgment_scope',
+            ])
+            ->with('generalRepercussions')
+            ->get()
+            ->sortBy(static fn (LegalTheme $theme): string => sprintf('%d-%06d', $kinds[$theme->type->value], $theme->number))
+            ->map(static fn (LegalTheme $theme): array => [
+                'id' => $theme->id,
+                'heading' => $theme->heading(),
+                'status' => $theme->status,
+                'judging_body' => $theme->judging_body?->label(),
+                'question' => $theme->question,
+                'settled_thesis' => $theme->settled_thesis,
+                'judgment_scope' => $theme->judgment_scope,
+                'reason' => self::reasonOf($theme),
+                'general_repercussions' => $theme->generalRepercussions
+                    ->map(static fn (GeneralRepercussion $repercussion): array => [
+                        'number' => $repercussion->number,
+                        'description' => $repercussion->description,
+                    ])
+                    ->values()
+                    ->all(),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * The link's claim about the theme, read off the pivot.
+     */
+    private static function reasonOf(LegalTheme $theme): ?string
+    {
+        $pivot = $theme->getRelationValue('pivot');
+        $reason = $pivot instanceof LegalCaseTheme ? $pivot->reason : null;
+
+        return is_string($reason) && $reason !== '' ? $reason : null;
     }
 
     /**

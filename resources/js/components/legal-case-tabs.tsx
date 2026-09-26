@@ -1,4 +1,4 @@
-import { Tabs } from '@/components/ui/tabs'
+import { LinkTabs } from '@/components/ui/link-tabs'
 
 /**
  * As duas faces de uma peça: o assistente que a monta e o documento que ela é.
@@ -27,7 +27,7 @@ export function LegalCaseTabs({
     }
 
     return (
-        <Tabs
+        <LinkTabs
             items={[
                 {
                     label: 'Assistente',

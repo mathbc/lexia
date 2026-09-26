@@ -290,6 +290,22 @@ export interface LegalCaseDraft {
      */
     research: LegalResearchFindings | null;
     /**
+     * Os temas do STJ vinculados à peça — a segunda aba da etapa 6.
+     *
+     * Vazia numa peça cuja seleção nunca rodou e vazia também numa em que ela
+     * rodou e nenhum tema se aplicava: quem distingue as duas é o campo abaixo.
+     */
+    themes: ResearchedLegalTheme[];
+    /**
+     * O relato da seleção de temas, ou nulo se ela nunca rodou nesta peça.
+     *
+     * Um marcador **separado** do de `research`, e é isso que deixa as duas
+     * abas serem pesquisadas, repetidas e falharem cada uma por si: uma peça
+     * pesquisada antes de a aba de temas existir tem `research` e não tem
+     * este, e a etapa pede só os temas.
+     */
+    theme_research: LegalThemeFindings | null;
+    /**
      * A jurisprudência já gravada — a sétima etapa, com os ids reais.
      *
      * Vazia numa peça que ainda não chegou à etapa 7, e vazia também numa em
@@ -536,6 +552,59 @@ export interface CourtDecisionFindings {
     unverified_citations: string[];
     researched_at: string;
 }
+
+/**
+ * Um tema do STJ vinculado à peça — espelha `LegalCaseFormProps::themes()`.
+ *
+ * É catálogo, só leitura, com uma afirmação nossa ao lado: `reason`, o porquê
+ * de o tema se aplicar a estes fatos, escrito pelo agente de seleção. Os
+ * rótulos já chegam em português (`heading`, `judging_body`), porque nada na
+ * tela edita a espécie de um tema.
+ *
+ * `id` é o do **tema**, e não o do vínculo: é o que o "Concluir" posta de volta
+ * como `legal_theme_id`. `settled_thesis` nulo é tema afetado, ainda sem tese —
+ * que importa mesmo assim, porque pode suspender o processo.
+ */
+export interface ResearchedLegalTheme {
+    id: string;
+    heading: string;
+    status: string;
+    judging_body: string | null;
+    question: string;
+    settled_thesis: string | null;
+    judgment_scope: string | null;
+    reason: string | null;
+    general_repercussions: GeneralRepercussion[];
+}
+
+/** Uma repercussão geral do STF que o STJ lista ao lado de um tema. */
+export interface GeneralRepercussion {
+    number: number;
+    description: string;
+}
+
+/**
+ * O relato de uma seleção de temas — espelha
+ * `LegalThemeResearchData::findings()`, o que `legal_cases.theme_findings`
+ * guarda.
+ *
+ * Bem menor do que o das teses, porque a rodada é: nenhum portal é aberto e
+ * nenhuma citação passa por guarda. `considered` é quantos temas a busca
+ * vetorial entregou ao agente — é o que deixa a aba dizer "12 temas
+ * consultados" ao lado de uma lista vazia.
+ */
+export interface LegalThemeFindings {
+    considered: number;
+    researched_at: string;
+}
+
+/**
+ * As duas metades da revisão forense — espelha o enum `ForensicReviewTab`.
+ *
+ * É o valor que viaja em `tabs[]` ao pedir a pesquisa e a chave do erro que
+ * volta quando uma metade falha.
+ */
+export type ForensicReviewTab = 'theses' | 'themes';
 
 /**
  * O relato mais as duas listas, que é a forma que a pesquisa publica antes de

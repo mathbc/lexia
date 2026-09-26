@@ -14,6 +14,8 @@ use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Policies\LegalCasePolicy;
 use App\Domain\LegalPleadings\Models\LegalPleading;
 use App\Domain\LegalPrecedents\Models\LegalPrecedent;
+use App\Domain\LegalThemes\Models\LegalCaseTheme;
+use App\Domain\LegalThemes\Models\LegalTheme;
 use App\Domain\LegalTheses\Models\LegalThesis;
 use App\Domain\PracticeAreas\Models\PracticeArea;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
@@ -28,6 +30,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -98,6 +101,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property bool $is_draft
  * @property array<string, mixed>|null $research_findings
  * @property array<string, mixed>|null $court_decision_findings
+ * @property array<string, mixed>|null $theme_findings
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property CarbonImmutable|null $deleted_at
@@ -110,6 +114,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property-read Collection<int, LegalThesis> $theses
  * @property-read Collection<int, LegalPrecedent> $precedents
  * @property-read Collection<int, CourtDecision> $courtDecisions
+ * @property-read Collection<int, LegalTheme> $themes
  * @property-read Collection<int, LegalPleading> $pleadings
  */
 #[UsePolicy(LegalCasePolicy::class)]
@@ -138,6 +143,7 @@ class LegalCase extends Model
             'is_draft' => 'boolean',
             'research_findings' => 'array',
             'court_decision_findings' => 'array',
+            'theme_findings' => 'array',
         ];
     }
 
@@ -237,6 +243,30 @@ class LegalCase extends Model
     public function courtDecisions(): HasMany
     {
         return $this->hasMany(CourtDecision::class)->oldest();
+    }
+
+    /**
+     * The STJ themes the pleading leans on — the sixth step's second tab.
+     *
+     * The one relation here that crosses into the catalogue, which is why it is
+     * a `BelongsToMany` and not a `HasMany`: the theme is reference data shared
+     * by every account, and what belongs to this pleading is only the link and
+     * the reason it was made. The link is a model of its own, `LegalCaseTheme`,
+     * so that it mints its uuid on `sync()` like every other row.
+     *
+     * No order here, unlike the lists above. The agent ranks what it returns,
+     * but the ranking only decides which themes survive its ceiling; once
+     * linked they are a set, and the screen orders them the way a lawyer reads
+     * precedents, by kind and number (LegalCaseFormProps::themes()).
+     *
+     * @return BelongsToMany<LegalTheme, $this, LegalCaseTheme, 'pivot'>
+     */
+    public function themes(): BelongsToMany
+    {
+        return $this->belongsToMany(LegalTheme::class, 'legal_case_themes')
+            ->using(LegalCaseTheme::class)
+            ->withPivot(['id', 'account_id', 'reason'])
+            ->withTimestamps();
     }
 
     /**

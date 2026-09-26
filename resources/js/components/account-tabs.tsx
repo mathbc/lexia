@@ -1,4 +1,4 @@
-import { Tabs } from '@/components/ui/tabs'
+import { LinkTabs } from '@/components/ui/link-tabs'
 import type { AccountAbilities } from '@/types'
 
 /**
@@ -17,7 +17,7 @@ export function AccountTabs({
     current: 'general' | 'users'
 }) {
     return (
-        <Tabs
+        <LinkTabs
             items={[
                 { label: 'Dados gerais', href: `/contas/${accountId}`, active: current === 'general' },
                 ...(can.manage_users

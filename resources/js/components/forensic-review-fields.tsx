@@ -1,5 +1,12 @@
-import { ExternalLink, RefreshCw, Scale, ShieldAlert } from "lucide-react";
+import {
+    ExternalLink,
+    LoaderCircle,
+    RefreshCw,
+    Scale,
+    ShieldAlert,
+} from "lucide-react";
 import { useId } from "react";
+import { LegalThemesPanel } from "@/components/legal-theme-fields";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,37 +20,47 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     adherenceLabel,
     keptTheses,
     sourceLabel,
     type ThesisDraft,
 } from "@/lib/forensic-review";
+import { keptLegalThemes, type LegalThemeDraft } from "@/lib/legal-themes";
 import { cn } from "@/lib/utils";
 import type {
+    ForensicReviewTab,
     LegalResearchFindings,
+    LegalThemeFindings,
     Option,
     ResearchedPrecedent,
 } from "@/types";
 
 interface Props {
     /**
-     * O relato da pesquisa já gravada, ou nulo quando nunca se pesquisou.
+     * O relato da pesquisa de teses já gravada, ou nulo quando nunca se
+     * pesquisou.
      *
      * O nulo é o estado transitório: a etapa dispara a pesquisa ao abrir, então
      * ele dura o tempo do diálogo. Presente com tudo vazio é o outro caso — uma
      * rodada que abriu os portais e nada confirmou —, e essa não se repete.
      */
     research: LegalResearchFindings | null;
-    /** O agente está respondendo agora: a etapa mostra o esqueleto. */
-    researching: boolean;
-    /** A rodada falhou — portal fora do ar, cota esgotada — e nada foi gravado. */
-    failed: boolean;
-    /** Refaz a pesquisa, descartando a anterior. Um gesto do advogado, nunca automático. */
-    onResearch: () => void;
+    /** O mesmo para a aba de temas, com marcador próprio. */
+    themeResearch: LegalThemeFindings | null;
+    /** As abas cuja pesquisa está em voo agora. */
+    researching: ForensicReviewTab[];
+    /** As abas cuja última rodada falhou sem gravar nada. */
+    failed: ForensicReviewTab[];
+    /** Refaz a pesquisa de uma aba, descartando a anterior dela e só dela. */
+    onResearch: (tab: ForensicReviewTab) => void;
     /** As teses com a decisão do advogado ao lado — ver `@/lib/forensic-review`. */
     theses: ThesisDraft[];
     onToggle: (id: string, keep: boolean) => void;
+    /** Os temas com a decisão do advogado ao lado — ver `@/lib/legal-themes`. */
+    themes: LegalThemeDraft[];
+    onToggleTheme: (id: string, keep: boolean) => void;
     /** `LegalThesisType::options()`: o português dos rótulos vem do enum. */
     thesisTypes: Option[];
     /** `LegalPrecedentType::options()`, pelo mesmo motivo. */
@@ -51,21 +68,153 @@ interface Props {
 }
 
 /**
- * A sexta etapa: as teses que a peça vai sustentar e os julgados que as
+ * A sexta etapa, em duas abas: **Teses** — o que a peça argumenta e os julgados
+ * que o sustentam — e **Temas** — os precedentes qualificados do STJ em que ela
+ * se apoia.
+ *
+ * As duas abas abrem **preenchidas por uma pesquisa**, e as duas pesquisas
+ * correm juntas: abrir a etapa dispara `ResearchLegalCaseForensicReview`, que
+ * roda a pesquisa de teses nos portais e a seleção de temas no catálogo como
+ * duas tasks do mesmo `Concurrency::run`. Cada aba tem marcador próprio, então
+ * elas também falham e se repetem cada uma por si — a aba que falhou mostra o
+ * alerta e um ícone no gatilho, e o "Pesquisar novamente" de uma não toca a
+ * outra.
+ *
+ * As abas são o primitivo do Radix, e não links: o que a etapa decide (o `keep`
+ * de cada linha) já vive em estado local até o "Concluir", e trocar de aba não
+ * tem nada a pedir ao servidor. Recarregar volta para Teses.
+ */
+export function ForensicReviewFields({
+    research,
+    themeResearch,
+    researching,
+    failed,
+    onResearch,
+    theses,
+    onToggle,
+    themes,
+    onToggleTheme,
+    thesisTypes,
+    precedentTypes,
+}: Props) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Revisão forense</CardTitle>
+                <CardDescription>
+                    As teses que a peça sustenta e os temas do STJ em que ela se
+                    apoia. Tudo chega marcado: desmarque o que não serve.
+                </CardDescription>
+            </CardHeader>
+
+            <CardContent>
+                <Tabs defaultValue="theses" className="gap-6">
+                    <TabsList>
+                        <TabsTrigger value="theses">
+                            <TabState
+                                researching={researching.includes("theses")}
+                                failed={failed.includes("theses")}
+                            />
+                            Teses
+                            <Count
+                                value={keptTheses(theses).length}
+                                total={theses.length}
+                            />
+                        </TabsTrigger>
+                        <TabsTrigger value="themes">
+                            <TabState
+                                researching={researching.includes("themes")}
+                                failed={failed.includes("themes")}
+                            />
+                            Temas
+                            <Count
+                                value={keptLegalThemes(themes).length}
+                                total={themes.length}
+                            />
+                        </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="theses">
+                        <ThesesPanel
+                            research={research}
+                            researching={researching.includes("theses")}
+                            failed={failed.includes("theses")}
+                            onResearch={() => onResearch("theses")}
+                            theses={theses}
+                            onToggle={onToggle}
+                            thesisTypes={thesisTypes}
+                            precedentTypes={precedentTypes}
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="themes">
+                        <LegalThemesPanel
+                            research={themeResearch}
+                            researching={researching.includes("themes")}
+                            failed={failed.includes("themes")}
+                            onResearch={() => onResearch("themes")}
+                            themes={themes}
+                            onToggle={onToggleTheme}
+                        />
+                    </TabsContent>
+                </Tabs>
+            </CardContent>
+        </Card>
+    );
+}
+
+/**
+ * O estado de uma aba no gatilho dela, para que a aba que não está à vista
+ * ainda diga que está pesquisando ou que falhou — senão uma falha de temas,
+ * com as teses abertas, passaria despercebida.
+ */
+function TabState({
+    researching,
+    failed,
+}: {
+    researching: boolean;
+    failed: boolean;
+}) {
+    if (researching) {
+        return (
+            <LoaderCircle
+                className="animate-spin text-muted-foreground"
+                aria-label="Pesquisando"
+            />
+        );
+    }
+
+    return failed ? (
+        <ShieldAlert className="text-destructive" aria-label="Falhou" />
+    ) : null;
+}
+
+/** "2/3": quantas ficam de quantas vieram, e nada quando não veio nenhuma. */
+function Count({ value, total }: { value: number; total: number }) {
+    if (total === 0) {
+        return null;
+    }
+
+    return (
+        <span className="text-xs text-muted-foreground tabular-nums">
+            {value === total ? total : `${value}/${total}`}
+        </span>
+    );
+}
+
+/**
+ * A primeira aba: as teses que a peça vai sustentar e os julgados que as
  * sustentam.
  *
- * É a única etapa do assistente que abre **preenchida por uma pesquisa**, e não
- * por um relato — e a única cuja espera sai da máquina. Abrir a etapa dispara
- * `ResearchLegalCaseForensicReview`, que pesquisa nos portais oficiais e grava
- * o que confirma; o que chega aqui já passou pela guarda de
- * `LegalResearchData` — toda citação que sobrou foi lida num portal oficial, e
- * a que não foi está dita em separado, embaixo.
+ * Abre preenchida pela pesquisa nos portais oficiais; o que chega aqui já
+ * passou pela guarda de `LegalResearchData` — toda citação que sobrou foi lida
+ * num portal oficial, e a que não foi está dita em separado, embaixo.
  *
  * O disparo é **uma vez por peça**, e quem decide é `research` ser nulo, nunca
  * a lista de teses estar vazia: uma rodada que nada confirma é uma resposta
  * cara e legítima que grava zero teses, e repeti-la a cada visita gastaria cota
  * e apagaria o que o advogado já curou. Uma segunda rodada é o botão
- * "Pesquisar novamente", e ele avisa o que faz.
+ * "Pesquisar novamente", e ele pede só as teses.
  *
  * Por isso a decisão que a tela pede é **tirar**, não escolher. Toda tese chega
  * marcada; a caixa ao lado do título é o que a desvincula da peça. Uma tese
@@ -78,7 +227,7 @@ interface Props {
  * a gravação aceita, e ler uma tese sem os julgados dela embaixo não é ler
  * nada. Quem torna a aninhar é `@/lib/forensic-review`.
  *
- * Três blocos fecham a tela e nenhum deles é decoração. **As fontes** dizem
+ * Três blocos fecham a aba e nenhum deles é decoração. **As fontes** dizem
  * quais portais foram de fato abertos — é o que separa uma pesquisa de um
  * modelo recitando de memória. **O pendente** é o que ficou em aberto, e
  * costuma ser trabalho de verdade: um documento que falta, uma divergência que
@@ -87,21 +236,13 @@ interface Props {
  * — não se achou nada, ou se achou e não se confirmou — que produzem
  * exatamente a mesma lista vazia.
  *
- * **As teses são linhas no banco antes de esta tela desenhá-las.** Já não
- * foram: elas viajavam no `sessionStorage` e morriam com a aba, e a tela em
- * branco tinha de ser vaga porque não sabia distinguir a pesquisa que falhou
- * da aba que foi recarregada. Agora a gravação acontece junto com a pesquisa,
- * então recarregar mostra o que está no banco, e cada estado desta tela afirma
- * uma coisa só: pesquisando, falhou sem gravar nada, nada confirmado, ou as
- * teses.
- *
- * O que ainda vive em estado local é só a **decisão** — o `keep` de cada tese —,
- * que vira gravação no "Concluir e gerar minuta" — hoje na etapa 7, logo
- * adiante. Desmarcar e sair sem concluir não desmarca nada no banco, e o
- * "Continuar" daqui atravessa a decisão intacta porque a visita preserva o
- * estado da página; ver `submit()` em `pages/legal-cases/form`.
+ * O que vive em estado local é só a **decisão** — o `keep` de cada tese —, que
+ * vira gravação no "Concluir e gerar minuta", na etapa 7. Desmarcar e sair sem
+ * concluir não desmarca nada no banco, e o "Continuar" daqui atravessa a
+ * decisão intacta porque a visita preserva o estado da página; ver `submit()`
+ * em `pages/legal-cases/form`.
  */
-export function ForensicReviewFields({
+function ThesesPanel({
     research,
     researching,
     failed,
@@ -110,24 +251,30 @@ export function ForensicReviewFields({
     onToggle,
     thesisTypes,
     precedentTypes,
-}: Props) {
+}: {
+    research: LegalResearchFindings | null;
+    researching: boolean;
+    failed: boolean;
+    onResearch: () => void;
+    theses: ThesisDraft[];
+    onToggle: (id: string, keep: boolean) => void;
+    thesisTypes: Option[];
+    precedentTypes: Option[];
+}) {
     const kept = keptTheses(theses).length;
 
     return (
-        <Card>
-            <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
-                <div className="space-y-1.5">
-                    <CardTitle>Revisão forense</CardTitle>
-                    <CardDescription>
-                        {theses.length === 0
-                            ? "As teses que a peça sustenta e os julgados que as fundamentam."
-                            : `${theses.length} ${theses.length === 1 ? "tese encontrada" : "teses encontradas"} · ${kept} ${
-                                  kept === 1
-                                      ? "mantida na peça"
-                                      : "mantidas na peça"
-                              }`}
-                    </CardDescription>
-                </div>
+        <div className="space-y-6">
+            <div className="flex items-start justify-between gap-4">
+                <p className="text-sm text-muted-foreground">
+                    {theses.length === 0
+                        ? "As teses que a peça sustenta e os julgados que as fundamentam."
+                        : `${theses.length} ${theses.length === 1 ? "tese encontrada" : "teses encontradas"} · ${kept} ${
+                              kept === 1
+                                  ? "mantida na peça"
+                                  : "mantidas na peça"
+                          }`}
+                </p>
 
                 {/* Depois de uma rodada ter acontecido, ou de uma ter falhado:
                     a primeira falha deixa `research` nulo, e o alerta abaixo
@@ -146,79 +293,75 @@ export function ForensicReviewFields({
                         Pesquisar novamente
                     </Button>
                 )}
-            </CardHeader>
+            </div>
 
-            <CardContent className="space-y-6">
-                {researching ? (
-                    // O diálogo modal de `form.tsx` é quem conta o que está
-                    // acontecendo; aqui basta não afirmar que não há nada — e
-                    // repetir a demora, porque é o que esta caixa mostra se o
-                    // diálogo já tiver se fechado e a rodada for a do botão.
-                    <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-balance text-muted-foreground">
-                        Pesquisando as teses nos portais oficiais… Leva alguns
-                        minutos: o agente lê cada página antes de responder.
-                    </p>
-                ) : failed ? (
-                    // A falha não gravou marcador nenhum, então a etapa não
-                    // tenta de novo sozinha — e é preciso dizer isso, senão a
-                    // tela parece uma pesquisa que não achou nada.
-                    <Alert variant="destructive">
-                        <ShieldAlert />
-                        <AlertTitle>
-                            A pesquisa não pôde ser concluída
-                        </AlertTitle>
-                        <AlertDescription>
-                            Nada foi gravado. A pesquisa depende dos portais
-                            oficiais — um deles fora do ar basta para
-                            derrubá-la. Use "Pesquisar novamente" para tentar
-                            outra vez, ou siga sem teses: a peça pode ser
-                            concluída assim.
-                        </AlertDescription>
-                    </Alert>
-                ) : research === null ? (
-                    // Estado de partida numa peça que nunca pesquisou e cuja
-                    // etapa ainda não disparou — um piscar, na prática.
-                    <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-                        Ainda não há pesquisa de teses nesta peça.
-                    </p>
-                ) : (
-                    <>
-                        {research.legal_question && (
-                            <div className="rounded-lg bg-muted/50 p-4">
-                                <p className="text-xs font-medium">
-                                    Questão pesquisada
-                                </p>
-                                <p className="mt-1 text-sm text-muted-foreground">
-                                    {research.legal_question}
-                                </p>
-                            </div>
-                        )}
-
-                        {theses.length === 0 ? (
-                            <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-                                A pesquisa não confirmou nenhuma tese em fonte
-                                oficial. O que ficou em aberto está abaixo.
+            {researching ? (
+                // O diálogo modal de `form.tsx` é quem conta o que está
+                // acontecendo; aqui basta não afirmar que não há nada — e
+                // repetir a demora, porque é o que esta caixa mostra se o
+                // diálogo já tiver se fechado e a rodada for a do botão.
+                <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-balance text-muted-foreground">
+                    Pesquisando as teses nos portais oficiais… Leva alguns
+                    minutos: o agente lê cada página antes de responder.
+                </p>
+            ) : failed ? (
+                // A falha não gravou marcador nenhum, então a etapa não
+                // tenta de novo sozinha — e é preciso dizer isso, senão a
+                // tela parece uma pesquisa que não achou nada.
+                <Alert variant="destructive">
+                    <ShieldAlert />
+                    <AlertTitle>A pesquisa não pôde ser concluída</AlertTitle>
+                    <AlertDescription>
+                        Nada foi gravado nesta aba, e os temas não foram
+                        tocados. A pesquisa depende dos portais oficiais — um
+                        deles fora do ar basta para derrubá-la. Use "Pesquisar
+                        novamente" para tentar outra vez, ou siga sem teses: a
+                        peça pode ser concluída assim.
+                    </AlertDescription>
+                </Alert>
+            ) : research === null ? (
+                // Estado de partida numa peça que nunca pesquisou e cuja
+                // etapa ainda não disparou — um piscar, na prática.
+                <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+                    Ainda não há pesquisa de teses nesta peça.
+                </p>
+            ) : (
+                <>
+                    {research.legal_question && (
+                        <div className="rounded-lg bg-muted/50 p-4">
+                            <p className="text-xs font-medium">
+                                Questão pesquisada
                             </p>
-                        ) : (
-                            <ol className="space-y-4">
-                                {theses.map((draft, index) => (
-                                    <ThesisItem
-                                        key={draft.id}
-                                        draft={draft}
-                                        position={index + 1}
-                                        onToggle={onToggle}
-                                        thesisTypes={thesisTypes}
-                                        precedentTypes={precedentTypes}
-                                    />
-                                ))}
-                            </ol>
-                        )}
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                {research.legal_question}
+                            </p>
+                        </div>
+                    )}
 
-                        <Findings research={research} />
-                    </>
-                )}
-            </CardContent>
-        </Card>
+                    {theses.length === 0 ? (
+                        <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+                            A pesquisa não confirmou nenhuma tese em fonte
+                            oficial. O que ficou em aberto está abaixo.
+                        </p>
+                    ) : (
+                        <ol className="space-y-4">
+                            {theses.map((draft, index) => (
+                                <ThesisItem
+                                    key={draft.id}
+                                    draft={draft}
+                                    position={index + 1}
+                                    onToggle={onToggle}
+                                    thesisTypes={thesisTypes}
+                                    precedentTypes={precedentTypes}
+                                />
+                            ))}
+                        </ol>
+                    )}
+
+                    <Findings research={research} />
+                </>
+            )}
+        </div>
     );
 }
 

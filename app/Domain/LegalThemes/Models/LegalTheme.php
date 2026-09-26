@@ -8,8 +8,11 @@ use App\Domain\LegalThemes\Enums\JudgingBody;
 use App\Domain\LegalThemes\Enums\LegalThemeType;
 use App\Domain\Shared\Casts\AsVector;
 use Carbon\CarbonImmutable;
+use Database\Factories\LegalThemeFactory;
+use Illuminate\Database\Eloquent\Attributes\UseFactory;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -50,8 +53,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable|null $updated_at
  * @property-read Collection<int, GeneralRepercussion> $generalRepercussions
  */
+#[UseFactory(LegalThemeFactory::class)]
 class LegalTheme extends Model
 {
+    /** @use HasFactory<LegalThemeFactory> */
+    use HasFactory;
+
     use HasUuids;
 
     protected $guarded = ['id'];
@@ -77,6 +84,29 @@ class LegalTheme extends Model
             'embedding' => AsVector::class,
             'embedded_at' => 'immutable_datetime',
         ];
+    }
+
+    /**
+     * The key a prompt names this precedent by: `theme-1016`, `puil-5`.
+     *
+     * Never the uuid, for the reason the procedural classes go by their CNJ
+     * code: the uuid is ours, differs between databases and means nothing to a
+     * model. Nor the bare number, which is not unique — Tema 5 and PUIL 5 are
+     * different precedents. Type and number are, by the unique index, and they
+     * are how the heading beside the key reads, so the model has nothing to
+     * translate.
+     */
+    public function reference(): string
+    {
+        return "{$this->type->value}-{$this->number}";
+    }
+
+    /**
+     * How a lawyer names it: "Tema Repetitivo 1016".
+     */
+    public function heading(): string
+    {
+        return "{$this->type->label()} {$this->number}";
     }
 
     /**

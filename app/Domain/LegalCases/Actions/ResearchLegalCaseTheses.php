@@ -64,22 +64,21 @@ use RuntimeException;
  * ## Who calls it, and what that costs
  *
  * No `asController()` of its own, and there will not be one: nothing routes
- * *here*. What reaches it is `ClassifyLegalCase`, as the last of its five
- * steps, so this pair now runs inside `POST /pecas/classificar` with a browser
- * waiting on it.
- *
- * That is exactly the request this docblock used to say should be a queue, and
- * saying so was right — what changed is only where the debt is recorded. It
- * belongs to `ClassifyLegalCase` now, which already owed four serial
- * `Timeout(360)` and owes six with these two; the first of the two is the
- * slowest inference in the project, because the provider runs the searches
- * before it answers. When that Action returns an identifier instead of a
- * result, this Action does not change a line.
+ * *here*. What reaches it is ResearchLegalCaseForensicReview, when step 6
+ * opens, as one of two tasks of a `Concurrency::run` — the other is the STJ
+ * theme selection, ResearchLegalCaseThemes, which reads the same pleading and
+ * answers a different question. The browser waits on the longer of the two,
+ * which is this one: the first of its two serial `Timeout(360)` is the slowest
+ * inference in the project, because the provider runs the searches before it
+ * answers. That is the request that should be a queue, and when the step's
+ * Action returns an identifier instead of a result, this one does not change a
+ * line.
  *
  * The pleading it receives need not be saved. `LegalCaseDossier::forResearch()`
  * only ever touches the model it is handed, so the three relations set by hand
- * are the whole of the contract — `ClassifyLegalCase::pleading()` builds one
- * that way, and so does `tests/Agents/LegalThesisResearchTest`.
+ * are the whole of the contract — `tests/Agents/LegalThesisResearchTest` builds
+ * one that way. Inside the parallel block it is the saved pleading, reloaded in
+ * the child process under its own tenant.
  */
 final class ResearchLegalCaseTheses
 {

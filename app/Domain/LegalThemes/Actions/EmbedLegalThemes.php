@@ -13,9 +13,8 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * Gera e grava o vetor de cada tema do STJ que ainda não o tem, ou cujo texto
  * mudou desde a última passada.
  *
- * É a base do RAG sobre os temas: a busca ainda não existe, e quando existir
- * vai comparar os fatos de uma peça com o texto abaixo, pelo
- * `DocumentEmbedder::query()` do outro lado do par.
+ * É a base do RAG sobre os temas: `LegalThemeCandidatesQuery` compara os
+ * fatos de uma peça com o texto abaixo, pelo `queryFor()` do outro lado do par.
  */
 final class EmbedLegalThemes
 {
@@ -60,5 +59,20 @@ final class EmbedLegalThemes
         }
 
         return DocumentEmbedder::document(implode("\n", $parts));
+    }
+
+    /**
+     * O outro lado do par: o relato de fatos, como consulta.
+     *
+     * A área vai na frente porque é o único pedaço do enquadramento que fala
+     * do assunto — "Direito do Consumidor" puxa para os temas do CDC. A classe
+     * fica de fora: "Procedimento Comum Cível" é igual para metade das peças e
+     * só diluiria o vetor.
+     */
+    public static function queryFor(string $facts, ?string $area = null): string
+    {
+        $text = trim($facts);
+
+        return DocumentEmbedder::query($area === null || $area === '' ? $text : "{$area}. {$text}");
     }
 }

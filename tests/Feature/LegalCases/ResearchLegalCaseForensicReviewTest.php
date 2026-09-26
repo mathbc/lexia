@@ -5,17 +5,24 @@ declare(strict_types=1);
 namespace Tests\Feature\LegalCases;
 
 use App\Domain\Accounts\Models\Account;
+use App\Domain\LegalCases\Actions\ResearchLegalCaseThemes;
 use App\Domain\LegalCases\Actions\ResearchLegalCaseTheses;
 use App\Domain\LegalCases\Data\ForensicReviewData;
 use App\Domain\LegalCases\Data\LegalResearchData;
+use App\Domain\LegalCases\Data\LegalThemeResearchData;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalPrecedents\Data\LegalPrecedentData;
 use App\Domain\LegalPrecedents\Enums\LegalPrecedentType;
+use App\Domain\LegalThemes\Data\LegalCaseThemeData;
+use App\Domain\LegalThemes\Data\LegalCaseThemeListData;
+use App\Domain\LegalThemes\Models\LegalCaseTheme;
+use App\Domain\LegalThemes\Models\LegalTheme;
 use App\Domain\LegalTheses\Data\LegalBasisData;
 use App\Domain\LegalTheses\Data\LegalThesisData;
 use App\Domain\LegalTheses\Enums\LegalBasisType;
 use App\Domain\LegalTheses\Enums\LegalThesisType;
+use App\Domain\LegalTheses\Models\LegalThesis;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Mockery\MockInterface;
@@ -28,12 +35,15 @@ use Tests\TestCase;
  *
  * This used to be the fifth step of `POST /pecas/classificar`, and what is
  * pinned here is the two things that move made possible: the result **is
- * persisted**, and it is asked for **once**.
+ * persisted**, and it is asked for **once**. Since the themes tab arrived there
+ * is a third: the two halves — theses and themes — run side by side and are
+ * **marked, retried and failed apart**.
  *
- * The agent is mocked throughout. It is exercised for real in
- * `tests/Agents/LegalThesisResearchTest`, which spends Gemini quota and opens
- * the STJ; what this file is about is the Action around it, and a test that
- * reached the network would be red on days a portal was.
+ * The inner Actions are mocked throughout. The agents are exercised for real in
+ * `tests/Agents/LegalThesisResearchTest` and `LegalThemeSelectionTest`; what
+ * this file is about is the Action around them, and a test that reached the
+ * network would be red on days a portal was. The suite runs the
+ * `Concurrency::run` in `sync`, which is what lets the mocks be seen at all.
  */
 final class ResearchLegalCaseForensicReviewTest extends TestCase
 {
@@ -45,10 +55,14 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
         [$account, $owner] = $this->accountWithOwner();
         $case = $this->pleading($account);
 
+        $theme = LegalTheme::factory()->create();
+
         $this->fakeResearch()->shouldReceive('handle')->once()->andReturn($this->found());
+        $this->fakeThemes()->shouldReceive('handle')->once()->andReturn($this->selected($theme));
 
         $this->actingAs($owner)
             ->post(route('legal-cases.forensic-review.research', $case))
+            ->assertSessionHasNoErrors()
             ->assertRedirect(route('legal-cases.edit', [
                 'legalCase' => $case,
                 'etapa' => LegalCaseStep::Review->value,
@@ -77,6 +91,16 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
         $this->assertSame(['Juntada da certidão de arquivamento.'], $findings['pending']);
         $this->assertNotEmpty($findings['researched_at']);
 
+        // A outra aba, na mesma rodada: o vínculo com o tema, a razão que o
+        // agente escreveu e o marcador que é só dela.
+        $link = LegalCaseTheme::query()->where('legal_case_id', $case->id)->sole();
+
+        $this->assertSame($theme->id, $link->legal_theme_id);
+        $this->assertSame('O relato discute o reajuste por faixa etária.', $link->reason);
+        $this->assertSame($account->id, $link->account_id);
+        $this->assertSame(12, $case->theme_findings['considered'] ?? null);
+        $this->assertNotEmpty($case->theme_findings['researched_at'] ?? null);
+
         // A gravação também marca a marca d'água, porque é a Action irmã que
         // grava — a mesma que o "Concluir" chama.
         $this->assertSame(LegalCaseStep::Review, $case->current_step);
@@ -100,6 +124,10 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
             review: new ForensicReviewData(theses: [], precedents: []),
             pending: ['Nada se confirmou em fonte oficial.'],
         ));
+        $this->fakeThemes()->shouldReceive('handle')->once()->andReturn(new LegalThemeResearchData(
+            themes: new LegalCaseThemeListData([]),
+            considered: 12,
+        ));
 
         $this->actingAs($owner)
             ->post(route('legal-cases.forensic-review.research', $case))
@@ -113,6 +141,10 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
             ['Nada se confirmou em fonte oficial.'],
             $case->research_findings['pending'],
         );
+
+        // O mesmo para os temas: nenhum se aplica é resposta, e fica marcada.
+        $this->assertCount(0, $case->themes);
+        $this->assertIsArray($case->theme_findings);
     }
 
     /**
@@ -133,10 +165,13 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
             ->twice()
             ->andReturn($this->found(), $this->found('Da Prescrição Intercorrente'));
 
-        $this->actingAs($owner)->post(route('legal-cases.forensic-review.research', $case));
+        // O botão da aba de teses pede só as teses.
+        $this->fakeThemes()->shouldNotReceive('handle');
+
+        $this->actingAs($owner)->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['theses']]);
         $first = $case->refresh()->theses[0]->id;
 
-        $this->actingAs($owner)->post(route('legal-cases.forensic-review.research', $case));
+        $this->actingAs($owner)->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['theses']]);
         $case->refresh();
 
         $this->assertCount(1, $case->theses);
@@ -145,29 +180,131 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
     }
 
     /**
-     * A inferência fica fora da transação, e a falha não deixa rastro.
+     * A inferência fica fora da transação, e a falha não deixa rastro — nesta
+     * metade, e só nela.
      *
      * Nada gravado significa `research_findings` nulo, e o nulo é o que faz a
      * tela oferecer o botão em vez de mostrar uma etapa que parece pesquisada.
+     * Os temas, que voltaram, são gravados: descartá-los cobraria do advogado
+     * uma inferência que deu certo.
      */
     #[Test]
-    public function a_failed_run_writes_nothing_and_leaves_no_marker(): void
+    public function a_failed_half_writes_nothing_and_leaves_the_other_half_standing(): void
     {
         [$account, $owner] = $this->accountWithOwner();
         $case = $this->pleading($account);
+        $theme = LegalTheme::factory()->create();
 
         $this->fakeResearch()
             ->shouldReceive('handle')
             ->andThrow(new RuntimeException('504 Gateway Timeout'));
+        $this->fakeThemes()->shouldReceive('handle')->once()->andReturn($this->selected($theme));
 
+        // Um erro de validação por aba, e não um 500: é o que chega ao
+        // `onError` da tela e a impede de pesquisar de novo sozinha.
         $this->actingAs($owner)
             ->post(route('legal-cases.forensic-review.research', $case))
-            ->assertStatus(500);
+            ->assertRedirect()
+            ->assertSessionHasErrors('theses')
+            ->assertSessionDoesntHaveErrors('themes');
 
         $case->refresh();
 
         $this->assertCount(0, $case->theses);
         $this->assertNull($case->research_findings);
+
+        $this->assertSame([$theme->id], $case->themes->pluck('id')->all());
+        $this->assertIsArray($case->theme_findings);
+    }
+
+    #[Test]
+    public function when_both_halves_fail_nothing_is_written_and_both_tabs_are_told(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $case = $this->pleading($account);
+
+        $this->fakeResearch()->shouldReceive('handle')->andThrow(new RuntimeException('504 Gateway Timeout'));
+        $this->fakeThemes()->shouldReceive('handle')->andThrow(new RuntimeException('Ollama fora do ar'));
+
+        $this->actingAs($owner)
+            ->post(route('legal-cases.forensic-review.research', $case))
+            ->assertRedirect()
+            ->assertSessionHasErrors(['theses', 'themes']);
+
+        $case->refresh();
+
+        $this->assertCount(0, $case->theses);
+        $this->assertCount(0, $case->themes);
+        $this->assertNull($case->research_findings);
+        $this->assertNull($case->theme_findings);
+    }
+
+    /**
+     * O caso que motivou o marcador por metade.
+     *
+     * Uma peça pesquisada antes de a aba de temas existir tem teses curadas e
+     * nenhum tema. Abrir a etapa pede só os temas — e, se a pesquisa de teses
+     * rodasse junto, o diff da gravação apagaria em silêncio o que o advogado
+     * já tinha decidido.
+     */
+    #[Test]
+    public function researching_only_the_themes_leaves_the_theses_and_their_marker_alone(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $case = $this->pleading($account);
+        $case->update(['research_findings' => ['legal_question' => 'Já pesquisada.', 'researched_at' => '2026-09-01T10:00:00-03:00']]);
+        $thesis = LegalThesis::factory()->forLegalCase($case)->create();
+        $theme = LegalTheme::factory()->create();
+
+        $this->fakeResearch()->shouldNotReceive('handle');
+        $this->fakeThemes()->shouldReceive('handle')->once()->andReturn($this->selected($theme));
+
+        $this->actingAs($owner)
+            ->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['themes']])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $case->refresh();
+
+        $this->assertSame([$thesis->id], $case->theses->pluck('id')->all());
+        $this->assertSame('Já pesquisada.', $case->research_findings['legal_question'] ?? null);
+        $this->assertSame([$theme->id], $case->themes->pluck('id')->all());
+    }
+
+    /**
+     * Repesquisar os temas substitui os vínculos: o `sync()` da gravação é o
+     * diff, e um tema que a segunda rodada não escolheu sai da peça.
+     */
+    #[Test]
+    public function selecting_the_themes_again_replaces_the_previous_links(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $case = $this->pleading($account);
+        [$first, $second] = LegalTheme::factory()->count(2)->create();
+
+        $this->fakeThemes()
+            ->shouldReceive('handle')
+            ->twice()
+            ->andReturn($this->selected($first), $this->selected($second));
+
+        $this->actingAs($owner)->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['themes']]);
+        $this->actingAs($owner)->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['themes']]);
+
+        $this->assertSame([$second->id], $case->refresh()->themes->pluck('id')->all());
+    }
+
+    #[Test]
+    public function an_unknown_tab_is_refused(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $case = $this->pleading($account);
+
+        $this->fakeResearch()->shouldNotReceive('handle');
+        $this->fakeThemes()->shouldNotReceive('handle');
+
+        $this->actingAs($owner)
+            ->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['precedents']])
+            ->assertSessionHasErrors('tabs.0');
     }
 
     /**
@@ -180,12 +317,14 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
         $case = $this->pleading($account, facts: null);
 
         $this->fakeResearch()->shouldNotReceive('handle');
+        $this->fakeThemes()->shouldNotReceive('handle');
 
         $this->actingAs($owner)
             ->post(route('legal-cases.forensic-review.research', $case))
             ->assertStatus(500);
 
         $this->assertNull($case->refresh()->research_findings);
+        $this->assertNull($case->theme_findings);
     }
 
     #[Test]
@@ -197,6 +336,7 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
         $case = LegalCase::factory()->forAccount($other)->create(['facts' => 'O vizinho derrubou o muro.']);
 
         $this->fakeResearch()->shouldNotReceive('handle');
+        $this->fakeThemes()->shouldNotReceive('handle');
 
         $this->actingAs($owner)
             ->post(route('legal-cases.forensic-review.research', $case))
@@ -231,6 +371,29 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
         app()->instance('LaravelActions:AsFake:'.ResearchLegalCaseTheses::class, $fake);
 
         return $fake;
+    }
+
+    private function fakeThemes(): MockInterface
+    {
+        $fake = Mockery::mock(app(ResearchLegalCaseThemes::class));
+
+        app()->instance('LaravelActions:AsFake:'.ResearchLegalCaseThemes::class, $fake);
+
+        return $fake;
+    }
+
+    /**
+     * Uma seleção com um tema, como `ResearchLegalCaseThemes` a devolve: o id
+     * já resolvido da referência do prompt, e a razão que o agente escreveu.
+     */
+    private function selected(LegalTheme $theme): LegalThemeResearchData
+    {
+        return new LegalThemeResearchData(
+            themes: new LegalCaseThemeListData([
+                new LegalCaseThemeData($theme->id, 'O relato discute o reajuste por faixa etária.'),
+            ]),
+            considered: 12,
+        );
     }
 
     /**

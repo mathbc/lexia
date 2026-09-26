@@ -116,8 +116,14 @@ em vez de alargar a tabela. Quem não pode executar não vê o item, e a lista j
 chega filtrada pelo `can` que a Action publicou — a Policy segue sendo a defesa
 de verdade.
 
-As abas continuam sendo links, não o primitivo do Radix: quem guarda o estado
-é a URL (ver abaixo).
+As abas de um **registro** continuam sendo links, não o primitivo do Radix:
+quem guarda o estado é a URL (ver abaixo) — `LinkTabs`, em
+`resources/js/components/ui/link-tabs.tsx`. A exceção são os **painéis dentro
+de uma tela**, e hoje há um: as abas Teses e Temas da etapa 6. Ali o estado é
+local de propósito, porque o que a etapa decide (o `keep` de cada linha) já vive
+em estado local até o "Concluir" e trocar de aba não tem o que pedir ao
+servidor. Esses usam o `Tabs` do Radix em `ui/tabs.tsx`, o nome que o
+`npx shadcn add tabs` espera.
 
 ## O painel
 
@@ -180,7 +186,10 @@ sessão. O `/register` do Fortify está desligado: o cadastro público é
 da internet? São **oito agentes**; sete rodam no Ollama com `gpt-oss:20b`, e o oitavo é
 `PleadingDraftingAgent`, que redige a minuta — ver "A minuta", abaixo. A minuta tem ainda
 um segundo agente, `PleadingGroundsReinforcementAgent`, que reforça o DO DIREITO e segue o
-provider do de redação. Os embeddings do catálogo nunca saíram da máquina:
+provider do de redação. A etapa 6 ganhou um terceiro fora da conta original,
+`LegalThemeSelectionAgent`, que escolhe os temas do STJ que se aplicam ao caso — ver "Os
+temas do STJ", abaixo; ele segue o `#[Provider('gemini')]` dos seletores, com a linha do
+Ollama comentada acima. Os embeddings do catálogo nunca saíram da máquina:
 `nomic-embed-text`, 768 dimensões.
 
 O **Gemini** responde por **um**: `LegalThesisResearchAgent`, que pesquisa nos portais
@@ -412,11 +421,26 @@ composer test:agents
 
 ## A revisão forense
 
-A sexta etapa da peça (`LegalCaseStep::Review`) tem duas entidades filhas de
+A sexta etapa da peça (`LegalCaseStep::Review`) tem **duas abas**, e cada uma é
+preenchida por uma pesquisa: **Teses**, o que a peça argumenta, e **Temas**, os
+precedentes qualificados do STJ em que ela se apoia. As abas são o `Tabs` do
+Radix, em estado local — ver "O design system".
+
+A aba de teses tem duas entidades filhas de
 `LegalCase`, ambas 1-N: `LegalThesis` é o que a peça argumenta — nome, tipo
 (`LegalThesisType`), descrição, impacto e a fundamentação em `legal_bases`, um
 jsonb de `{type, reference, source}` —, e `LegalPrecedent` é o julgado que
 sustenta a tese, com a ementa, a citação ABNT e a aderência ao caso.
+
+A aba de temas é um **N-N** com o catálogo: `legal_case_themes`, com o pivot
+`LegalCaseTheme` (uuid, `account_id`, `reason`). A linha não copia o tema, guarda
+o vínculo e o *porquê* — a razão que o agente escreveu ligando o tema a um fato
+do relato. **Não tem soft delete**, ao contrário das teses: é um vínculo com um
+catálogo que nunca some, e uma repesquisa re-vincula o mesmo tema, o que
+colidiria no `unique(legal_case_id, legal_theme_id)` com uma linha apagada só
+logicamente. Quem grava é `SaveLegalCaseThemes`, com um `sync()` que é o diff
+inteiro; o pivot é uma classe própria porque só uma classe de pivot passa por
+`save()` no `attach()`, que é onde o `HasUuids` cunha o id.
 
 O precedente aponta para a tese por **FK** (`legal_thesis_id`, nullable), e não
 por pivot, porque a linha não guarda a súmula e sim o *achado*: a Súmula 393
@@ -508,17 +532,36 @@ em duas listas e cunha o uuid em PHP é `ForensicReviewData::fromAgent()`, que �
 Não é mais o `ClassifyLegalCase`: é **abrir a etapa 6**, por
 `ResearchLegalCaseForensicReview` (`POST /pecas/{id}/revisao-forense/pesquisar`). A troca
 resolveu duas coisas de uma vez — a espera saiu do preenchimento inteligente, e o
-resultado passou a ter onde ser gravado, porque ali a peça já tem chave primária. A Action
-pesquisa, chama `SaveLegalCaseForensicReview` (o mapa de ids, o diff, o `advanceTo`) e
-grava o envelope. A inferência fica **fora** da transação: são minutos de rede, e
-segurar uma linha travada por eles seria um lock que ninguém quis.
+resultado passou a ter onde ser gravado, porque ali a peça já tem chave primária. A
+inferência fica **fora** da transação: são minutos de rede, e segurar uma linha travada
+por eles seria um lock que ninguém quis.
 
-**O gatilho é `legal_cases.research_findings` ser nulo, e nunca a lista de teses estar
-vazia.** É a distinção que sustenta o desenho: uma rodada que abriu os portais e nada
+A Action pesquisa as **duas abas em paralelo**: a pesquisa de teses
+(`ResearchLegalCaseTheses`) e a seleção de temas (`ResearchLegalCaseThemes`) são duas
+tasks do mesmo `Concurrency::run`, com as regras que o docblock de `ClassifyLegalCase`
+fixa — o `try/catch` dentro de cada task, closures `static` que capturam só strings (o id
+e a conta da peça) e retorno em DTO sem model. O processo filho não tem usuário, então
+recarrega a peça sob `TenantContext::actingAs()`. A espera é a mais longa das duas, que
+é a das teses. Depois, numa transação, cada metade que voltou é gravada —
+`SaveLegalCaseForensicReview` (o mapa de ids, o diff, o `advanceTo`) mais o envelope, e
+`SaveLegalCaseThemes` mais o seu.
+
+**O gatilho é o marcador de cada aba ser nulo, e nunca a lista estar vazia** —
+`legal_cases.research_findings` para as teses, `legal_cases.theme_findings` para os
+temas. É a distinção que sustenta o desenho: uma rodada que abriu os portais e nada
 confirmou é resposta legítima e cara que grava zero teses, então um gatilho pela lista
 dispararia de novo a cada visita à etapa, a cada troca de aba e a cada reload — gastando
 cota toda vez e, pior, substituindo em silêncio o que o advogado já curou, porque a
-gravação reconcilia por diff. Uma segunda rodada é o botão "Pesquisar novamente".
+gravação reconcilia por diff.
+
+Os marcadores são **dois** pelo mesmo motivo, um nível abaixo. A tela manda em `tabs[]`
+só as abas cujo marcador é nulo: uma peça pesquisada antes de a aba de temas existir pede
+só os temas, e as teses curadas não são tocadas. "Pesquisar novamente" é por aba e pede
+só a sua. Uma metade que falha não grava nada e não impede a outra de ser gravada; ela
+volta como **erro de validação sob a chave da aba** (`withErrors(['themes' => …])`), e
+não como 500 — é o que dispara o `onError` do Inertia, mostra o alerta naquela aba e
+impede o efeito de abertura de tentar de novo sozinho. A única recusa que continua 500 é
+a peça sem fatos, checada antes de gastar qualquer coisa.
 
 Essa coluna (jsonb) guarda o que não tem tabela: a questão pesquisada, os portais
 abertos, o pendente e as citações que a guarda recusou — mais o `researched_at`, que não
@@ -532,8 +575,9 @@ outras etapas numa peça nova; o que faltava era o `?etapa`, que abria a etapa 6
 peça parada na 2 — `ShowLegalCaseForm::initialStep()` agora limita pela marca d'água.
 
 A dívida da fila continua de pé aqui, e agora só aqui: são dois `Timeout(360)` em série, e
-o primeiro é a inferência mais lenta do projeto. A tela que consome isso é
-`ForensicReviewFields`, com o `AnalysisDialog` durante a espera.
+o primeiro é a inferência mais lenta do projeto — a seleção de temas corre ao lado e não
+soma. A tela que consome isso é `ForensicReviewFields`, com o `AnalysisDialog` durante a
+espera.
 
 E há um teto que não é do SDK: o **`max_execution_time` do PHP**. Um `php.ini` de fábrica
 traz 30, e a requisição morre em 32 s dentro do cURL do Guzzle —
@@ -593,14 +637,14 @@ razão pela qual uma ementa desta tabela pode ser conferida.
 ## A minuta
 
 A oitava etapa que não é etapa. Concluir a análise de jurisprudência é o **primeiro gesto
-do projeto que termina uma peça**: `FinalizeLegalCase` grava as teses e os julgados pelas
-duas Actions irmãs, vira `is_draft` para `false` — até aqui nada escrevia essa coluna, e a
-`LegalCasePolicy` documentava a ausência — e manda `PleadingDraftingAgent` redigir a
-petição inteira.
+do projeto que termina uma peça**: `FinalizeLegalCase` grava as teses, os temas do STJ e
+os julgados pelas três Actions irmãs, vira `is_draft` para `false` — até aqui nada escrevia
+essa coluna, e a `LegalCasePolicy` documentava a ausência — e manda `PleadingDraftingAgent`
+redigir a petição inteira.
 
-A fronteira entre esses efeitos é o desenho. As duas gravações e a bandeira são **uma
-transação**, porque são uma afirmação só sobre a peça: são estes os argumentos e estes os
-julgados, e ela está pronta. A redação fica **fora**, com `try/catch` e `report()` — é a
+A fronteira entre esses efeitos é o desenho. As três gravações e a bandeira são **uma
+transação**, porque são uma afirmação só sobre a peça: são estes os argumentos, estes os
+temas e estes os julgados, e ela está pronta. A redação fica **fora**, com `try/catch` e `report()` — é a
 única parte que sai da máquina e a única que uma cota esgotada pode levar embora.
 Falhando, a peça continua registrada e a aba Minuta abre vazia oferecendo o botão de
 gerar. Com uma versão na mão, o mesmo `GenerateLegalPleading` é o **"Gerar novamente"**:
@@ -737,8 +781,8 @@ novamente", dentro dos 900 s do `AllowLongInference`.
 
 `LegalTheme` é o catálogo dos precedentes qualificados do STJ — Temas Repetitivos,
 Controvérsias, PUIL, IAC e SIRDR —, trazido do portal de dados abertos por
-`php artisan lexia:import-legal-themes` e vetorizado para um RAG que **ainda não existe**:
-hoje nenhum agente lê a tabela. É dado de referência como o catálogo de classes, global,
+`php artisan lexia:import-legal-themes` e vetorizado para o RAG da aba Temas da etapa 6
+(ver "A seleção de temas", abaixo). É dado de referência como o catálogo de classes, global,
 sem `account_id` e sem soft delete, mas carregado por **comando** e não por migration,
 porque o STJ afeta e julga temas toda semana e um snapshot versionado envelheceria no
 commit.
@@ -771,10 +815,41 @@ tema que não mudou. O comando itera em `chunkById(256)`: os 2,4 mil vetores hid
 de uma vez passam do `memory_limit` de 128 MB. A carga inteira leva ~25 s no Ollama, e
 uma segunda execução não cria nem embute nada.
 
+### A seleção de temas
+
+O RAG são duas metades em série dentro de `ResearchLegalCaseThemes`. A **recuperação** é
+`LegalThemeCandidatesQuery`: o relato (com a área na frente) vira vetor pelo
+`EmbedLegalThemes::queryFor()` — o `search_query:` do nomic, par do `search_document:` da
+gravação — e o Postgres devolve os `ai.retrieval.theme_candidates` (12) temas mais
+próximos pelo `<=>`. É **top-k de verdade**, ao contrário do catálogo de classes: ali o
+`enum` cobre todas as candidatas e o vetor só orça a janela; aqui a pergunta é "quais se
+aplicam" entre 2,4 mil, e o que não vem na consulta não é resposta possível. O vetor da
+consulta vai calculado, como array — uma string faria o framework embuti-la sem o
+prefixo. Ficam de fora os cancelados e os prejudicados (531 linhas, com as duas grafias de
+"cancelado"); afetado e sobrestado ficam, porque suspendem processo.
+
+A **geração** é `LegalThemeSelectionAgent`, que lê as candidatas — questão, tese, delimitação,
+órgão, situação e as repercussões gerais do STF — e fica com as que se aplicam, cada uma com
+uma razão. As candidatas viajam pela **referência** (`theme-1016`, `puil-5`), e o `enum` do
+schema é montado com elas: tema não recuperado é algo que o modelo não consegue emitir. O
+uuid nunca entra no prompt, e o número sozinho não serve porque Tema 5 e PUIL 5 são coisas
+diferentes. Lista vazia é resposta legítima e frequente, e o prompt diz isso com todas as
+letras, porque um seletor com doze candidatas lê a lista como cota.
+
+Duas escolhas que valem a frase. A recuperação **não degrada em silêncio**, ao contrário do
+ranking das classes: sem vetor da consulta não há ordem de reserva, e uma lista vazia seria
+gravada como "nenhum tema se aplica" — afirmação falsa. A exceção sobe e a aba falha. E
+catálogo vazio **lança** em vez de chamar o agente: `enum` vazio é gramática inválida, e zero
+candidatas não é o mesmo que zero temas aplicáveis.
+
+Os temas mantidos **ainda não entram na minuta**: o "Concluir" grava o vínculo (desmarcar
+desvincula, pelo `sync()`), mas `forDrafting()` não os carrega.
+
 ## Ainda não implementado
 
-A busca sobre os temas do STJ: os vetores estão gravados, falta a query (o
-`DocumentEmbedder::query()` é o outro lado do par) e o agente que a consulte.
+Os temas do STJ na minuta: a etapa 6 já grava os que o advogado manteve, falta
+`LegalCaseDossier::forDrafting()`/`forGrounds()` levá-los e a guarda do reforço aceitar
+"Tema N" só quando o dossiê o traz.
 
 O módulo de Jurisprudência: ingestão, chunking e busca vetorial sobre o corpus.
 O pgvector já está de pé e em uso no catálogo de classes, então o que falta é a

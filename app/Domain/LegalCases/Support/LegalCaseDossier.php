@@ -85,9 +85,10 @@ final class LegalCaseDossier
     /**
      * The framing alone, for the agent that looks for case law.
      *
-     * The narrowest projection of the five, and the narrowing is the point. The
-     * jurisprudence search asks "what have the courts decided about a question
-     * like this one?", and what makes a ruling relevant is the area of law, the
+     * The narrowest projection, tied with `forThemes()`, and the narrowing is
+     * the point. The jurisprudence search asks "what have the courts decided
+     * about a question like this one?", and what makes a ruling relevant is the
+     * area of law, the
      * class the matter is filed under, and the question the facts raise. The
      * facts are the prompt, as always.
      *
@@ -105,6 +106,25 @@ final class LegalCaseDossier
      * matched to a case without the question the facts raise. The names do not.
      */
     public static function forCourtDecisions(LegalCase $legalCase): string
+    {
+        return self::section('O enquadramento', self::pleading($legalCase));
+    }
+
+    /**
+     * The framing alone, for the agent that picks the STJ themes.
+     *
+     * The same section as `forCourtDecisions()`, and a method of its own
+     * because the two agents stand beside each other only by coincidence: the
+     * theme selection asks whether a question the STJ has already put to
+     * judgement is the question these facts raise, and for that the area and
+     * the class are the whole of what it needs beyond the narrative. The
+     * requests stay out for the court decisions' reason — a theme is matched to
+     * the controversy, not scored against what the client wants.
+     *
+     * No parties, like every projection that feeds a cloud agent. The facts
+     * are the prompt, as always.
+     */
+    public static function forThemes(LegalCase $legalCase): string
     {
         return self::section('O enquadramento', self::pleading($legalCase));
     }

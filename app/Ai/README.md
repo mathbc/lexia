@@ -15,6 +15,7 @@ geram em `app/Ai/Agents` e `app/Ai/Tools`. O conhecimento que os agentes leem fi
 | `FactsRefinementAgent` | Reescreve o relato do cliente como a narrativa de fatos de uma inicial: registro formal, terceira pessoa, ordem cronológica — e o peso que uma perda irreparável tem |
 | `LegalThesisResearchAgent` | Pesquisa nos portais oficiais as teses que a peça pode sustentar, com as normas e os julgados que as sustentam, e devolve uma ficha rotulada |
 | `ForensicReviewTranscriptionAgent` | Transcreve a ficha da pesquisa para a estrutura aninhada de teses e precedentes |
+| `LegalThemeSelectionAgent` | Entre os temas do STJ que a busca vetorial trouxe como mais próximos do relato, escolhe os que se aplicam ao caso, cada um com a razão |
 | `PleadingDraftingAgent` | Redige a petição inicial inteira a partir do dossiê, pondo cada julgado por marcador e escolhendo os trechos da ementa que a citação leva |
 | `PleadingGroundsReinforcementAgent` | Reescreve o corpo do DO DIREITO da minuta a partir das teses da revisão forense — espécie, argumento, garantia e fundamentos —, fazendo a subsunção de cada tese ao relato |
 
@@ -25,9 +26,13 @@ a resposta em modelo e é o ponto por onde o caso de uso entra. `ClassifyLegalCa
 os quatro primeiros — encadeia os dois iniciais e acrescenta os outros dois, que é coisa
 diferente de encadear; a seção abaixo diz por quê. O quinto fica de fora dela de
 propósito: ele reescreve um relato que já está na tela, e não lê um relato para preencher
-uma. Os dois últimos são a etapa 6 e formam um par indivisível: quem os expõe é
-`ResearchLegalCaseTheses`, que chama os dois em série — a seção abaixo diz por que não
-podem ser um só.
+uma. Os dois seguintes são a aba de teses da etapa 6 e formam um par indivisível: quem os
+expõe é `ResearchLegalCaseTheses`, que chama os dois em série — a seção abaixo diz por que
+não podem ser um só. O seletor de temas é a outra aba, exposto por
+`ResearchLegalCaseThemes`, e corre **ao lado** do par: `ResearchLegalCaseForensicReview`
+roda as duas metades como duas tasks do mesmo `Concurrency::run`, cada uma com marcador
+próprio, de modo que uma falha, uma repetição ou uma peça antiga sem temas afeta só a sua
+aba.
 
 A minuta também é um par em série, mas por outro motivo: `DraftLegalPleading` chama o
 agente de redação e, antes de citar os julgados e assinar, entrega o DO DIREITO a
@@ -466,6 +471,15 @@ provider junto com ela.
 É isso que paga o catálogo enriquecido: as descrições passaram a carregar prazo, gatilho
 e instrumentos, e a lista inteira da maior área não caberia ao lado do guia. Detalhes,
 inclusive por que o documento markdown continua indo inteiro, em `app/Rag/README.md`.
+
+Os temas do STJ são o caso oposto, e o único top-k do projeto: `LegalThemeCandidatesQuery`
+traz os doze mais próximos do relato e só eles chegam a `LegalThemeSelectionAgent`. O
+`enum` continua sendo a garantia — montado com as **referências** das candidatas
+(`theme-1016`, `puil-5`), nunca o uuid e nunca o número sozinho, que não é único entre
+espécies —, mas aqui ele é feito do que a busca trouxe, e não de uma lista fechada. Duas
+recusas antes do agente: sem vetor da consulta a exceção sobe (uma lista vazia seria
+gravada como "nenhum tema se aplica"), e com o catálogo vazio também (`enum` vazio é
+gramática inválida).
 
 ## Saída estruturada
 

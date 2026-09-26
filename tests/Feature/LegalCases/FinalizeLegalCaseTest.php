@@ -10,6 +10,7 @@ use App\Domain\LegalCases\Actions\DraftLegalPleading;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalPleadings\Models\LegalPleading;
+use App\Domain\LegalThemes\Models\LegalTheme;
 use App\Domain\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Response;
@@ -29,10 +30,11 @@ use Tests\TestCase;
  * two lists and the flag are one transaction, and the drafting is deliberately
  * outside it, so a provider being down cannot undo minutes of research.
  *
- * The two lists, since step 7 arrived, are the theses of the forensic review
- * and the rulings of the jurisprudence analysis. Both are already rows by the
- * time this runs — the two research runs wrote them — so what the conclusion
- * posts is the lawyer's reading, and both saves are diffs.
+ * The lists, since step 7 and the themes tab arrived, are the theses and the
+ * STJ themes of the forensic review and the rulings of the jurisprudence
+ * analysis. All are already rows by the time this runs — the research runs
+ * wrote them — so what the conclusion posts is the lawyer's reading, and every
+ * save is a diff.
  *
  * The agent is mocked throughout. It is exercised for real in
  * `tests/Agents/PleadingDraftingTest`, which costs inference; what this file is
@@ -137,7 +139,7 @@ final class FinalizeLegalCaseTest extends TestCase
 
         $this->actingAs($owner)->post(
             route('legal-cases.finalize', $case),
-            ['theses' => [], 'precedents' => [], 'court_decisions' => []],
+            ['theses' => [], 'precedents' => [], 'themes' => [], 'court_decisions' => []],
         );
 
         $this->assertSame(0, $case->theses()->count());
@@ -168,6 +170,59 @@ final class FinalizeLegalCaseTest extends TestCase
         $this->assertSame([$kept->id], $case->courtDecisions()->pluck('id')->all());
         $this->assertSoftDeleted($unticked);
         $this->assertFalse($case->refresh()->is_draft);
+    }
+
+    /**
+     * A outra aba da etapa 6, no mesmo gesto: o tema desmarcado é desvinculado.
+     *
+     * O vínculo é duro, e não lógico — ver a migration de `legal_case_themes` —,
+     * então o que se confere é a linha ter saído, e o tema continuar no
+     * catálogo.
+     */
+    #[Test]
+    public function a_theme_the_lawyer_unticked_is_unlinked_when_the_pleading_closes(): void
+    {
+        [, $owner, $case] = $this->pleading();
+        [$kept, $unticked] = LegalTheme::factory()->count(2)->create();
+
+        $case->themes()->attach([
+            $kept->id => ['account_id' => $case->account_id, 'reason' => 'Mantido.'],
+            $unticked->id => ['account_id' => $case->account_id, 'reason' => 'Desmarcado.'],
+        ]);
+
+        $this->fakeDrafting()->shouldReceive('handle')->once()->andReturn($this->draft($case));
+
+        $this->finalize($owner, $case, themes: [['legal_theme_id' => $kept->id, 'reason' => 'Mantido.']])
+            ->assertRedirect(route('legal-cases.pleading', $case));
+
+        $this->assertSame([$kept->id], $case->themes()->pluck('legal_themes.id')->all());
+        $this->assertSame('Mantido.', $case->themes()->first()?->pivot->reason);
+        $this->assertDatabaseHas('legal_themes', ['id' => $unticked->id]);
+    }
+
+    #[Test]
+    public function a_theme_that_does_not_exist_is_refused(): void
+    {
+        [, $owner, $case] = $this->pleading();
+
+        $this->fakeDrafting()->shouldNotReceive('handle');
+
+        $this->finalize($owner, $case, themes: [['legal_theme_id' => self::UUID_A, 'reason' => null]])
+            ->assertSessionHasErrors('themes.0.legal_theme_id');
+
+        $this->assertTrue($case->refresh()->is_draft);
+    }
+
+    #[Test]
+    public function the_themes_list_must_be_present(): void
+    {
+        [, $owner, $case] = $this->pleading();
+
+        $this->actingAs($owner)
+            ->post(route('legal-cases.finalize', $case), ['theses' => [], 'precedents' => [], 'court_decisions' => []])
+            ->assertSessionHasErrors('themes');
+
+        $this->assertTrue($case->refresh()->is_draft);
     }
 
     /**
@@ -261,12 +316,14 @@ final class FinalizeLegalCaseTest extends TestCase
      *
      * `$decisions` is empty by default, which is what a pleading whose
      * jurisprudence run confirmed nothing posts — and what every test here that
-     * is not about step 7 wants. The one that is about it passes rows.
+     * is not about step 7 wants. The one that is about it passes rows. The
+     * same for `$themes`, the forensic review's second tab.
      *
      * @param  list<array<string, mixed>>  $decisions
+     * @param  list<array<string, mixed>>  $themes
      * @return TestResponse<Response>
      */
-    private function finalize(User $owner, LegalCase $case, array $decisions = []): TestResponse
+    private function finalize(User $owner, LegalCase $case, array $decisions = [], array $themes = []): TestResponse
     {
 
         return $this->actingAs($owner)->post(route('legal-cases.finalize', $case), [
@@ -290,6 +347,8 @@ final class FinalizeLegalCaseTest extends TestCase
                 'grounding' => 'Fundamenta a contagem do prazo.',
                 'adherence' => '90',
             ]],
+            // A outra aba da etapa 6: os temas que o advogado manteve.
+            'themes' => $themes,
             // A etapa 7 viaja junto: os julgados já são linhas, e o que a
             // conclusão posta é a leitura do advogado — ver `$decisions`.
             'court_decisions' => $decisions,

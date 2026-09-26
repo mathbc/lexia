@@ -29,11 +29,27 @@ A distinção que importa: o vetor **nunca** remove uma candidata do `enum`. Ele
 onde gastar a janela, não quais respostas são possíveis — que é exatamente a objeção ao
 top-k acima, evitada por construção.
 
-**Os temas do STJ também são vetorizados**, e ainda não são lidos por ninguém. As 2.364
-linhas de `legal_themes` (Temas Repetitivos, Controvérsias, PUIL, IAC, SIRDR) chegam
-pelo `lexia:import-legal-themes` já com o vetor, para o RAG que virá. Ali o corte top-k é
-o regime certo, ao contrário do enquadramento: não há `enum` a proteger, e sim um corpus
-grande do qual só uns poucos temas importam para uma peça.
+**Os temas do STJ são o terceiro regime, e o único top-k de verdade.** As 2.364 linhas de
+`legal_themes` (Temas Repetitivos, Controvérsias, PUIL, IAC, SIRDR) chegam pelo
+`lexia:import-legal-themes` já com o vetor, e a aba Temas da etapa 6 as lê:
+`LegalThemeCandidatesQuery` ordena no Postgres (`<=>`) pela proximidade com o relato e
+entrega os `ai.retrieval.theme_candidates` (12) mais próximos a
+`LegalThemeSelectionAgent`, que fica com os que se aplicam. Ali o corte é o regime certo,
+ao contrário do enquadramento: não há `enum` fixo a proteger — o `enum` é montado com as
+candidatas que a busca trouxe —, e sim um corpus grande do qual só uns poucos temas
+importam para uma peça.
+
+Três diferenças para o catálogo de classes, todas deliberadas:
+
+- **A distância é calculada no SQL**, e não em PHP: hidratar 2,4 mil vetores para ficar
+  com doze seria pagar a tabela pelo topo dela. O vetor da consulta vai como array — uma
+  string faria o framework embuti-la por conta própria, sem o prefixo `search_query:`.
+- **A consulta leva a área na frente** (`EmbedLegalThemes::queryFor()`): é o pedaço do
+  enquadramento que fala do assunto. A classe fica de fora, porque "Procedimento Comum
+  Cível" é igual para metade das peças.
+- **Não degrada em silêncio.** Sem o vetor da consulta a exceção sobe e a aba falha:
+  não existe ordem de reserva que signifique alguma coisa, e uma lista vazia seria
+  gravada como "nenhum tema se aplica". Cancelados e prejudicados ficam fora do filtro.
 
 ## Como a vetorização funciona
 

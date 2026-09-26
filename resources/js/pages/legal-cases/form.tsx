@@ -42,12 +42,18 @@ import {
 } from "@/lib/forensic-review";
 import { readHandoff } from "@/lib/legal-case-handoff";
 import {
+    toLegalThemeDrafts,
+    toLegalThemePayload,
+    type LegalThemeDraft,
+} from "@/lib/legal-themes";
+import {
     newRequirement,
     toRequirementDrafts,
     type RequirementDraft,
 } from "@/lib/requirements";
 import type {
     DefendantSuggestion,
+    ForensicReviewTab,
     LegalCaseDraft,
     LegalCaseStepValue,
     Option,
@@ -105,6 +111,20 @@ const RESEARCH_STEPS = [
     "Distinguindo súmula, tema repetitivo e acórdão isolado.",
     "Descartando o que não se confirmou em fonte oficial.",
     "Transcrevendo as teses, a fundamentação e os julgados que as sustentam.",
+    "Em paralelo, consultando o catálogo de temas do STJ pela proximidade com o relato.",
+] as const;
+
+/**
+ * A seleção de temas sozinha — quando só a aba de temas está sendo pesquisada.
+ *
+ * Bem mais curta do que a pesquisa de teses: nenhum portal é aberto. A busca
+ * vetorial traz os temas mais próximos do relato e um agente lê cada um.
+ */
+const THEME_STEPS = [
+    "Comparando o relato com os temas repetitivos do STJ.",
+    "Separando os temas mais próximos da questão que os fatos levantam.",
+    "Lendo a questão submetida a julgamento e a tese firmada de cada um.",
+    "Ficando só com os temas que de fato se aplicam ao caso.",
 ] as const;
 
 /**
@@ -132,7 +152,7 @@ const COURT_DECISION_STEPS = [
  * manda o agente redigir a minuta inteira. Ver `FinalizeLegalCase`.
  */
 const FINALISING_STEPS = [
-    "Gravando as teses, os precedentes e a jurisprudência…",
+    "Gravando as teses, os temas, os precedentes e a jurisprudência…",
     "Registrando a peça…",
     "Redigindo a qualificação das partes…",
     "Escrevendo a narrativa dos fatos…",
@@ -420,6 +440,29 @@ export default function LegalCaseForm({
     }, [courtDecisionSignature]);
 
     /**
+     * Os temas do STJ, a segunda aba da etapa 6 — o mesmo arranjo, pela mesma
+     * razão: a seleção grava, o Inertia re-renderiza sem remontar, e a
+     * assinatura de ids é o que impede um re-render de remarcar o que o
+     * advogado desmarcou.
+     */
+    const [legalThemes, setLegalThemes] = useState<LegalThemeDraft[]>(() =>
+        toLegalThemeDrafts(legalCase?.themes),
+    );
+
+    const themeSignature = (legalCase?.themes ?? [])
+        .map((theme) => theme.id)
+        .join(",");
+
+    useEffect(() => {
+        if (!legalCase) {
+            return;
+        }
+
+        setLegalThemes(toLegalThemeDrafts(legalCase.themes));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [themeSignature]);
+
+    /**
      * A conclusão é um `useForm` como as quatro etapas que gravam, e não um
      * `router.post` solto: é ele que dá o `processing` que tranca o botão, e é
      * ele que aceita as três listas sem que cada tese precise de uma assinatura
@@ -428,8 +471,9 @@ export default function LegalCaseForm({
     const review = useForm<{
         theses: ResearchedThesis[];
         precedents: ResearchedPrecedent[];
+        themes: { legal_theme_id: string; reason: string | null }[];
         court_decisions: ResearchedCourtDecision[];
-    }>({ theses: [], precedents: [], court_decisions: [] });
+    }>({ theses: [], precedents: [], themes: [], court_decisions: [] });
 
     const trail: StepItem[] = steps.map((option) => ({
         label: option.label,
@@ -562,12 +606,13 @@ export default function LegalCaseForm({
      * chega registrada na aba da minuta, que oferece tentar de novo.
      */
     const finalise = () => {
-        // As duas decisões vivem em estado local, então o payload é montado na
+        // As três decisões vivem em estado local, então o payload é montado na
         // hora do envio — `transform` é o mesmo mecanismo que leva o relato
         // junto da criação na etapa 1. O que não estiver nestas listas é
         // apagado pelo diff do servidor: é assim que desmarcar vira remoção.
         review.transform(() => ({
             ...toForensicReviewPayload(theses),
+            themes: toLegalThemePayload(legalThemes),
             court_decisions: toCourtDecisionPayload(courtDecisions),
         }));
 
@@ -585,31 +630,58 @@ export default function LegalCaseForm({
      * Um estado por etapa, e não um compartilhado: as duas rodadas falham por
      * motivos diferentes — o STJ fora do ar, o LexML fora do ar — e uma falha na
      * etapa 6 não pode impedir a etapa 7 de tentar, nem o contrário.
+     *
+     * Na etapa 6 o estado é **por aba**, pelo mesmo motivo um nível abaixo: as
+     * teses e os temas correm juntos no servidor, mas cada metade tem marcador
+     * próprio e falha por si — a pesquisa de teses pode cair com o STJ enquanto
+     * a de temas volta.
      */
-    const [researching, setResearching] = useState(false);
-    const [researchFailed, setResearchFailed] = useState(false);
+    const [researching, setResearching] = useState<ForensicReviewTab[]>([]);
+    const [researchFailed, setResearchFailed] = useState<ForensicReviewTab[]>(
+        [],
+    );
 
     const [researchingDecisions, setResearchingDecisions] = useState(false);
     const [decisionResearchFailed, setDecisionResearchFailed] = useState(false);
 
-    const research = () => {
-        if (!id || researching) {
+    /**
+     * Pede as abas dadas — as duas ao abrir uma peça nova, uma só no botão de
+     * cada aba ou quando só uma nunca foi pesquisada.
+     *
+     * A falha de uma metade volta como erro de validação sob a chave da aba
+     * (`errors.theses`, `errors.themes`), e é isso que o `onError` lê: a metade
+     * que voltou já está gravada e chega nas props. O `onHttpException` cobre o
+     * que não é de uma aba só — a peça sem fatos, um 500 qualquer — e marca as
+     * duas, senão o efeito de abertura tentaria de novo sem parar.
+     */
+    const research = (tabs: ForensicReviewTab[]) => {
+        if (!id || researching.length > 0 || tabs.length === 0) {
             return;
         }
 
-        setResearching(true);
-        setResearchFailed(false);
+        const fail = (failed: ForensicReviewTab[]) =>
+            setResearchFailed((current) => [
+                ...current.filter((tab) => !failed.includes(tab)),
+                ...failed,
+            ]);
+
+        setResearching(tabs);
+        setResearchFailed((current) =>
+            current.filter((tab) => !tabs.includes(tab)),
+        );
 
         router.post(
             `/pecas/${id}/revisao-forense/pesquisar`,
-            {},
+            { tabs },
             {
                 preserveScroll: true,
                 // Sem `onSuccess` que mexa na etapa: o servidor redireciona
                 // para `?etapa=review`, que é onde já estamos. Quem redesenha
-                // é o efeito das teses, com as props novas.
-                onError: () => setResearchFailed(true),
-                onFinish: () => setResearching(false),
+                // são os efeitos das teses e dos temas, com as props novas.
+                onError: (errors) => fail(tabs.filter((tab) => tab in errors)),
+                onHttpException: () => fail(tabs),
+                onNetworkError: () => fail(tabs),
+                onFinish: () => setResearching([]),
             },
         );
     };
@@ -635,10 +707,15 @@ export default function LegalCaseForm({
     };
 
     /**
-     * Uma vez, ao abrir a etapa, e nunca mais sozinha.
+     * Uma vez por aba, ao abrir a etapa, e nunca mais sozinha.
      *
-     * O gatilho é `legalCase.research === null`, que é "nunca se pesquisou", e
-     * **não** `theses.length === 0`. A diferença é a que decide: uma pesquisa
+     * O gatilho é o marcador de cada aba ser nulo — `legalCase.research` para as
+     * teses, `legalCase.theme_research` para os temas —, que é "nunca se
+     * pesquisou", e **não** a lista estar vazia. O efeito pede só as abas que
+     * faltam: uma peça pesquisada antes de a aba de temas existir pede só os
+     * temas, e as teses que o advogado já curou não são tocadas.
+     *
+     * A diferença entre marcador e lista é a que decide: uma pesquisa
      * que abriu os portais e nada confirmou é uma resposta legítima e cara que
      * grava zero teses, então um gatilho pela lista vazia dispararia de novo a
      * cada visita à etapa, a cada troca de aba e a cada reload — gastando cota
@@ -651,20 +728,32 @@ export default function LegalCaseForm({
      *
      * `researchFailed` é o que impede o laço depois de um erro: a falha não
      * grava marcador nenhum, então sem ele a etapa tentaria de novo a cada
-     * render.
+     * render. Uma aba que falhou fica de fora até o botão dela ser apertado.
      */
     useEffect(() => {
-        if (
-            step === 5 &&
-            id &&
-            legalCase?.research == null &&
-            !researching &&
-            !researchFailed
-        ) {
-            research();
+        if (step !== 5 || !id || researching.length > 0) {
+            return;
         }
+
+        const missing: ForensicReviewTab[] = [];
+
+        if (legalCase?.research == null) {
+            missing.push("theses");
+        }
+
+        if (legalCase?.theme_research == null) {
+            missing.push("themes");
+        }
+
+        research(missing.filter((tab) => !researchFailed.includes(tab)));
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [step, id, legalCase?.research, researchFailed]);
+    }, [
+        step,
+        id,
+        legalCase?.research,
+        legalCase?.theme_research,
+        researchFailed.join(","),
+    ]);
 
     /**
      * O mesmo disparo na etapa 7, com o marcador que é dela.
@@ -967,14 +1056,25 @@ export default function LegalCaseForm({
                     {step === 5 && (
                         <ForensicReviewFields
                             research={legalCase?.research ?? null}
+                            themeResearch={legalCase?.theme_research ?? null}
                             researching={researching}
                             failed={researchFailed}
-                            onResearch={research}
+                            onResearch={(tab) => research([tab])}
                             theses={theses}
                             onToggle={(thesisId, keep) =>
                                 setTheses((current) =>
                                     current.map((draft) =>
                                         draft.id === thesisId
+                                            ? { ...draft, keep }
+                                            : draft,
+                                    ),
+                                )
+                            }
+                            themes={legalThemes}
+                            onToggleTheme={(themeId, keep) =>
+                                setLegalThemes((current) =>
+                                    current.map((draft) =>
+                                        draft.id === themeId
                                             ? { ...draft, keep }
                                             : draft,
                                     ),
@@ -1068,11 +1168,24 @@ export default function LegalCaseForm({
                 inteligente: numa espera de minutos, um texto que troca a cada
                 quatro segundos passa de sinal de vida a agitação. */}
             <AnalysisDialog
-                open={researching}
+                open={researching.includes("theses")}
                 title="Pesquisando as teses — leva alguns minutos"
-                hint="É a etapa mais demorada da peça, e a espera é normal: o agente consulta o Planalto, o STJ e o STF e lê cada página antes de responder, o que costuma levar alguns minutos. Mantenha esta aba aberta e não recarregue a página — ao terminar, as teses ficam gravadas na peça e a pesquisa não se repete."
+                hint="É a etapa mais demorada da peça, e a espera é normal: o agente consulta o Planalto, o STJ e o STF e lê cada página antes de responder, o que costuma levar alguns minutos. Os temas do STJ são selecionados ao mesmo tempo. Mantenha esta aba aberta e não recarregue a página — ao terminar, tudo fica gravado na peça e a pesquisa não se repete."
                 messages={RESEARCH_STEPS}
                 interval={6500}
+            />
+
+            {/* Só os temas: sem portal nenhum, é a espera curta da etapa — a
+                de uma peça pesquisada antes de a aba existir, ou a do botão
+                da aba. */}
+            <AnalysisDialog
+                open={
+                    researching.includes("themes") &&
+                    !researching.includes("theses")
+                }
+                title="Selecionando os temas do STJ"
+                hint="O agente compara o relato com o catálogo de temas repetitivos do STJ e fica com os que se aplicam ao caso. Mantenha esta aba aberta — ao terminar, os temas ficam gravados na peça."
+                messages={THEME_STEPS}
             />
 
             {/* A segunda espera que sai da máquina, e a mesma escolha de
