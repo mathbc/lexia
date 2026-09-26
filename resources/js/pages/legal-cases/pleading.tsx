@@ -7,7 +7,7 @@ import {
     FileText,
     FileType,
     Pencil,
-    RefreshCw,
+    Save,
     Scale,
     Sparkles,
 } from 'lucide-react'
@@ -15,6 +15,7 @@ import { useEffect, useState } from 'react'
 import { AnalysisDialog } from '@/components/analysis-dialog'
 import { LegalCaseTabs } from '@/components/legal-case-tabs'
 import { PleadingDocument } from '@/components/pleading-document'
+import { RegeneratePleadingDialog } from '@/components/regenerate-pleading-dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -127,6 +128,29 @@ export default function LegalCasePleading({ legalCase, pleading, letterhead, can
         )
     }
 
+    // Exportar e salvar aparecem duas vezes, acima do timbre e no rodapé: a
+    // minuta tem páginas, e nenhum dos dois gestos deveria custar rolar até o
+    // fim dela — nem de volta ao topo depois de corrigir o último parágrafo.
+    const exportMenu = can.export && (
+        <ExportMenu legalCaseId={legalCase.id} changed={changed} disabled={form.processing} />
+    )
+
+    const saveButton = can.update && (
+        <Button
+            type="button"
+            disabled={!changed || form.processing}
+            onClick={() =>
+                form.put(`/pecas/${legalCase.id}/minuta`, {
+                    preserveScroll: true,
+                    onSuccess: () => setEditing(false),
+                })
+            }
+        >
+            <Save />
+            {form.processing ? 'Salvando…' : 'Salvar nova versão'}
+        </Button>
+    )
+
     return (
         <AppLayout
             title="Minuta da peça"
@@ -179,6 +203,20 @@ export default function LegalCasePleading({ legalCase, pleading, letterhead, can
                     )}
 
                     <Card className="gap-0 overflow-hidden py-0">
+                        {(exportMenu || saveButton) && (
+                            <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-6 py-3">
+                                <p className="text-xs text-muted-foreground">
+                                    Versão {pleading.version}
+                                    {changed && ' · alterações não salvas'}
+                                </p>
+
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {exportMenu}
+                                    {saveButton}
+                                </div>
+                            </div>
+                        )}
+
                         {/* O timbre: moldura, não conteúdo. Fica parado enquanto o
                             documento rola, como o papel timbrado fica. */}
                         <header className="sticky top-0 z-10 space-y-1 border-b bg-card px-6 py-5 text-center">
@@ -249,86 +287,30 @@ export default function LegalCasePleading({ legalCase, pleading, letterhead, can
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2">
-                                {can.export && (
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                disabled={changed || form.processing}
-                                                title={
-                                                    changed
-                                                        ? 'Salve as alterações antes de exportar'
-                                                        : undefined
-                                                }
-                                            >
-                                                <Download />
-                                                Exportar
-                                                <ChevronDown />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-
-                                        <DropdownMenuContent align="end">
-                                            {/* `<a>` de verdade e não visita do Inertia:
-                                                a resposta é um arquivo, não uma página. */}
-                                            <DropdownMenuItem asChild>
-                                                <a href={`/pecas/${legalCase.id}/minuta/pdf`} download>
-                                                    <FileText />
-                                                    PDF
-                                                </a>
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem asChild>
-                                                <a href={`/pecas/${legalCase.id}/minuta/docx`} download>
-                                                    <FileType />
-                                                    Word (DOCX)
-                                                </a>
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                )}
+                                {exportMenu}
 
                                 {can.generate && (
-                                    <Button
-                                        type="button"
-                                        variant="outline"
+                                    <RegeneratePleadingDialog
+                                        version={pleading.version}
+                                        unsaved={changed}
                                         disabled={form.processing || generating}
-                                        onClick={() => {
-                                            if (window.confirm(regenerateWarning(pleading.version, changed))) {
-                                                generate()
-                                            }
-                                        }}
-                                    >
-                                        <RefreshCw />
-                                        Gerar novamente
-                                    </Button>
+                                        onConfirm={generate}
+                                    />
                                 )}
 
                                 {can.update && (
-                                    <>
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            disabled={form.processing}
-                                            onClick={() => setEditing((on) => !on)}
-                                        >
-                                            {editing ? <Eye /> : <Pencil />}
-                                            {editing ? 'Ver documento' : 'Editar texto'}
-                                        </Button>
-
-                                        <Button
-                                            type="button"
-                                            disabled={!changed || form.processing}
-                                            onClick={() =>
-                                                form.put(`/pecas/${legalCase.id}/minuta`, {
-                                                    preserveScroll: true,
-                                                    onSuccess: () => setEditing(false),
-                                                })
-                                            }
-                                        >
-                                            {form.processing ? 'Salvando…' : 'Salvar nova versão'}
-                                        </Button>
-                                    </>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={form.processing}
+                                        onClick={() => setEditing((on) => !on)}
+                                    >
+                                        {editing ? <Eye /> : <Pencil />}
+                                        {editing ? 'Ver documento' : 'Editar texto'}
+                                    </Button>
                                 )}
+
+                                {saveButton}
                             </div>
                         </footer>
                     </Card>
@@ -345,21 +327,49 @@ export default function LegalCasePleading({ legalCase, pleading, letterhead, can
     )
 }
 
-/**
- * A pergunta antes de chamar o agente por cima de uma minuta que existe.
- *
- * Diz o que acontece com o que está na tela, que é o que se perde de vista: a
- * versão atual continua gravada, mas deixa de ser a que a aba mostra — e uma
- * edição não salva não está gravada em lugar nenhum.
- */
-const regenerateWarning = (version: number, unsaved: boolean): string =>
-    [
-        `Gerar a minuta novamente? O agente redige a versão ${version + 1} a partir da peça como ela está agora.`,
-        `A versão ${version} continua guardada no histórico, mas deixa de ser a exibida.`,
-        unsaved && 'As alterações não salvas serão perdidas.',
-    ]
-        .filter(Boolean)
-        .join('\n\n')
+interface ExportMenuProps {
+    legalCaseId: string
+    /** Há texto não salvo: o arquivo sairia de uma versão que o histórico não conhece. */
+    changed: boolean
+    disabled: boolean
+}
+
+/** O PDF e o DOCX da última versão salva, com o timbre. */
+function ExportMenu({ legalCaseId, changed, disabled }: ExportMenuProps) {
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    type="button"
+                    variant="outline"
+                    disabled={changed || disabled}
+                    title={changed ? 'Salve as alterações antes de exportar' : undefined}
+                >
+                    <Download />
+                    Exportar
+                    <ChevronDown />
+                </Button>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent align="end">
+                {/* `<a>` de verdade e não visita do Inertia:
+                    a resposta é um arquivo, não uma página. */}
+                <DropdownMenuItem asChild>
+                    <a href={`/pecas/${legalCaseId}/minuta/pdf`} download>
+                        <FileText />
+                        PDF
+                    </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                    <a href={`/pecas/${legalCaseId}/minuta/docx`} download>
+                        <FileType />
+                        Word (DOCX)
+                    </a>
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+}
 
 /**
  * "Av. Paulista, 1000, Conjunto 1402, Bela Vista, São Paulo/SP, CEP 01310-100".

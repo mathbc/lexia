@@ -156,9 +156,17 @@ final class PleadingDraftingTest extends TestCase
      *
      * Dois acórdãos do STJ sobre acidente de trânsito, que é o caso do relato. O
      * que se pina é o que é estrutura: cada marcador uma vez, sozinho na linha,
-     * dentro de DO DIREITO — e, depois da expansão, cada ementa uma vez, como
-     * citação recuada. Em que tese cada um entra, e com que frase, é juízo, e
-     * fica para quem lê o `show()`.
+     * dentro de DO DIREITO — e, depois da expansão, cada julgado uma vez, como
+     * citação recuada que abre pelo cabeçalho da ementa e fecha na referência
+     * com a data. Em que tese cada um entra, com que frase e com que trechos, é
+     * juízo, e fica para quem lê o `show()` — que mostra também os números dos
+     * trechos escolhidos.
+     *
+     * Este é o cenário que pegou o filtro de recitação do Gemini: pedida a cópia
+     * literal dos trechos, a resposta voltou sem nenhum texto (`finishReason:
+     * RECITATION`) e a minuta inteira se perdia. Os trechos passaram a ser
+     * escolhidos por número, e é a primeira asserção abaixo — o documento
+     * existe — que diz se isso voltou.
      */
     #[Test]
     public function it_places_each_kept_ruling_once_inside_the_argument(): void
@@ -190,9 +198,11 @@ final class PleadingDraftingTest extends TestCase
         ]);
 
         $draft = $this->draft($facts, decisions: $decisions);
-        $document = PleadingJurisprudence::expand($draft->content, $decisions);
+        $document = PleadingJurisprudence::expand($draft->content, $decisions, $draft->excerpts);
 
         $this->show($facts, $draft, $document);
+
+        $this->assertTrue($draft->isWritten(), 'O agente não devolveu minuta — ver o finishReason do provider.');
 
         // Um marcador que sobrou é um que o agente escreveu no meio de uma
         // frase, ou um que não existe: a expansão não o alcança.
@@ -206,12 +216,16 @@ final class PleadingDraftingTest extends TestCase
         $this->assertNotFalse($law);
         $this->assertNotFalse($requests);
 
+        // A citação pode vir abreviada, então o que se procura é o que nunca sai
+        // dela: o cabeçalho da ementa e a referência, com o título e a data.
         foreach ($decisions as $decision) {
-            $ementa = PleadingJurisprudence::ementa($decision->summary);
+            $heading = PleadingJurisprudence::heading(PleadingJurisprudence::ementa($decision->summary));
+            $reference = PleadingJurisprudence::reference($decision);
 
-            $this->assertSame(1, mb_substr_count($document, $ementa));
-            $this->assertGreaterThan($law, mb_strpos($document, $ementa));
-            $this->assertLessThan($requests, mb_strpos($document, $ementa));
+            $this->assertSame(1, mb_substr_count($document, $heading));
+            $this->assertSame(1, mb_substr_count($document, $reference));
+            $this->assertGreaterThan($law, mb_strpos($document, $heading));
+            $this->assertLessThan($requests, mb_strpos($document, $reference));
         }
 
         $this->assertCount(4, array_filter(
@@ -405,6 +419,7 @@ final class PleadingDraftingTest extends TestCase
             // versão gravada: antes da expansão o marcador parece lacuna.
             'lacunas' => $document === null ? $draft->placeholders : PleadingDraftData::gapsIn($document),
             'cifras_sem_fonte' => $draft->unsupportedAmounts,
+            'trechos' => $draft->excerpts,
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES).PHP_EOL.PHP_EOL);
     }
 }

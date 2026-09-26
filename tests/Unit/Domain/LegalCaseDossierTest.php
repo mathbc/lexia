@@ -13,6 +13,7 @@ use App\Domain\Documents\Models\Document;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalCases\Support\LegalCaseDossier;
 use App\Domain\LegalPrecedents\Models\LegalPrecedent;
+use App\Domain\LegalTheses\Enums\LegalThesisType;
 use App\Domain\LegalTheses\Models\LegalThesis;
 use App\Domain\PracticeAreas\Models\PracticeArea;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
@@ -193,6 +194,62 @@ final class LegalCaseDossierTest extends TestCase
     }
 
     /**
+     * O dossiê do embasamento é construído em volta das teses: cada uma inteira,
+     * com a espécie — que decide se o argumento é principal ou subsidiário — e
+     * cada fundamento numa linha, com o tipo de instrumento e a fonte.
+     *
+     * As partes não viajam: o DO DIREITO já as chama de "o Autor" e "a Ré", e
+     * qualificar alguém é outra parte da peça.
+     */
+    #[Test]
+    public function the_grounds_dossier_carries_every_field_of_the_theses_and_not_the_parties(): void
+    {
+        $pleading = $this->fullPleading(decisions: [
+            new CourtDecision([
+                'title' => 'REsp 2125459 / SP',
+                'authority' => 'Superior Tribunal de Justiça. 3ª Turma',
+                'summary' => 'DIREITO DE VIZINHANÇA. RESPONSABILIDADE CIVIL OBJETIVA.',
+                'decided_at' => '2024-04-02',
+            ]),
+        ]);
+
+        $pleading->setRelation('theses', new Collection([
+            new LegalThesis([
+                'name' => 'Da Responsabilidade Objetiva do Construtor',
+                'type' => LegalThesisType::SubsidiaryMerits,
+                'description' => 'Ainda que não se prove a culpa, o construtor responde pelo dano ao vizinho.',
+                'impact' => 'Assegura a reparação mesmo sem prova de culpa.',
+                'legal_bases' => [
+                    ['type' => 'article', 'reference' => 'Art. 1.299 do CC', 'source' => 'CC'],
+                    ['type' => 'sumula', 'reference' => 'Súmula 479 do STJ', 'source' => null],
+                    ['type' => 'unknown', 'reference' => 'Lei nº 10.406/2002', 'source' => ''],
+                ],
+            ]),
+        ]));
+
+        $dossier = LegalCaseDossier::forGrounds($pleading);
+
+        $this->assertStringContainsString(implode(PHP_EOL, [
+            '- Tese: Da Responsabilidade Objetiva do Construtor',
+            '- Espécie: Mérito subsidiário',
+            '- O que se argumenta: Ainda que não se prove a culpa, o construtor responde pelo dano ao vizinho.',
+            '- O que a tese garante: Assegura a reparação mesmo sem prova de culpa.',
+            '- Fundamentos a citar:',
+            '  - Art. 1.299 do CC (Dispositivo de lei — CC)',
+            '  - Súmula 479 do STJ (Súmula)',
+            '  - Lei nº 10.406/2002',
+        ]), $dossier);
+
+        $this->assertStringContainsString('- Marcador: [[JULGADO 1]]', $dossier);
+        $this->assertStringContainsString('## Os pedidos', $dossier);
+        $this->assertStringContainsString('Procedimento Comum Cível', $dossier);
+
+        $this->assertStringNotContainsString('Joaquim Vizinho', $dossier);
+        $this->assertStringNotContainsString('Construtora Muro', $dossier);
+        $this->assertStringNotContainsString('115.863.259-22', $dossier);
+    }
+
+    /**
      * Os julgados que o advogado manteve na etapa 7 entram, cada um com o seu
      * marcador — é o que o agente escreve onde o julgado deve ser citado.
      *
@@ -226,7 +283,11 @@ final class LegalCaseDossierTest extends TestCase
             '- Tribunal: Superior Tribunal de Justiça. 3ª Turma',
             '- Julgado: REsp 2125459 / SP',
             '- Data do julgamento: 02/04/2024',
-            '- Ementa: DIREITO DE VIZINHANÇA. RESPONSABILIDADE CIVIL OBJETIVA. Recurso especial não provido.',
+            // Em trechos numerados: é por esses números que o agente escolhe o
+            // que a citação guarda, sem escrever uma palavra da ementa.
+            '- Ementa, em trechos numerados:',
+            '  Trecho 1: DIREITO DE VIZINHANÇA. RESPONSABILIDADE CIVIL OBJETIVA.',
+            '  Trecho 2: Recurso especial não provido.',
             '- Marcador: [[JULGADO 2]]',
         ]), $dossier);
 

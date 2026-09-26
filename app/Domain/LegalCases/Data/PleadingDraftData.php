@@ -50,17 +50,29 @@ use App\Domain\Requirements\Data\RequirementData;
  *
  * Only currency is checked, as in the sibling: bare numbers change shape
  * legitimately all the time, and article numbers are numbers.
+ *
+ * ## The excerpts, which are a choice and not a text
+ *
+ * `excerpts` carries the numbers of the passages of each ruling's ementa the
+ * agent wants quoted, keyed by the number of the ruling's marker. Numbers, never
+ * text: the dossier shows each ementa cut into numbered passages, and the
+ * quotation is composed from the record by PleadingJurisprudence. They are read
+ * here as loosely as the grammar allows a model to vary — a number that arrives
+ * as a string, an entry with no numbers — and nothing more: whether a number
+ * names a passage is decided there, against the ementa, when it abridges.
  */
 final readonly class PleadingDraftData
 {
     /**
      * @param  list<string>  $placeholders  the bracketed gaps left for the lawyer
      * @param  list<string>  $unsupportedAmounts  figures the document names and no source writes
+     * @param  array<int, list<int>>  $excerpts  the passage numbers of each ementa to quote, keyed by marker number
      */
     public function __construct(
         public string $content,
         public array $placeholders = [],
         public array $unsupportedAmounts = [],
+        public array $excerpts = [],
     ) {}
 
     /**
@@ -78,6 +90,7 @@ final readonly class PleadingDraftData
             content: $content,
             placeholders: self::gapsIn($content),
             unsupportedAmounts: self::amountsMissingFrom($content, $sources),
+            excerpts: self::excerptsIn($answer['excerpts'] ?? null),
         );
     }
 
@@ -90,6 +103,7 @@ final readonly class PleadingDraftData
             'content' => $this->content,
             'placeholders' => $this->placeholders,
             'unsupported_amounts' => $this->unsupportedAmounts,
+            'excerpts' => $this->excerpts,
         ];
     }
 
@@ -150,9 +164,14 @@ final readonly class PleadingDraftData
     }
 
     /**
+     * The figures `$content` names and `$sources` does not write.
+     *
+     * Public because ReinforcedGroundsData runs this same guard over the
+     * rewritten DO DIREITO — one reader of money, whichever agent wrote it.
+     *
      * @return list<string>
      */
-    private static function amountsMissingFrom(string $content, string $sources): array
+    public static function amountsMissingFrom(string $content, string $sources): array
     {
         $written = self::amountsIn($sources);
 
@@ -160,6 +179,50 @@ final readonly class PleadingDraftData
             self::amountsIn($content),
             static fn (string $amount): bool => ! in_array($amount, $written, true),
         ));
+    }
+
+    /**
+     * The `excerpts` key, keyed by the ruling's number, with every entry the
+     * grammar let through but that says nothing dropped.
+     *
+     * @return array<int, list<int>>
+     */
+    private static function excerptsIn(mixed $excerpts): array
+    {
+        $read = [];
+
+        foreach (is_array($excerpts) ? $excerpts : [] as $excerpt) {
+            $excerpt = is_array($excerpt) ? $excerpt : [];
+            $ruling = self::positive($excerpt['ruling'] ?? null);
+            $passages = self::passagesIn($excerpt['passages'] ?? null);
+
+            if ($ruling !== null && $passages !== []) {
+                $read[$ruling] = [...$read[$ruling] ?? [], ...$passages];
+            }
+        }
+
+        return $read;
+    }
+
+    /**
+     * A number counted from one — also when it arrives as "2".
+     */
+    private static function positive(mixed $number): ?int
+    {
+        $read = filter_var($number, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+        return $read === false ? null : $read;
+    }
+
+    /**
+     * @return list<int>
+     */
+    private static function passagesIn(mixed $passages): array
+    {
+        return array_values(array_filter(array_map(
+            self::positive(...),
+            is_array($passages) ? $passages : [],
+        )));
     }
 
     /**

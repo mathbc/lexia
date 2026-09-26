@@ -15,6 +15,8 @@ geram em `app/Ai/Agents` e `app/Ai/Tools`. O conhecimento que os agentes leem fi
 | `FactsRefinementAgent` | Reescreve o relato do cliente como a narrativa de fatos de uma inicial: registro formal, terceira pessoa, ordem cronológica — e o peso que uma perda irreparável tem |
 | `LegalThesisResearchAgent` | Pesquisa nos portais oficiais as teses que a peça pode sustentar, com as normas e os julgados que as sustentam, e devolve uma ficha rotulada |
 | `ForensicReviewTranscriptionAgent` | Transcreve a ficha da pesquisa para a estrutura aninhada de teses e precedentes |
+| `PleadingDraftingAgent` | Redige a petição inicial inteira a partir do dossiê, pondo cada julgado por marcador e escolhendo os trechos da ementa que a citação leva |
+| `PleadingGroundsReinforcementAgent` | Reescreve o corpo do DO DIREITO da minuta a partir das teses da revisão forense — espécie, argumento, garantia e fundamentos —, fazendo a subsunção de cada tese ao relato |
 
 Um agente não é chamado direto da tela: quem o expõe é uma Action do domínio
 (`ClassifyPracticeArea`, `SelectProceduralClass`, `ExtractLegalCaseDefendant`,
@@ -26,6 +28,13 @@ propósito: ele reescreve um relato que já está na tela, e não lê um relato 
 uma. Os dois últimos são a etapa 6 e formam um par indivisível: quem os expõe é
 `ResearchLegalCaseTheses`, que chama os dois em série — a seção abaixo diz por que não
 podem ser um só.
+
+A minuta também é um par em série, mas por outro motivo: `DraftLegalPleading` chama o
+agente de redação e, antes de citar os julgados e assinar, entrega o DO DIREITO a
+`ReinforcePleadingGrounds`, que expõe o de embasamento. O segundo não é indivisível do
+primeiro — é um reforço. Sem tese na peça ele nem é chamado, e quando falha, ou quando
+`ReinforcedGroundsData` recusa a resposta (marcador de julgado perdido ou repetido,
+súmula, tema ou cifra que o dossiê não escreve), a minuta sai com a seção da redação.
 
 ## Quem sai da máquina
 

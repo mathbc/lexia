@@ -143,7 +143,7 @@ final class PleadingDraftDataTest extends TestCase
     }
 
     #[Test]
-    public function it_publishes_the_three_readings_under_the_keys_the_screen_uses(): void
+    public function it_publishes_the_readings_under_the_keys_the_screen_uses(): void
     {
         $draft = PleadingDraftData::fromAgent(
             ['content' => '  Requer R$ 9.000,00 em favor de [o autor].  '],
@@ -154,6 +154,43 @@ final class PleadingDraftDataTest extends TestCase
             'content' => 'Requer R$ 9.000,00 em favor de [o autor].',
             'placeholders' => ['[o autor]'],
             'unsupported_amounts' => ['9000.00'],
+            'excerpts' => [],
         ], $draft->toArray());
+    }
+
+    /**
+     * Os números dos trechos de ementa que o agente escolheu, chaveados pelo
+     * número do marcador, lidos com a folga que a gramática deixa um modelo
+     * variar — e nada além: se o número nomeia um trecho, quem decide é
+     * PleadingJurisprudence, contra a ementa.
+     */
+    #[Test]
+    public function it_reads_the_excerpts_keyed_by_the_rulings_number(): void
+    {
+        $draft = PleadingDraftData::fromAgent([
+            'content' => 'Uma peça.',
+            'excerpts' => [
+                ['ruling' => 1, 'passages' => [2, 4]],
+                // O número que chega como texto ainda é um número.
+                ['ruling' => '2', 'passages' => ['3', 0, -1, 'trecho', 1.5]],
+                // Sem número, com número inválido ou sem trecho: nada a citar.
+                ['passages' => [1]],
+                ['ruling' => 0, 'passages' => [1]],
+                ['ruling' => 3, 'passages' => []],
+                'lixo',
+            ],
+        ], '');
+
+        $this->assertSame([
+            1 => [2, 4],
+            2 => [3],
+        ], $draft->excerpts);
+    }
+
+    #[Test]
+    public function a_draft_without_excerpts_quotes_every_ementa_whole(): void
+    {
+        $this->assertSame([], PleadingDraftData::fromAgent(['content' => 'Uma peça.'], '')->excerpts);
+        $this->assertSame([], PleadingDraftData::fromAgent(['content' => 'Uma peça.', 'excerpts' => null], '')->excerpts);
     }
 }

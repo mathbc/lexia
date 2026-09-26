@@ -10,6 +10,7 @@ use App\Domain\Customers\Models\Customer;
 use App\Domain\Documents\Models\Document;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalPleadings\Support\PleadingJurisprudence;
+use App\Domain\LegalTheses\Enums\LegalBasisType;
 use App\Domain\LegalTheses\Models\LegalThesis;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
 use App\Domain\Requirements\Models\Requirement;
@@ -84,7 +85,7 @@ final class LegalCaseDossier
     /**
      * The framing alone, for the agent that looks for case law.
      *
-     * The narrowest projection of the four, and the narrowing is the point. The
+     * The narrowest projection of the five, and the narrowing is the point. The
      * jurisprudence search asks "what have the courts decided about a question
      * like this one?", and what makes a ruling relevant is the area of law, the
      * class the matter is filed under, and the question the facts raise. The
@@ -148,6 +149,38 @@ final class LegalCaseDossier
             self::section('As teses da revisão forense', self::theses($legalCase)),
             self::section('Os julgados da análise de jurisprudência', self::courtDecisions($legalCase)),
             self::section('Os documentos que instruem a peça', self::documents($legalCase)),
+        ]);
+    }
+
+    /**
+     * The theses in full, for the agent that reinforces DO DIREITO.
+     *
+     * The fifth projection, and the only one built around the forensic review
+     * rather than around the parties. PleadingGroundsReinforcementAgent does one
+     * thing — makes the argument of each thesis hold — and what it holds it up
+     * with is the thesis itself: its kind, what it argues, what it secures, and
+     * every item of its fundamentação. So the theses go **wider** here than in
+     * `forDrafting()`: each legal basis on its own line with the kind of
+     * instrument and the source the review recorded, where the drafting dossier
+     * joins the references into one line. A súmula and an article are argued
+     * differently, and "Mérito subsidiário" is what tells the agent to write
+     * "subsidiariamente" instead of arguing two incompatible positions as one.
+     *
+     * The requests go because a thesis has to end in one, and the rulings go
+     * under their markers because the section already places them and the
+     * sentence that introduces each one is part of the argument.
+     *
+     * The parties do not go. The section already calls them "o Autor" and "a
+     * Ré", and qualifying anybody is another part of the document's job. The
+     * facts stay out, as everywhere: the agent is handed them separately.
+     */
+    public static function forGrounds(LegalCase $legalCase): string
+    {
+        return implode(PHP_EOL.PHP_EOL, [
+            self::section('A peça', self::pleading($legalCase)),
+            self::section('Os pedidos', self::requirements($legalCase)),
+            self::section('As teses da revisão forense', self::thesesInFull($legalCase)),
+            self::section('Os julgados da análise de jurisprudência', self::courtDecisions($legalCase)),
         ]);
     }
 
@@ -450,6 +483,64 @@ final class LegalCaseDossier
     }
 
     /**
+     * Each thesis with every field the forensic review recorded, and its
+     * fundamentação one item per line.
+     *
+     * @return list<string>
+     */
+    private static function thesesInFull(LegalCase $legalCase): array
+    {
+        return $legalCase->theses
+            ->map(static fn (LegalThesis $thesis): string => implode(PHP_EOL, [
+                ...self::written([
+                    'Tese' => $thesis->name,
+                    'Espécie' => $thesis->type?->label(),
+                    'O que se argumenta' => $thesis->description,
+                    'O que a tese garante' => $thesis->impact,
+                ]),
+                ...self::legalBases($thesis),
+            ]))
+            ->all();
+    }
+
+    /**
+     * "Art. 186 do Código Civil (Dispositivo de lei — CC)", one per line under
+     * "Fundamentos a citar", or nothing when the thesis records none.
+     *
+     * @return list<string>
+     */
+    private static function legalBases(LegalThesis $thesis): array
+    {
+        $bases = array_values(array_filter(array_map(
+            self::legalBasis(...),
+            $thesis->legal_bases ?? [],
+        )));
+
+        return $bases === []
+            ? []
+            : ['- Fundamentos a citar:', ...array_map(static fn (string $basis): string => '  - '.$basis, $bases)];
+    }
+
+    /**
+     * @param  array{type: string|null, reference: string, source: string|null}  $basis
+     */
+    private static function legalBasis(array $basis): string
+    {
+        $reference = trim($basis['reference']);
+
+        $details = array_filter([
+            LegalBasisType::tryFrom((string) $basis['type'])?->label(),
+            trim((string) $basis['source']),
+        ]);
+
+        return match (true) {
+            $reference === '' => '',
+            $details === [] => $reference,
+            default => $reference.' ('.implode(' — ', $details).')',
+        };
+    }
+
+    /**
      * The rulings the lawyer kept on the seventh step, each under its marker.
      *
      * What the agent needs to *place* a ruling, and nothing more: the marker it
@@ -460,9 +551,11 @@ final class LegalCaseDossier
      * sides number the one list.
      *
      * The ementa is the one that will be quoted, without the judgment record
-     * the LexML field carries after it. No URL and no URN: they identify the
-     * record for a person checking it, and to a model they are noise beside
-     * the ementa.
+     * the LexML field carries after it, and it goes **numbered** — one line per
+     * passage, as PleadingJurisprudence::passages() cuts it — because the
+     * drafting agent chooses what the quotation keeps by those numbers. No URL
+     * and no URN: they identify the record for a person checking it, and to a
+     * model they are noise beside the ementa.
      *
      * @return list<string>
      */
@@ -470,14 +563,39 @@ final class LegalCaseDossier
     {
         return $legalCase->courtDecisions
             ->values()
-            ->map(static fn (CourtDecision $decision, int $index): string => implode(PHP_EOL, self::written([
-                'Marcador' => PleadingJurisprudence::marker($index + 1),
-                'Tribunal' => $decision->authority,
-                'Julgado' => $decision->title,
-                'Data do julgamento' => $decision->decided_at?->format('d/m/Y'),
-                'Ementa' => PleadingJurisprudence::ementa($decision->summary),
-            ])))
+            ->map(static fn (CourtDecision $decision, int $index): string => implode(PHP_EOL, [
+                ...self::written([
+                    'Marcador' => PleadingJurisprudence::marker($index + 1),
+                    'Tribunal' => $decision->authority,
+                    'Julgado' => $decision->title,
+                    'Data do julgamento' => $decision->decided_at?->format('d/m/Y'),
+                ]),
+                ...self::numberedEmenta($decision),
+            ]))
             ->all();
+    }
+
+    /**
+     * "- Ementa, em trechos numerados:" and then "  Trecho 1: ...", one per line.
+     *
+     * @return list<string>
+     */
+    private static function numberedEmenta(CourtDecision $decision): array
+    {
+        $passages = PleadingJurisprudence::passages(PleadingJurisprudence::ementa((string) $decision->summary));
+
+        if ($passages === []) {
+            return [];
+        }
+
+        return [
+            '- Ementa, em trechos numerados:',
+            ...array_map(
+                static fn (string $passage, int $index): string => '  Trecho '.($index + 1).': '.$passage,
+                $passages,
+                array_keys($passages),
+            ),
+        ];
     }
 
     /**

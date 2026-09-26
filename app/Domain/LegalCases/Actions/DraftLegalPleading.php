@@ -18,6 +18,7 @@ use App\Domain\Users\Models\User;
 use Laravel\Ai\Responses\StructuredAgentResponse;
 use Lorisleiva\Actions\Concerns\AsAction;
 use RuntimeException;
+use Throwable;
 
 /**
  * Write the petição inicial for a pleading, and store it as its next version.
@@ -40,15 +41,22 @@ use RuntimeException;
  * which is the same answer the agent gives for everything else it does not know.
  * A queued run has no actor at all, and this is what lets one exist.
  *
- * Three things happen after the agent answers, and none is the agent's to do:
+ * Four things happen after the agent answers, and none is the drafting agent's
+ * to do:
  *
- * 1. **The rulings are quoted**, by PleadingJurisprudence: each `[[JULGADO n]]`
+ * 1. **The argument is reinforced**, by ReinforcePleadingGrounds: a second agent
+ *    rewrites the body of DO DIREITO from the theses of the forensic review. It
+ *    is the only one of the four that can fail on its own, and when it does the
+ *    draft keeps the section the drafting agent wrote — reported, never fatal,
+ *    because a weaker argument is a better answer than no pleading.
+ * 2. **The rulings are quoted**, by PleadingJurisprudence: each `[[JULGADO n]]`
  *    the agent placed becomes the ementa and its reference, copied from the
- *    LexML record and indented. The reason the model places a ruling and never
- *    writes one is in that class.
- * 2. **The signature is appended**, composed by PleadingSignature. The reason it
+ *    LexML record and indented — abridged to the passages the agent chose by
+ *    number, with `[...]` where the court's text was cut. The reason the model
+ *    places and chooses but never writes is in that class.
+ * 3. **The signature is appended**, composed by PleadingSignature. The reason it
  *    is not written by the model is in that class.
- * 3. **The row is written by StoreLegalPleadingVersion**, which is also what the
+ * 4. **The row is written by StoreLegalPleadingVersion**, which is also what the
  *    lawyer's own edits go through — so the version numbering has exactly one
  *    implementation whether the text came from a model or from a keyboard.
  *
@@ -111,11 +119,14 @@ final class DraftLegalPleading
             throw new RuntimeException('O agente devolveu uma minuta vazia.');
         }
 
+        $content = $this->reinforced($legalCase, $draft->content);
+
         // A guarda de cifra acima leu só o que o modelo escreveu; a ementa entra
-        // depois, porque não é dele — é cópia do registro, feita em PHP.
+        // depois, porque não é dele — é cópia do registro, feita em PHP. Os
+        // trechos que ele escolheu, por número, só abreviam a cópia.
         $stored = StoreLegalPleadingVersion::run(
             $legalCase,
-            PleadingJurisprudence::expand($draft->content, $legalCase->courtDecisions)
+            PleadingJurisprudence::expand($content, $legalCase->courtDecisions, $draft->excerpts)
                 .PHP_EOL.PHP_EOL.PleadingSignature::for($legalCase, $author),
         );
 
@@ -125,6 +136,26 @@ final class DraftLegalPleading
         // porque foi ela que a gravação decidiu manter. Uma peça sem versão
         // nenhuma não chega aqui: o conteúdo não é vazio, então a linha nasceu.
         return $stored ?? $legalCase->pleadings()->firstOrFail();
+    }
+
+    /**
+     * The draft with its DO DIREITO reinforced, or the draft as it came when the
+     * reinforcement fails.
+     *
+     * The same shape as the drafting call in FinalizeLegalCase, one level down:
+     * what can fail on its own is reported and does not take the rest with it.
+     * The draft already passed the drafting agent's rules, so falling back to it
+     * loses the second pass and nothing else.
+     */
+    private function reinforced(LegalCase $legalCase, string $draft): string
+    {
+        try {
+            return ReinforcePleadingGrounds::run($legalCase, $draft);
+        } catch (Throwable $e) {
+            report($e);
+
+            return $draft;
+        }
     }
 
     /**

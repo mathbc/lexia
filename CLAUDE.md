@@ -177,8 +177,10 @@ sessão. O `/register` do Fortify está desligado: o cadastro público é
 
 `laravel/ai` com **dois providers**, e a divisão responde a uma pergunta só: quem precisa
 da internet? São **oito agentes**; sete rodam no Ollama com `gpt-oss:20b`, e o oitavo é
-`PleadingDraftingAgent`, que redige a minuta — ver "A minuta", abaixo. Os embeddings do
-catálogo nunca saíram da máquina: `nomic-embed-text`, 768 dimensões.
+`PleadingDraftingAgent`, que redige a minuta — ver "A minuta", abaixo. A minuta tem ainda
+um segundo agente, `PleadingGroundsReinforcementAgent`, que reforça o DO DIREITO e segue o
+provider do de redação. Os embeddings do catálogo nunca saíram da máquina:
+`nomic-embed-text`, 768 dimensões.
 
 O **Gemini** responde por **um**: `LegalThesisResearchAgent`, que pesquisa nos portais
 oficiais. Ele não tem opção local, e a falha não seria graciosa —
@@ -691,6 +693,44 @@ uma frase, ou que aponta para um julgado que não existe, fica no texto, e o
 A numeração é a posição na relação `courtDecisions`, e o dossiê e a expansão leem a
 **mesma** coleção. Como `FinalizeLegalCase` apaga o que o advogado desmarcou *antes* de
 redigir, a relação é exatamente a lista que ele manteve.
+
+**A citação pode sair abreviada, e continua sendo cópia.** Uma ementa de dois mil
+caracteres enterra a frase que sustenta a tese, então o dossiê traz cada ementa em
+**trechos numerados** — `PleadingJurisprudence::passages()` corta o cabeçalho e depois
+cada frase ou item — e o agente devolve, em `excerpts`, só os **números** dos trechos que
+a citação guarda. `abridge()` recoloca os escolhidos na ordem do tribunal e marca cada
+corte com `[...]`. Duas coisas não dependem da escolha: o **cabeçalho** em caixa alta da
+ementa (`heading()`, até o primeiro item "1." ou "- ") entra sempre, e a **referência** —
+título, órgão, "julgado em dd/mm/aaaa" — continua composta das colunas. Número que não
+nomeia trecho é ignorado, e sem nenhum válido a ementa vai inteira, como antes. A
+abreviação vive **só no documento**: `court_decisions.summary` não muda, e a etapa 7
+continua mostrando a ementa completa. `[...]` não é lacuna — `gapsIn()` exige letra.
+
+Números, e não texto, por uma armadilha medida: pedida a cópia literal dos trechos, o
+Gemini devolveu **zero tokens** com `finishReason: RECITATION` — a ementa é texto público
+que o filtro reconhece — e a minuta inteira se perdia, com o `DraftLegalPleading`
+lançando "minuta vazia". O SDK achata isso em `FinishReason::ContentFilter`; só o corpo
+cru da resposta diz `RECITATION`. Nenhum agente deste projeto deve ser instruído a
+reproduzir ementa, súmula ou texto de lei palavra por palavra.
+
+**O DO DIREITO passa por um segundo agente antes de a versão ser gravada.**
+`PleadingGroundsReinforcementAgent`, exposto por `ReinforcePleadingGrounds`, recebe o
+**corpo** da seção — `PleadingSections` o recorta entre o título romano e o seguinte, e o
+recoloca sob o título original, porque a numeração não é dele — e reescreve o argumento
+tese por tese: a subsunção (o que o dispositivo exige, o fato do relato que o preenche, a
+consequência que leva ao pedido), com a espécie da tese mudando a redação — o mérito
+subsidiário abre por "subsidiariamente". O material são as teses **inteiras**:
+`LegalCaseDossier::forGrounds()` é a quinta projeção, com espécie, argumento, garantia e
+cada fundamento numa linha com tipo e fonte, mais pedidos e julgados — e sem as partes.
+Sem tese na peça, o agente não é chamado.
+
+A diferença para as guardas da redação é que aqui há sempre para onde voltar, então
+`ReinforcedGroundsData` **recusa** em vez de relatar: marcador de julgado perdido,
+repetido ou inventado, súmula ou tema que o dossiê não escreve, cifra sem fonte. A
+recusa vira exceção, e `DraftLegalPleading::reinforced()` a reporta e segue com a seção
+da redação — o reforço é o único passo da minuta que pode falhar sozinho, e custa
+qualidade, nunca a peça. São duas inferências em série no "Concluir" e no "Gerar
+novamente", dentro dos 900 s do `AllowLongInference`.
 
 ## Ainda não implementado
 

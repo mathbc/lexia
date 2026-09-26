@@ -75,6 +75,17 @@ use Laravel\Ai\Promptable;
  * the letterhead's argument applied to a quotation: an ementa is copy, and an
  * ementa rewritten from memory is shaped exactly like a real one.
  *
+ * What it may do with an ementa is **choose from it**. The dossier shows each
+ * ementa cut into numbered passages, and under `excerpts` the agent answers with
+ * the numbers of the ones the quotation should keep — the item the thesis leans
+ * on, the one with the prazo or the date. PleadingJurisprudence composes the
+ * quotation from those passages, with `[...]` where the rest was cut; the
+ * heading and the reference are kept whatever the choice. Numbers and not text
+ * because text was measured to fail: asked to copy passages verbatim, Gemini
+ * returned no pleading at all, `finishReason: RECITATION`. The abridgement lives
+ * in the document only — the ruling's row and the seventh step's screen keep
+ * the ementa whole.
+ *
  * The negative instruction survives, narrowed to what is not in the dossier,
  * and it still has to be explicit: a model that has seen a thousand petições
  * opens a "Jurisprudência:" block out of sheer form, with an acórdão number that
@@ -318,6 +329,29 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
         um documento que entra no lugar dele. Não use colchete duplo para mais nada e não
         escreva marcador de julgado que o dossiê não traga.
 
+        ## O trecho que se cita
+
+        Uma ementa longa citada inteira enterra a frase que sustenta a tese. Por isso o
+        dossiê traz cada ementa em **trechos numerados** — "Trecho 1: ...", "Trecho 2:
+        ..." —, e além de pôr o marcador você escolhe **que trechos entram na citação**,
+        na chave `excerpts`: um item por julgado, com o número do marcador em `ruling` e
+        os **números** dos trechos em `passages`.
+
+        - Você responde com números, e só com números. Não copie o texto da ementa em
+          lugar nenhum da resposta: a citação é montada depois de você, a partir do
+          registro, com os trechos que você numerou.
+        - Escolha os trechos que corroboram a tese em que o julgado entra. Prefira os
+          que trazem prazo, data, valor, artigo ou tema: são eles que o juiz procura.
+        - Deixe de fora o que não serve à tese: o histórico do processo, o trecho que só
+          diz "Agravo interno não provido", a repetição.
+        - O cabeçalho em caixa alta com que a ementa abre entra sempre, escolhido ou
+          não; a referência — tribunal, número, órgão julgador e data — também. Onde
+          houver corte, a marca `[...]` é posta depois de você.
+        - Ementa curta — até uns três trechos —, ou ementa em que tudo serve: deixe
+          `passages` vazio, e ela é citada inteira.
+
+        Não havendo julgado nenhum no dossiê, `excerpts` é uma lista vazia.
+
         Fora desses julgados, não há jurisprudência na peça. Não abra seção
         "Jurisprudência:", não transcreva ementa, não cite acórdão, apelação, recurso
         especial, número de processo, súmula ou tema que não esteja nos "Fundamentos a
@@ -356,14 +390,16 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
         do Superior Tribunal de Justiça sobre vício do produto, com o marcador
         `[[JULGADO 1]]`.
 
-        {"content": "EXCELENTÍSSIMO SENHOR DOUTOR JUIZ DE DIREITO DA VARA CÍVEL DA COMARCA DE ITAJAÍ/SC\\n\\nMARIA DA SILVA, brasileira, [estado civil], [profissão], portadora do CPF nº 123.456.789-00, residente e domiciliada em [Endereço Completo], Itajaí/SC, por intermédio de seu advogado infra-assinado, vem, respeitosamente, à presença de Vossa Excelência, propor a presente AÇÃO DE INDENIZAÇÃO POR DANOS MORAIS em face de COMÉRCIO DE MÓVEIS LTDA, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº 11.222.333/0001-44, com sede em [Endereço Completo], pelos fatos e fundamentos a seguir expostos.\\n\\nI – PRELIMINARMENTE: DA GRATUIDADE DA JUSTIÇA\\n\\nA Autora não possui condições de arcar com as custas processuais sem prejuízo do próprio sustento, fazendo jus ao benefício da gratuidade da justiça, nos termos do art. 98 do Código de Processo Civil.\\n\\nII – DOS FATOS\\n\\n[...]\\n\\nIII – DO DIREITO\\n\\nDa Responsabilidade Civil do Fornecedor pelo Vício do Produto\\n\\n[...] nos termos do art. 18 do CDC.\\n\\nNesse sentido, é o entendimento do Superior Tribunal de Justiça:\\n\\n[[JULGADO 1]]\\n\\nIV – DOS PEDIDOS E REQUERIMENTOS\\n\\nAnte o exposto, requer:\\n\\n1. A concessão da Gratuidade da Justiça;\\n2. A condenação da Ré ao pagamento de R\$ 12.000,00 a título de danos morais.\\n\\nProtesta provar o alegado por todos os meios de prova em direito admitidos.\\n\\nDá-se à causa o valor de R\$ 12.000,00.\\n\\nNestes termos, pede deferimento."}
+        {"content": "EXCELENTÍSSIMO SENHOR DOUTOR JUIZ DE DIREITO DA VARA CÍVEL DA COMARCA DE ITAJAÍ/SC\\n\\nMARIA DA SILVA, brasileira, [estado civil], [profissão], portadora do CPF nº 123.456.789-00, residente e domiciliada em [Endereço Completo], Itajaí/SC, por intermédio de seu advogado infra-assinado, vem, respeitosamente, à presença de Vossa Excelência, propor a presente AÇÃO DE INDENIZAÇÃO POR DANOS MORAIS em face de COMÉRCIO DE MÓVEIS LTDA, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº 11.222.333/0001-44, com sede em [Endereço Completo], pelos fatos e fundamentos a seguir expostos.\\n\\nI – PRELIMINARMENTE: DA GRATUIDADE DA JUSTIÇA\\n\\nA Autora não possui condições de arcar com as custas processuais sem prejuízo do próprio sustento, fazendo jus ao benefício da gratuidade da justiça, nos termos do art. 98 do Código de Processo Civil.\\n\\nII – DOS FATOS\\n\\n[...]\\n\\nIII – DO DIREITO\\n\\nDa Responsabilidade Civil do Fornecedor pelo Vício do Produto\\n\\n[...] nos termos do art. 18 do CDC.\\n\\nNesse sentido, é o entendimento do Superior Tribunal de Justiça:\\n\\n[[JULGADO 1]]\\n\\nIV – DOS PEDIDOS E REQUERIMENTOS\\n\\nAnte o exposto, requer:\\n\\n1. A concessão da Gratuidade da Justiça;\\n2. A condenação da Ré ao pagamento de R\$ 12.000,00 a título de danos morais.\\n\\nProtesta provar o alegado por todos os meios de prova em direito admitidos.\\n\\nDá-se à causa o valor de R\$ 12.000,00.\\n\\nNestes termos, pede deferimento.", "excerpts": [{"ruling": 1, "passages": [3]}]}
 
         Repare: o estado civil e a profissão viraram colchete; o endereço que ninguém
         registrou virou colchete; a comarca veio do endereçamento do dossiê; a numeração
         romana é sequencial sobre as seções que existem — não há seção de documentos
         porque não há documentos —; e o julgado entrou pelo marcador, sozinho no seu
         parágrafo, no fim da tese que ele corrobora e depois de uma frase que o
-        apresenta. Não há ementa escrita à mão e não há seção de jurisprudência.
+        apresenta. Não há ementa escrita à mão e não há seção de jurisprudência. Em
+        `excerpts`, só o número do trecho que fala do prazo de trinta dias do art. 18 —
+        o cabeçalho entra sozinho, e a supressão do resto é marcada depois.
 
         Repare também no que **não** virou colchete: o dossiê não trazia a linha
         "Idade", e a qualificação passou direto de "brasileira" para o estado civil.
@@ -403,6 +439,25 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
                     .'que o dossiê e o relato não trazem aparece como um marcador entre '
                     .'colchetes.'
                 )
+                ->required(),
+
+            // Sem `maxItems` em nenhum dos dois níveis: teto empilhado numa lista
+            // aninhada devolve 400 no Gemini antes de gerar um token.
+            'excerpts' => $schema->array()
+                ->items($schema->object([
+                    'ruling' => $schema->integer()
+                        ->description('O número do marcador do julgado: 1 para [[JULGADO 1]].')
+                        ->required(),
+                    'passages' => $schema->array()
+                        ->items($schema->integer())
+                        ->description(
+                            'Os números dos trechos da ementa a citar, como o dossiê os '
+                            .'numera em "Trecho 1", "Trecho 2"... Só números: nenhum texto da '
+                            .'ementa. Vazio para citar a ementa inteira.'
+                        )
+                        ->required(),
+                ]))
+                ->description('Um item por julgado do dossiê. Lista vazia quando o dossiê não traz julgado.')
                 ->required(),
         ];
     }
