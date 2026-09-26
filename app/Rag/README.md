@@ -29,24 +29,37 @@ A distinção que importa: o vetor **nunca** remove uma candidata do `enum`. Ele
 onde gastar a janela, não quais respostas são possíveis — que é exatamente a objeção ao
 top-k acima, evitada por construção.
 
+**Os temas do STJ também são vetorizados**, e ainda não são lidos por ninguém. As 2.364
+linhas de `legal_themes` (Temas Repetitivos, Controvérsias, PUIL, IAC, SIRDR) chegam
+pelo `lexia:import-legal-themes` já com o vetor, para o RAG que virá. Ali o corte top-k é
+o regime certo, ao contrário do enquadramento: não há `enum` a proteger, e sim um corpus
+grande do qual só uns poucos temas importam para uma peça.
+
 ## Como a vetorização funciona
 
-- Embeddings via Ollama com `nomic-embed-text`, 768 dimensões, em lotes de 64
-  (`EmbedProceduralClasses`).
-- Os textos levam os prefixos de tarefa do nomic — `search_document:` no catálogo,
-  `search_query:` no relato. O modelo foi treinado com eles e a similaridade entre um
-  relato leigo e uma definição jurídica piora visivelmente sem.
+- Embeddings via Ollama com `nomic-embed-text`, 768 dimensões, em lotes de 64. O laço, o
+  hash e o prefixo moram em `DocumentEmbedder` (`app/Domain/Shared/Support`), que as duas
+  Actions usam (`EmbedProceduralClasses`, `EmbedLegalThemes`). Cada uma decide só o texto
+  de cada linha.
+- Os textos levam os prefixos de tarefa do nomic: `search_document:` no corpus e
+  `search_query:` na consulta (`DocumentEmbedder::document()` e `::query()`). O modelo
+  foi treinado com eles, e a similaridade entre um relato leigo e uma definição jurídica
+  piora visivelmente sem eles.
 - Coluna com os helpers nativos do core do Laravel 12
   (`Schema::ensureVectorExtensionExists()`, `$table->vector('embedding', 768)`).
-- `embedding_hash` guarda o sha256 do texto embutido: uma classe que não mudou não é
-  reembutida, e a migration de recarga zera os hashes para forçar a próxima passada.
+- `embedding_hash` guarda o sha256 do texto embutido: uma linha que não mudou não é
+  reembutida, e a migration de recarga do catálogo zera os hashes para forçar a próxima
+  passada. No tema, o texto é questão, tese, delimitação e assuntos. A situação fica fora
+  de propósito: ela muda sem que o tema mude, e dentro do texto trocaria o hash.
 - **Sem índice ANN**, de propósito: a 615 linhas o scan exato leva menos de dois
   megabytes e é sub-milissegundo, e exato significa que o ranking nunca erra em silêncio
-  por recall. O índice passa a valer quando Jurisprudência trouxer a própria tabela.
+  por recall. Com as 2,4 mil linhas dos temas o scan continua em milissegundos. O índice
+  passa a valer quando Jurisprudência trouxer a própria tabela.
 
 ```bash
 php artisan lexia:embed-procedural-classes           # o que estiver desatualizado
 php artisan lexia:embed-procedural-classes --fresh   # tudo, ignorando o hash
+php artisan lexia:import-legal-themes                # baixa, importa e embute o que mudou
 ```
 
 Não é obrigatório rodar: `SelectProceduralClass` embute as candidatas que faltarem antes

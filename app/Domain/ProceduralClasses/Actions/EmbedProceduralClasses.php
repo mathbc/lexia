@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Domain\ProceduralClasses\Actions;
 
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
+use App\Domain\Shared\Support\DocumentEmbedder;
 use Illuminate\Support\Collection;
-use Laravel\Ai\Embeddings;
 use Lorisleiva\Actions\Concerns\AsAction;
 
 /**
@@ -14,27 +14,12 @@ use Lorisleiva\Actions\Concerns\AsAction;
  *
  * O texto embutido é o mesmo que o advogado leria — nome, descrição, matérias
  * típicas e a fundamentação —, porque é contra ele que o relato de fatos vai
- * ser comparado.
+ * ser comparado. O laço de lotes, o hash e o prefixo de tarefa do
+ * `nomic-embed-text` moram no DocumentEmbedder, que os temas do STJ também
+ * usam; o docblock dele explica por que o prefixo existe.
  *
- * O prefixo `search_document:` não é enfeite, e é do `nomic-embed-text`: o
- * modelo foi treinado com prefixos de tarefa, e documento e consulta caem em
- * regiões diferentes do espaço quando cada um usa o seu. Sem eles a
- * similaridade entre um relato leigo e uma definição jurídica fica
- * visivelmente pior.
- *
- * Ele segue `ai.default_for_embeddings` em vez de ser fixo porque esse par é o
- * que pode divergir do texto dos agentes: já divergiu uma vez, quando o texto
- * esteve no Gemini, e hoje os dois voltaram a ser Ollama. Se um dia a
- * vetorização sair daqui, o prefixo tem de sair junto — um provedor de nuvem
- * expressa a mesma ideia por `taskType`, que o SDK não deixa passar daqui, e
- * receberia o prefixo como texto literal no começo de cada documento: ruído,
- * não instrução. Que o prefixo entre no texto e o texto
- * no hash é o que faz essa mudança se cobrar sozinha, regenerando os vetores
- * que deixaram de bater.
- *
- * O hash é o que torna isto barato de repetir: uma classe cujo texto não mudou
- * não é reembutida. A migration de recarga do catálogo zera os hashes
- * justamente para forçar a próxima passada.
+ * A migration de recarga do catálogo zera os hashes justamente para forçar a
+ * próxima passada.
  *
  * Chamado de dois lugares, e é de propósito: o comando
  * `lexia:embed-procedural-classes` prepara o catálogo inteiro de uma vez, e
@@ -47,54 +32,12 @@ final class EmbedProceduralClasses
     use AsAction;
 
     /**
-     * Ollama aguenta lotes bem maiores, mas um lote gigante é uma requisição
-     * longa e tudo-ou-nada; 64 mantém o custo de uma falha pequeno.
-     */
-    private const int BATCH = 64;
-
-    /**
      * @param  Collection<int, ProceduralClass>  $classes
      * @return int quantas classes foram (re)embutidas
      */
     public function handle(Collection $classes): int
     {
-        $stale = $classes
-            ->map(fn (ProceduralClass $class): array => [
-                'class' => $class,
-                'text' => $text = $this->documentFor($class),
-                'hash' => hash('sha256', $text),
-            ])
-            ->filter(fn (array $row): bool => $row['class']->embedding === null
-                || $row['class']->embedding_hash !== $row['hash'])
-            ->values();
-
-        if ($stale->isEmpty()) {
-            return 0;
-        }
-
-        foreach ($stale->chunk(self::BATCH) as $batch) {
-            $this->embedBatch($batch->values());
-        }
-
-        return $stale->count();
-    }
-
-    /**
-     * @param  Collection<int, array{class: ProceduralClass, text: string, hash: string}>  $batch
-     */
-    private function embedBatch(Collection $batch): void
-    {
-        $response = Embeddings::for($batch->pluck('text')->all())
-            ->timeout(180)
-            ->generate();
-
-        foreach ($batch as $index => $row) {
-            $row['class']->forceFill([
-                'embedding' => $response->embeddings[$index],
-                'embedding_hash' => $row['hash'],
-                'embedded_at' => now(),
-            ])->save();
-        }
+        return (new DocumentEmbedder)->embed($classes, $this->documentFor(...));
     }
 
     /**
@@ -122,7 +65,7 @@ final class EmbedProceduralClasses
             $parts[] = 'Base legal: '.implode('; ', $bases).'.';
         }
 
-        return self::taskPrefix('search_document: ').implode(' ', $parts);
+        return DocumentEmbedder::document(implode(' ', $parts));
     }
 
     /**
@@ -130,18 +73,6 @@ final class EmbedProceduralClasses
      */
     public static function queryFor(string $facts): string
     {
-        return self::taskPrefix('search_query: ').trim($facts);
-    }
-
-    /**
-     * O prefixo de tarefa, quando o provedor de embeddings for um que os leia.
-     *
-     * Só o Ollama, hoje, porque só o `nomic-embed-text` foi treinado com eles.
-     * Qualquer outro recebe a string vazia: um provedor que não conhece o
-     * prefixo não o ignora, ele o embute.
-     */
-    private static function taskPrefix(string $prefix): string
-    {
-        return config('ai.default_for_embeddings') === 'ollama' ? $prefix : '';
+        return DocumentEmbedder::query(trim($facts));
     }
 }

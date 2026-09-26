@@ -26,6 +26,7 @@ php artisan migrate:fresh --seed     # senha de todos os usuários: password
 composer dev                         # serve + queue + pail + vite
 php artisan test                     # PHPUnit contra o banco lexia_testing
 php artisan lexia:embed-procedural-classes  # vetores do catálogo (após mexer nas descrições)
+php artisan lexia:import-legal-themes       # temas do STJ: baixa, importa e vetoriza (--file, --skip-embeddings, --fresh)
 ./vendor/bin/pint                    # formatação
 composer analyse                     # phpstan nível 6, sem supressões
 npm run types:check                  # tsc --noEmit
@@ -732,7 +733,48 @@ da redação — o reforço é o único passo da minuta que pode falhar sozinho,
 qualidade, nunca a peça. São duas inferências em série no "Concluir" e no "Gerar
 novamente", dentro dos 900 s do `AllowLongInference`.
 
+## Os temas do STJ
+
+`LegalTheme` é o catálogo dos precedentes qualificados do STJ — Temas Repetitivos,
+Controvérsias, PUIL, IAC e SIRDR —, trazido do portal de dados abertos por
+`php artisan lexia:import-legal-themes` e vetorizado para um RAG que **ainda não existe**:
+hoje nenhum agente lê a tabela. É dado de referência como o catálogo de classes, global,
+sem `account_id` e sem soft delete, mas carregado por **comando** e não por migration,
+porque o STJ afeta e julga temas toda semana e um snapshot versionado envelheceria no
+commit.
+
+Quatro fatos do arquivo decidem o desenho, todos medidos nele:
+
+1. **`sequencialPrecedente` não é único no CSV.** O STJ repete a linha de um precedente
+   uma vez para cada Repercussão Geral do STF vinculada, e só as duas colunas de RG mudam.
+   Na tabela, a coluna é única (`sequential_number`, a chave do upsert), e as RGs vão para
+   a filha `general_repercussions`, reescrita inteira a cada importação. (`type`,
+   `number`) também é único — "Tema 1016" nomeia um precedente só.
+2. **`situacao` fica em texto cru.** São 22 grafias, "Cancelada" e "Cancelado" entre
+   elas; um enum transformaria cada situação nova do STJ numa importação recusada. Já
+   `tipoPrecedente` e `orgaoJulgador` são enums (`LegalThemeType`, `JudgingBody`), e um
+   valor desconhecido **derruba** a importação: um instrumento novo sem rótulo não entra
+   por palpite.
+3. **O arquivo inteiro é lido e convertido antes da primeira escrita**, e as escritas são
+   uma transação. Célula vazia é null; célula malformada (data fora do ISO, S/N por
+   extenso) lança exceção com o número do precedente. O CSV é RFC 4180 — `fgetcsv` com
+   `escape: ''`, senão as aspas dobradas quebram. `LegalThemeRecord` é o único lugar que
+   conhece os cabeçalhos do STJ.
+4. **Precedente que some do arquivo fica na tabela.** O STJ cancela em vez de apagar, e
+   um sumiço é mais provavelmente exportação com defeito.
+
+A vetorização vem depois da transação e fora dela, e usa o `DocumentEmbedder` do
+catálogo de classes — mesmo modelo, mesmo prefixo do nomic, mesmo hash. O texto embutido
+é questão, tese, delimitação e assuntos; situação, datas e órgão ficam de fora porque são
+filtro de SQL, e dentro do texto uma mudança de situação trocaria o hash e reembutiria um
+tema que não mudou. O comando itera em `chunkById(256)`: os 2,4 mil vetores hidratados
+de uma vez passam do `memory_limit` de 128 MB. A carga inteira leva ~25 s no Ollama, e
+uma segunda execução não cria nem embute nada.
+
 ## Ainda não implementado
+
+A busca sobre os temas do STJ: os vetores estão gravados, falta a query (o
+`DocumentEmbedder::query()` é o outro lado do par) e o agente que a consulte.
 
 O módulo de Jurisprudência: ingestão, chunking e busca vetorial sobre o corpus.
 O pgvector já está de pé e em uso no catálogo de classes, então o que falta é a

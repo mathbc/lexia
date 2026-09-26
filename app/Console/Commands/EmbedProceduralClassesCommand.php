@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
+use App\Console\Concerns\ReportsEmbeddingFailure;
 use App\Domain\ProceduralClasses\Actions\EmbedProceduralClasses;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
 use Illuminate\Console\Command;
@@ -23,6 +24,8 @@ use Throwable;
  */
 final class EmbedProceduralClassesCommand extends Command
 {
+    use ReportsEmbeddingFailure;
+
     protected $signature = 'lexia:embed-procedural-classes
                             {--fresh : reembute todas, ignorando o hash}
                             {--filing-only : só as classes de ajuizamento, que são as que o agente vê}';
@@ -54,14 +57,7 @@ final class EmbedProceduralClassesCommand extends Command
         try {
             $embedded = $embed->handle($classes);
         } catch (Throwable $e) {
-            $provider = (string) config('ai.default_for_embeddings');
-            $model = (string) config("ai.providers.{$provider}.models.embeddings.default");
-
-            $this->error('Falha ao gerar embeddings: '.$e->getMessage());
-            $this->line("Provedor de embeddings: [{$provider}], modelo [{$model}].");
-            $this->line($provider === 'ollama'
-                ? "Verifique se o Ollama está de pé e se o modelo foi baixado: ollama pull {$model}"
-                : 'Verifique a credencial do provedor e se o modelo aceita as dimensões configuradas.');
+            $this->reportEmbeddingFailure($e);
 
             return self::FAILURE;
         }
