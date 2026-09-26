@@ -31,10 +31,11 @@ top-k acima, evitada por construção.
 
 **Os temas do STJ são o terceiro regime, e o único top-k de verdade.** As 2.364 linhas de
 `legal_themes` (Temas Repetitivos, Controvérsias, PUIL, IAC, SIRDR) chegam pelo
-`lexia:import-legal-themes` já com o vetor, e a aba Temas da etapa 6 as lê:
-`LegalThemeCandidatesQuery` ordena no Postgres (`<=>`) pela proximidade com o relato e
-entrega os `ai.retrieval.theme_candidates` (12) mais próximos a
-`LegalThemeSelectionAgent`, que fica com os que se aplicam. Ali o corte é o regime certo,
+`lexia:import-legal-themes` já com o vetor, e a aba Temas da etapa 6 as lê em três
+passos: `LegalQuestionFormulationAgent` reescreve o relato como as questões de direito
+que ele levanta, `LegalThemeCandidatesQuery` ordena no Postgres (`<=>`) pela proximidade
+com cada questão e entrega os `ai.retrieval.theme_candidates` (20) intercalados, e
+`LegalThemeSelectionAgent` os ordena por relevância — sempre de 3 a 8. Ali o corte é o regime certo,
 ao contrário do enquadramento: não há `enum` fixo a proteger — o `enum` é montado com as
 candidatas que a busca trouxe —, e sim um corpus grande do qual só uns poucos temas
 importam para uma peça.
@@ -42,14 +43,19 @@ importam para uma peça.
 Três diferenças para o catálogo de classes, todas deliberadas:
 
 - **A distância é calculada no SQL**, e não em PHP: hidratar 2,4 mil vetores para ficar
-  com doze seria pagar a tabela pelo topo dela. O vetor da consulta vai como array — uma
+  com vinte seria pagar a tabela pelo topo dela. O vetor da consulta vai como array — uma
   string faria o framework embuti-la por conta própria, sem o prefixo `search_query:`.
-- **A consulta leva a área na frente** (`EmbedLegalThemes::queryFor()`): é o pedaço do
-  enquadramento que fala do assunto. A classe fica de fora, porque "Procedimento Comum
-  Cível" é igual para metade das peças.
-- **Não degrada em silêncio.** Sem o vetor da consulta a exceção sobe e a aba falha:
-  não existe ordem de reserva que signifique alguma coisa, e uma lista vazia seria
-  gravada como "nenhum tema se aplica". Cancelados e prejudicados ficam fora do filtro.
+- **A consulta é uma questão de direito, e não o relato** (`EmbedLegalThemes::queryFor()`).
+  O documento gravado é uma questão abstrata ("Definir se…"), e fatos concretos não caem
+  perto dele: embutido inteiro, o relato de um furto em flagrante trouxe Maria da Penha e
+  nenhum tema de furto entre os doze primeiros, e cada peça pesquisada assim gravou zero
+  temas. As questões — uma consulta cada, sem a área na frente, porque cada uma já nomeia
+  o instituto — puseram o tema certo em primeiro lugar. As listas são intercaladas por
+  posição, para que cada questão chegue ao seletor com o seu tema mais próximo.
+- **Não degrada em silêncio.** Sem questão formulada ou sem o vetor dela a exceção sobe e
+  a aba falha: consultar pelo relato cru seria reinstalar a busca que devolvia zero temas,
+  e não existe ordem de reserva que signifique alguma coisa. Cancelados e prejudicados
+  ficam fora do filtro.
 
 ## Como a vetorização funciona
 

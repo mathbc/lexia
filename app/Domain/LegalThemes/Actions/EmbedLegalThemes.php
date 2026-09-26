@@ -62,17 +62,17 @@ final class EmbedLegalThemes
     }
 
     /**
-     * O outro lado do par: o relato de fatos, como consulta.
+     * O outro lado do par: uma questão de direito, como consulta.
      *
-     * A área vai na frente porque é o único pedaço do enquadramento que fala
-     * do assunto — "Direito do Consumidor" puxa para os temas do CDC. A classe
-     * fica de fora: "Procedimento Comum Cível" é igual para metade das peças e
-     * só diluiria o vetor.
+     * Uma questão, e não o relato — ver `LegalThemeCandidatesQuery`. Ela vai
+     * sozinha, sem a área na frente: `LegalQuestionFormulationAgent` escreve
+     * cada questão nomeando o instituto e a relação ("no crime de furto", "no
+     * contrato de locação"), que é o pedaço da área que fala do assunto, e o
+     * rótulo da área repetido em oito consultas só as puxaria umas para as
+     * outras.
      */
-    public static function queryFor(string $facts, ?string $area = null): string
+    public static function queryFor(string $question): string
     {
-        $text = trim($facts);
-
-        return DocumentEmbedder::query($area === null || $area === '' ? $text : "{$area}. {$text}");
+        return DocumentEmbedder::query(trim($question));
     }
 }

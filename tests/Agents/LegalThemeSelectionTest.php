@@ -21,8 +21,9 @@ use Tests\Feature\LegalThemes\ImportLegalThemesTest;
 use Tests\TestCase;
 
 /**
- * The themes RAG against the real models, no fakes: nomic on the daemon for
- * both sides of the vector, and the selection agent on its provider.
+ * The themes RAG against the real models, no fakes: the formulation agent and
+ * the selection agent on their provider, and nomic on the daemon for both
+ * sides of the vector.
  *
  * The catalogue is the nine-row fixture the import tests use, embedded for real
  * in `setUp()` — a few seconds on Ollama. That is small enough that the
@@ -36,10 +37,11 @@ use Tests\TestCase;
  * ## What is pinned, and what deliberately is not
  *
  * Held firmly: the contract — every selected id is a theme of the catalogue,
- * the ceiling holds, every reason is written. Held loosely, with a message: the
- * one judgement a smoke test can make without pinning a legal opinion — a
- * narrative that *is* the question of Tema 952 selects it, and one about a
- * collapsed wall selects nothing about health plans.
+ * the floor and the ceiling hold, every reason is written, and the questions
+ * came back. Held loosely, with a message: the one judgement a smoke test can
+ * make without pinning a legal opinion — a narrative that *is* the question of
+ * Tema 952 selects it, and one about a collapsed wall still comes back with a
+ * ranked list (the floor), but not with a health plan on top of it.
  *
  * ```bash
  * composer test:agents
@@ -82,7 +84,7 @@ final class LegalThemeSelectionTest extends TestCase
     }
 
     #[Test]
-    public function a_narrative_that_touches_no_theme_selects_nothing_about_health_plans(): void
+    public function a_narrative_that_touches_no_theme_still_ranks_some_but_no_health_plan_first(): void
     {
         $facts = <<<'TXT'
         O meu vizinho fez uma obra no terreno dele e o muro que divide as duas casas
@@ -95,17 +97,24 @@ final class LegalThemeSelectionTest extends TestCase
         $this->show($facts, $research);
         $this->assertContractHolds($research);
 
+        $healthPlans = [$this->theme(952)->id, $this->controversy(1)->id];
+
         $this->assertNotContains(
-            $this->theme(952)->id,
-            $this->ids($research),
-            'O agente selecionou um tema de plano de saúde para um muro desabado.',
+            $this->ids($research)[0] ?? null,
+            $healthPlans,
+            'O agente pôs um tema de plano de saúde no topo da lista de um muro desabado.',
         );
     }
 
     private function assertContractHolds(LegalThemeResearchData $research): void
     {
         $this->assertSame(LegalTheme::query()->count(), $research->considered);
-        $this->assertLessThanOrEqual(LegalCaseThemeListData::MAX_THEMES, count($research->themes->themes));
+        $this->assertNotEmpty($research->questions, 'A busca não formulou nenhuma questão.');
+
+        $count = count($research->themes->themes);
+
+        $this->assertGreaterThanOrEqual(min(LegalCaseThemeListData::MIN_THEMES, $research->considered), $count);
+        $this->assertLessThanOrEqual(LegalCaseThemeListData::MAX_THEMES, $count);
 
         foreach ($research->themes->themes as $theme) {
             $this->assertTrue(LegalTheme::query()->whereKey($theme->legalThemeId)->exists());
@@ -126,6 +135,11 @@ final class LegalThemeSelectionTest extends TestCase
         return LegalTheme::query()->where('type', 'theme')->where('number', $number)->sole();
     }
 
+    private function controversy(int $number): LegalTheme
+    {
+        return LegalTheme::query()->where('type', 'controversy')->where('number', $number)->sole();
+    }
+
     private function pleading(string $facts): LegalCase
     {
         $legalCase = new LegalCase(['facts' => $facts, 'injunctive_relief' => false]);
@@ -138,7 +152,13 @@ final class LegalThemeSelectionTest extends TestCase
 
     private function show(string $facts, LegalThemeResearchData $research): void
     {
-        fwrite(STDERR, PHP_EOL.'— Relato —'.PHP_EOL.trim($facts).PHP_EOL.'— Temas —'.PHP_EOL);
+        fwrite(STDERR, PHP_EOL.'— Relato —'.PHP_EOL.trim($facts).PHP_EOL.'— Questões —'.PHP_EOL);
+
+        foreach ($research->questions as $question) {
+            fwrite(STDERR, "- {$question}".PHP_EOL);
+        }
+
+        fwrite(STDERR, '— Temas —'.PHP_EOL);
 
         foreach ($research->themes->themes as $theme) {
             $heading = LegalTheme::query()->findOrFail($theme->legalThemeId)->heading();

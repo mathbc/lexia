@@ -195,19 +195,22 @@ return [
     | certa descrita, mas suba `AI_CONTEXT_WINDOW` junto.
     |
     | Os temas do STJ são o regime oposto, e `theme_candidates` é top-k de
-    | verdade: dos 2,4 mil temas, só os mais próximos do relato chegam ao
-    | `LegalThemeSelectionAgent`, e os demais não são resposta possível. Lá não
-    | há `enum` fixo a proteger — a pergunta é "quais se aplicam", não "qual
-    | destes" —, então o corte é por contagem. Um tema descrito custa em média
-    | ~450 caracteres (questão, tese e delimitação, medido no catálogo), então
-    | doze cabem com folga; suba se o agente não estiver vendo o tema certo.
+    | verdade: dos 2,4 mil temas, só os mais próximos das questões de direito
+    | do caso chegam ao `LegalThemeSelectionAgent`, e os demais não são resposta
+    | possível. Lá não há `enum` fixo a proteger — a pergunta é "quais pesam",
+    | não "qual destes" —, então o corte é por contagem. São vinte porque a
+    | busca é por questão (de três a oito, intercaladas): com oito questões,
+    | vinte ainda dão a cada uma os seus dois ou três temas mais próximos. Um
+    | tema descrito custa em média ~450 caracteres (questão, tese e
+    | delimitação, medido no catálogo), então vinte cabem com folga; suba se o
+    | agente não estiver vendo o tema certo.
     |
     */
 
     'retrieval' => [
         'description_budget' => (int) env('AI_DESCRIPTION_BUDGET', 16000),
         'minimum_described' => (int) env('AI_MINIMUM_DESCRIBED', 10),
-        'theme_candidates' => (int) env('AI_THEME_CANDIDATES', 12),
+        'theme_candidates' => (int) env('AI_THEME_CANDIDATES', 20),
     ],
 
     /*

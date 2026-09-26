@@ -28,7 +28,8 @@ export interface LegalThemeDraft {
 /**
  * Os temas como a aba os desenha: todos marcados.
  *
- * A seleção foi pedida e só devolve o que o agente leu e julgou aplicável: o
+ * A seleção foi pedida e devolve, em ordem de relevância, o que o agente leu e
+ * julgou pertinente — inclusive o de relação indireta, que ela diz na razão: o
  * gesto do advogado é **tirar** o que não serve, como nas teses e nos julgados.
  */
 export const toLegalThemeDrafts = (themes: ResearchedLegalTheme[] | null | undefined): LegalThemeDraft[] =>
@@ -38,8 +39,10 @@ export const toLegalThemeDrafts = (themes: ResearchedLegalTheme[] | null | undef
  * Os temas mantidos, na forma que `SaveLegalCaseThemes` grava.
  *
  * A razão volta junto porque a gravação é um `sync()`: um vínculo que ficou
- * recebe de novo as colunas do pivot, e mandar a razão vazia a apagaria. O
- * tema desmarcado não vai — e é por não ir que o servidor o desvincula.
+ * recebe de novo as colunas do pivot, e mandar a razão vazia a apagaria. A
+ * ordem também volta, sem campo próprio: o servidor grava a posição de cada
+ * linha pelo índice. O tema desmarcado não vai — e é por não ir que o servidor
+ * o desvincula.
  */
 export const toLegalThemePayload = (
     drafts: LegalThemeDraft[],

@@ -18,9 +18,10 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
  * pivot *class* goes through `save()` on `attach()` — which is where
  * `HasUuids` mints it. The bare pivot would insert a row with no id.
  *
- * The one of meaning is `reason`: why this theme applies to these facts, as
- * `LegalThemeSelectionAgent` wrote it. The row is a finding about the pleading,
- * not a copy of the catalogue — see the migration.
+ * The one of meaning is `reason` and `position`: how this theme bears on these
+ * facts, as `LegalThemeSelectionAgent` wrote it, and where it sits in the
+ * ranking the agent returned. The row is a finding about the pleading, not a
+ * copy of the catalogue — see the migrations.
  *
  * Not `BelongsToAccount`, unlike the other children of `LegalCase`. The rows
  * are only ever reached through `LegalCase::themes()`, which the account scope
@@ -33,6 +34,7 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
  * @property string $legal_case_id
  * @property string $legal_theme_id
  * @property string|null $reason
+ * @property int $position
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property-read LegalCase $legalCase
@@ -43,6 +45,16 @@ class LegalCaseTheme extends Pivot
     use HasUuids;
 
     protected $table = 'legal_case_themes';
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'position' => 'integer',
+        ];
+    }
 
     /**
      * @return BelongsTo<LegalCase, $this>

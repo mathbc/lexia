@@ -18,7 +18,8 @@ use Tests\TestCase;
  *
  * Os vetores são de eixo, feitos à mão, pelo motivo de ProceduralClassRankingTest:
  * o que se verifica é a ordem que o Postgres devolve e o que ele descarta, e
- * não a qualidade do nomic. O fake do SDK devolve o vetor da consulta.
+ * não a qualidade do nomic. O fake do SDK devolve um vetor por questão, na
+ * ordem em que elas foram mandadas.
  */
 final class LegalThemeCandidatesQueryTest extends TestCase
 {
@@ -40,10 +41,33 @@ final class LegalThemeCandidatesQueryTest extends TestCase
 
         Embeddings::fake([[$this->axis(0)]]);
 
-        $found = (new LegalThemeCandidatesQuery)->for('O plano de saúde reajustou a mensalidade.', null, 2);
+        $found = (new LegalThemeCandidatesQuery)->for(['Definir se o reajuste por faixa etária é válido.'], 2);
 
         $this->assertSame([$closest->id, $near->id], $found->pluck('id')->all());
         $this->assertNotContains($far->id, $found->pluck('id')->all());
+    }
+
+    /**
+     * O primeiro de cada questão entra antes do segundo de qualquer uma: é o
+     * que impede duas questões vizinhas de tomarem as vagas da terceira. O tema
+     * que duas questões trazem entra uma vez, na primeira posição em que
+     * aparece.
+     */
+    #[Test]
+    public function the_questions_take_turns_so_each_brings_its_nearest_theme(): void
+    {
+        $theft = LegalTheme::factory()->embedded($this->axis(0))->create();
+        $theftNeighbour = LegalTheme::factory()->embedded($this->mix(0, 2))->create();
+        $search = LegalTheme::factory()->embedded($this->axis(1))->create();
+        $searchNeighbour = LegalTheme::factory()->embedded($this->mix(1, 3))->create();
+
+        // Duas questões sobre o furto e uma sobre a busca pessoal.
+        Embeddings::fake([[$this->axis(0), $this->axis(0), $this->axis(1)]]);
+
+        $found = (new LegalThemeCandidatesQuery)->for(['Consumação do furto.', 'Crime impossível no furto.', 'Fundada suspeita na busca pessoal.'], 3);
+
+        $this->assertSame([$theft->id, $search->id, $theftNeighbour->id], $found->pluck('id')->all());
+        $this->assertNotContains($searchNeighbour->id, $found->pluck('id')->all());
     }
 
     /**
@@ -59,7 +83,7 @@ final class LegalThemeCandidatesQueryTest extends TestCase
 
         Embeddings::fake([[$this->axis(0)]]);
 
-        $found = (new LegalThemeCandidatesQuery)->for('Relato.', null, 10);
+        $found = (new LegalThemeCandidatesQuery)->for(['Questão.'], 10);
 
         $this->assertSame([$kept->id], $found->pluck('id')->all());
     }
@@ -76,7 +100,7 @@ final class LegalThemeCandidatesQueryTest extends TestCase
 
         Embeddings::fake([[$this->axis(0)]]);
 
-        $found = (new LegalThemeCandidatesQuery)->for('Relato.', null, 10)->sole();
+        $found = (new LegalThemeCandidatesQuery)->for(['Questão.'], 10)->sole();
 
         $this->assertTrue($found->relationLoaded('generalRepercussions'));
         $this->assertSame([69], $found->generalRepercussions->pluck('number')->all());
@@ -84,25 +108,29 @@ final class LegalThemeCandidatesQueryTest extends TestCase
     }
 
     /**
-     * A consulta leva o prefixo do nomic e a área na frente: é o outro lado do
-     * `search_document:` com que os temas foram gravados.
+     * Cada questão vai sozinha atrás do prefixo do nomic — o outro lado do
+     * `search_document:` com que os temas foram gravados —, e as questões vão
+     * numa chamada só.
      */
     #[Test]
-    public function the_query_is_the_area_and_the_facts_behind_the_task_prefix(): void
+    public function each_question_is_a_query_behind_the_task_prefix(): void
     {
         LegalTheme::factory()->embedded($this->axis(0))->create();
 
-        Embeddings::fake([[$this->axis(0)]]);
+        Embeddings::fake([[$this->axis(0), $this->axis(0)]]);
 
-        (new LegalThemeCandidatesQuery)->for('  O plano de saúde reajustou a mensalidade.  ', 'Direito do Consumidor', 10);
+        (new LegalThemeCandidatesQuery)->for(['  Definir se o reajuste é válido.  ', 'Definir se cabe restituição em dobro.'], 10);
 
-        Embeddings::assertGenerated(static fn (EmbeddingsPrompt $prompt): bool => $prompt->inputs
-            === ['search_query: Direito do Consumidor. O plano de saúde reajustou a mensalidade.']);
+        Embeddings::assertGenerated(static fn (EmbeddingsPrompt $prompt): bool => $prompt->inputs === [
+            'search_query: Definir se o reajuste é válido.',
+            'search_query: Definir se cabe restituição em dobro.',
+        ]);
     }
 
     /**
-     * Sem vetor da consulta não há ordem que signifique alguma coisa, e uma
-     * lista vazia seria gravada como "nenhum tema se aplica". A falha sobe.
+     * Sem vetor da consulta não há ordem que signifique alguma coisa. A falha
+     * sobe — e sobe também quando o provedor devolve menos vetores do que
+     * questões, que deixaria uma delas sem busca em silêncio.
      */
     #[Test]
     public function an_embedding_outage_is_not_swallowed(): void
@@ -113,7 +141,32 @@ final class LegalThemeCandidatesQueryTest extends TestCase
 
         $this->expectException(RuntimeException::class);
 
-        (new LegalThemeCandidatesQuery)->for('Relato.', null, 10);
+        (new LegalThemeCandidatesQuery)->for(['Questão.'], 10);
+    }
+
+    #[Test]
+    public function a_missing_vector_is_not_swallowed(): void
+    {
+        LegalTheme::factory()->embedded($this->axis(0))->create();
+
+        Embeddings::fake([[$this->axis(0)]]);
+
+        $this->expectException(RuntimeException::class);
+
+        (new LegalThemeCandidatesQuery)->for(['Primeira.', 'Segunda.'], 10);
+    }
+
+    #[Test]
+    public function no_question_is_no_query(): void
+    {
+        Embeddings::fake();
+
+        try {
+            (new LegalThemeCandidatesQuery)->for([], 10);
+            $this->fail('Sem questão não deveria haver consulta.');
+        } catch (RuntimeException) {
+            Embeddings::assertNothingGenerated();
+        }
     }
 
     /**

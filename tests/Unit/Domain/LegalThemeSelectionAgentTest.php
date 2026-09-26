@@ -11,8 +11,9 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The invariant the themes RAG rests on, asserted where it costs nothing: the
- * schema may only offer the references it was handed.
+ * The invariants the themes RAG rests on, asserted where they cost nothing:
+ * the schema may only offer the references it was handed, and it may not come
+ * back with fewer than the floor — nor ask for more than there are.
  *
  * The retrieval that decides which references those are is pinned in
  * Tests\Feature\LegalThemes\LegalThemeCandidatesQueryTest, and the agent's
@@ -21,12 +22,17 @@ use PHPUnit\Framework\TestCase;
 final class LegalThemeSelectionAgentTest extends TestCase
 {
     #[Test]
-    public function the_schema_offers_exactly_the_candidate_references_under_one_ceiling(): void
+    public function the_schema_offers_exactly_the_candidate_references_between_a_floor_and_a_ceiling(): void
     {
         $schema = $this->agent()->schema(new JsonSchemaTypeFactory)['themes']->toArray();
 
         $this->assertSame(LegalCaseThemeListData::MAX_THEMES, $schema['maxItems']);
         $this->assertSame(['theme-952', 'theme-1474'], $schema['items']['properties']['reference']['enum']);
+
+        // Duas candidatas e um piso de três: um `minItems` acima do `enum`
+        // seria um schema que nenhuma resposta satisfaz.
+        $this->assertSame(2, $schema['minItems']);
+        $this->assertStringContainsString('de 2 a '.LegalCaseThemeListData::MAX_THEMES.' temas', $this->agent()->instructions());
     }
 
     /**
@@ -39,9 +45,12 @@ final class LegalThemeSelectionAgentTest extends TestCase
         $instructions = $this->agent()->instructions();
 
         $candidates = (int) strrpos($instructions, '# Os temas candidatos');
+        $questions = (int) strrpos($instructions, '# As questões de direito do caso');
         $framing = (int) strrpos($instructions, '# O enquadramento da peça');
 
-        $this->assertGreaterThan($framing, $candidates);
+        $this->assertGreaterThan($framing, $questions);
+        $this->assertGreaterThan($questions, $candidates);
+        $this->assertStringContainsString('2. Definir se cabe restituição em dobro.', $instructions);
         $this->assertGreaterThan(
             $candidates,
             (int) strpos($instructions, '- [theme-952] Tema Repetitivo 952 — Segunda Seção, situação: Trânsito em Julgado'),
@@ -55,6 +64,7 @@ final class LegalThemeSelectionAgentTest extends TestCase
     {
         return new LegalThemeSelectionAgent(
             framing: "## O enquadramento\n\n- Área de atuação: Direito do Consumidor",
+            questions: ['Definir se o reajuste por faixa etária é válido.', 'Definir se cabe restituição em dobro.'],
             candidates: [
                 [
                     'reference' => 'theme-952',

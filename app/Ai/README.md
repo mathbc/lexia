@@ -15,7 +15,8 @@ geram em `app/Ai/Agents` e `app/Ai/Tools`. O conhecimento que os agentes leem fi
 | `FactsRefinementAgent` | Reescreve o relato do cliente como a narrativa de fatos de uma inicial: registro formal, terceira pessoa, ordem cronológica — e o peso que uma perda irreparável tem |
 | `LegalThesisResearchAgent` | Pesquisa nos portais oficiais as teses que a peça pode sustentar, com as normas e os julgados que as sustentam, e devolve uma ficha rotulada |
 | `ForensicReviewTranscriptionAgent` | Transcreve a ficha da pesquisa para a estrutura aninhada de teses e precedentes |
-| `LegalThemeSelectionAgent` | Entre os temas do STJ que a busca vetorial trouxe como mais próximos do relato, escolhe os que se aplicam ao caso, cada um com a razão |
+| `LegalQuestionFormulationAgent` | Reescreve o relato como as questões de direito que ele levanta, na redação com que o STJ afeta um tema — são elas, e não o relato, que consultam o catálogo |
+| `LegalThemeSelectionAgent` | Entre os temas do STJ que a busca trouxe para essas questões, ordena por relevância os que pesam sobre o caso — sempre alguns, nunca a lista vazia —, cada um com a razão |
 | `PleadingDraftingAgent` | Redige a petição inicial inteira a partir do dossiê, pondo cada julgado por marcador e escolhendo os trechos da ementa que a citação leva |
 | `PleadingGroundsReinforcementAgent` | Reescreve o corpo do DO DIREITO da minuta a partir das teses da revisão forense — espécie, argumento, garantia e fundamentos —, fazendo a subsunção de cada tese ao relato |
 
@@ -28,8 +29,9 @@ diferente de encadear; a seção abaixo diz por quê. O quinto fica de fora dela
 propósito: ele reescreve um relato que já está na tela, e não lê um relato para preencher
 uma. Os dois seguintes são a aba de teses da etapa 6 e formam um par indivisível: quem os
 expõe é `ResearchLegalCaseTheses`, que chama os dois em série — a seção abaixo diz por que
-não podem ser um só. O seletor de temas é a outra aba, exposto por
-`ResearchLegalCaseThemes`, e corre **ao lado** do par: `ResearchLegalCaseForensicReview`
+não podem ser um só. Os dois de temas são a outra aba, expostos por
+`ResearchLegalCaseThemes` — o formulador escreve as questões, a busca vetorial traz os
+temas de cada uma, e o seletor os ordena —, e correm **ao lado** do par: `ResearchLegalCaseForensicReview`
 roda as duas metades como duas tasks do mesmo `Concurrency::run`, cada uma com marcador
 próprio, de modo que uma falha, uma repetição ou uma peça antiga sem temas afeta só a sua
 aba.
@@ -473,13 +475,37 @@ e instrumentos, e a lista inteira da maior área não caberia ao lado do guia. D
 inclusive por que o documento markdown continua indo inteiro, em `app/Rag/README.md`.
 
 Os temas do STJ são o caso oposto, e o único top-k do projeto: `LegalThemeCandidatesQuery`
-traz os doze mais próximos do relato e só eles chegam a `LegalThemeSelectionAgent`. O
-`enum` continua sendo a garantia — montado com as **referências** das candidatas
-(`theme-1016`, `puil-5`), nunca o uuid e nunca o número sozinho, que não é único entre
-espécies —, mas aqui ele é feito do que a busca trouxe, e não de uma lista fechada. Duas
-recusas antes do agente: sem vetor da consulta a exceção sobe (uma lista vazia seria
-gravada como "nenhum tema se aplica"), e com o catálogo vazio também (`enum` vazio é
-gramática inválida).
+traz os vinte mais próximos das questões de direito do caso e só eles chegam a
+`LegalThemeSelectionAgent`. O `enum` continua sendo a garantia — montado com as
+**referências** das candidatas (`theme-1016`, `puil-5`), nunca o uuid e nunca o número
+sozinho, que não é único entre espécies —, mas aqui ele é feito do que a busca trouxe, e
+não de uma lista fechada. Três recusas antes do seletor: sem questão formulada, sem vetor
+da consulta e com o catálogo vazio (`enum` vazio é gramática inválida), a exceção sobe e
+a aba falha.
+
+**A consulta não é o relato, e isso foi medido.** Um tema é uma questão de direito
+abstrata ("Definir se, no crime de furto, …"), e o relato são fatos concretos; embutido
+inteiro, o relato de um furto em flagrante de madrugada, com câmeras na loja, trouxe
+Maria da Penha e tabela de honorários da OAB entre os doze mais próximos, e nenhum dos
+temas de furto do catálogo. As três peças pesquisadas assim gravaram zero temas. Reescrito
+como seis questões no registro do STJ, o mesmo caso pôs o tema certo em primeiro lugar
+para cada uma (Temas 934, 924, 1144, 1205, 1434 e 1441). Daí `LegalQuestionFormulationAgent`,
+que traduz e só traduz: é proibido de nomear tema ou súmula, porque não vê o catálogo e
+um número lembrado não ajuda a busca. As listas de cada questão são **intercaladas por
+posição**, e não somadas: o mais próximo de cada questão entra antes do segundo de
+qualquer uma, para que três questões sobre o furto não empurrem para fora a única sobre a
+busca pessoal.
+
+**E o seletor ordena, não filtra.** O prompt anterior dizia "lista vazia é resposta
+legítima e frequente" e, com as candidatas ruins, era o que ele devolvia. Hoje o prompt
+explica o que é um tema — questão de direito que alcança todo processo em que surgir, no
+mérito, na prova, no procedimento ou nas consequências, favorável ou desfavorável — e o
+schema tem **piso**: de 3 a 8 temas, do mais relevante ao menos, com a relação indireta
+dita na razão. O advogado desmarca o que não serve; um tema descartado custa um clique, e
+um que nunca apareceu não se confere. `LegalCaseThemeListData::fromAgent()` segura o piso
+de novo, completando pela ordem da recuperação com uma razão que diz que ninguém o
+analisou, se um provider ignorar o `minItems`. A ordem é gravada (`legal_case_themes.position`)
+e é a ordem da tela.
 
 ## Saída estruturada
 

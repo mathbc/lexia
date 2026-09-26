@@ -99,6 +99,7 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
         $this->assertSame('O relato discute o reajuste por faixa etária.', $link->reason);
         $this->assertSame($account->id, $link->account_id);
         $this->assertSame(12, $case->theme_findings['considered'] ?? null);
+        $this->assertSame(['Definir se é válido o reajuste de plano de saúde por faixa etária.'], $case->theme_findings['questions'] ?? null);
         $this->assertNotEmpty($case->theme_findings['researched_at'] ?? null);
 
         // A gravação também marca a marca d'água, porque é a Action irmã que
@@ -127,6 +128,7 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
         $this->fakeThemes()->shouldReceive('handle')->once()->andReturn(new LegalThemeResearchData(
             themes: new LegalCaseThemeListData([]),
             considered: 12,
+            questions: ['Definir se o relato levanta alguma questão de direito.'],
         ));
 
         $this->actingAs($owner)
@@ -393,6 +395,7 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
                 new LegalCaseThemeData($theme->id, 'O relato discute o reajuste por faixa etária.'),
             ]),
             considered: 12,
+            questions: ['Definir se é válido o reajuste de plano de saúde por faixa etária.'],
         );
     }
 

@@ -8,7 +8,6 @@ use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\CourtDecisions\Models\CourtDecision;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalPrecedents\Models\LegalPrecedent;
-use App\Domain\LegalThemes\Enums\LegalThemeType;
 use App\Domain\LegalThemes\Models\GeneralRepercussion;
 use App\Domain\LegalThemes\Models\LegalCaseTheme;
 use App\Domain\LegalThemes\Models\LegalTheme;
@@ -115,15 +114,15 @@ final class LegalCaseFormProps
      * back as `legal_theme_id`, and what `sync()` keys the links by. The vector
      * is never selected — 768 floats per row for a screen that reads text.
      *
-     * Ordered by kind in the enum's order — the binding Temas Repetitivos first
-     * — and then by number, which is how a lawyer reads a list of precedents.
+     * In the relation's order, which is the selection's ranking — the most
+     * relevant theme first. The screen draws them in it and the "Concluir"
+     * posts the kept ones back in it, which is how the ranking survives the
+     * lawyer's curation.
      *
      * @return list<array<string, mixed>>
      */
     private static function themes(LegalCase $legalCase): array
     {
-        $kinds = array_flip(array_column(LegalThemeType::cases(), 'value'));
-
         return $legalCase->themes()
             ->select([
                 'legal_themes.id',
@@ -137,7 +136,6 @@ final class LegalCaseFormProps
             ])
             ->with('generalRepercussions')
             ->get()
-            ->sortBy(static fn (LegalTheme $theme): string => sprintf('%d-%06d', $kinds[$theme->type->value], $theme->number))
             ->map(static fn (LegalTheme $theme): array => [
                 'id' => $theme->id,
                 'heading' => $theme->heading(),

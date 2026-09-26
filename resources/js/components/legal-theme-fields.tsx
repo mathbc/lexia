@@ -14,8 +14,9 @@ interface Props {
      * O relato da seleção já gravada, ou nulo quando ela nunca rodou.
      *
      * O nulo é transitório, como nas teses: a etapa dispara a seleção ao abrir.
-     * Presente com a lista vazia é a outra afirmação — a seleção rodou e nenhum
-     * tema se aplicava —, e essa não se repete sozinha.
+     * Presente, a seleção rodou e não se repete sozinha — e ela sempre volta
+     * com temas; a lista vazia só aparece numa seleção gravada antes disso, ou
+     * depois de o advogado desmarcar tudo e concluir.
      */
     research: LegalThemeFindings | null;
     /** A seleção está rodando agora. */
@@ -31,15 +32,18 @@ interface Props {
 /**
  * A segunda aba da revisão forense: os temas do STJ em que a peça se apoia.
  *
- * Quem preenche é o RAG sobre o catálogo — a busca vetorial traz os temas mais
- * próximos do relato e `LegalThemeSelectionAgent` fica com os que se aplicam,
- * cada um com a razão ao lado. Roda em paralelo com a pesquisa de teses e tem
- * marcador próprio, então esta aba pode ter falhado enquanto a outra voltou, e
- * o "Pesquisar novamente" daqui refaz só ela.
+ * Quem preenche é o RAG sobre o catálogo — um agente reescreve o relato como as
+ * questões de direito que ele levanta, a busca vetorial traz os temas mais
+ * próximos de cada questão e `LegalThemeSelectionAgent` os ordena por
+ * relevância, cada um com a razão ao lado. Roda em paralelo com a pesquisa de
+ * teses e tem marcador próprio, então esta aba pode ter falhado enquanto a
+ * outra voltou, e o "Pesquisar novamente" daqui refaz só ela.
  *
  * A decisão é **tirar**, como nas teses: todo tema chega marcado, e desmarcar o
- * esmaece sem tirá-lo da lista. O desvínculo acontece no "Concluir e gerar
- * minuta", na etapa 7, pelo `sync()` de `SaveLegalCaseThemes`.
+ * esmaece sem tirá-lo da lista. A seleção sempre devolve alguns temas, mesmo
+ * quando a relação é indireta — é mais barato desmarcar do que procurar o que
+ * não veio. O desvínculo acontece no "Concluir e gerar minuta", na etapa 7,
+ * pelo `sync()` de `SaveLegalCaseThemes`, que também grava a ordem.
  */
 export function LegalThemesPanel({
     research,
@@ -57,7 +61,7 @@ export function LegalThemesPanel({
                 <p className="text-sm text-muted-foreground">
                     {themes.length === 0
                         ? "Os temas repetitivos e demais precedentes qualificados do STJ que se aplicam ao caso."
-                        : `${themes.length} ${themes.length === 1 ? "tema selecionado" : "temas selecionados"} · ${kept} ${
+                        : `${themes.length} ${themes.length === 1 ? "tema selecionado" : "temas em ordem de relevância"} · ${kept} ${
                               kept === 1
                                   ? "mantido na peça"
                                   : "mantidos na peça"
@@ -82,8 +86,9 @@ export function LegalThemesPanel({
 
             {researching ? (
                 <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-balance text-muted-foreground">
-                    Consultando o catálogo de temas do STJ… O agente lê os temas
-                    mais próximos do relato e fica com os que se aplicam.
+                    Consultando o catálogo de temas do STJ… O agente formula as
+                    questões de direito do relato, busca os temas mais próximos
+                    de cada uma e os ordena por relevância.
                 </p>
             ) : failed ? (
                 <Alert variant="destructive">
@@ -105,9 +110,9 @@ export function LegalThemesPanel({
                 <>
                     {themes.length === 0 ? (
                         <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-balance text-muted-foreground">
-                            Nenhum tema do STJ se aplica a este relato. A
-                            maioria dos casos não toca precedente qualificado
-                            nenhum.
+                            Nenhum tema vinculado a esta peça. Use "Pesquisar
+                            novamente" para consultar o catálogo com as
+                            questões de direito do relato.
                         </p>
                     ) : (
                         <ol className="space-y-4">
@@ -121,17 +126,46 @@ export function LegalThemesPanel({
                         </ol>
                     )}
 
-                    {/* O quanto se olhou, para que "nenhum se aplica" não se
-                        leia como "ninguém procurou". */}
-                    <p className="text-xs text-muted-foreground">
-                        {research.considered}{" "}
-                        {research.considered === 1
-                            ? "tema do catálogo consultado"
-                            : "temas do catálogo consultados"}{" "}
-                        pela proximidade com o relato.
-                    </p>
+                    <SearchedQuestions research={research} />
                 </>
             )}
+        </div>
+    );
+}
+
+/**
+ * O que se perguntou ao catálogo e o quanto se olhou.
+ *
+ * As questões são o que a busca usou no lugar do relato: quem sente falta de um
+ * tema vê aqui que ângulo do caso nunca foi perguntado. Uma seleção gravada
+ * antes de a busca ser por questão não as tem, e fica só com a contagem.
+ */
+function SearchedQuestions({ research }: { research: LegalThemeFindings }) {
+    const questions = research.questions ?? [];
+
+    return (
+        <div className="space-y-2 text-xs text-muted-foreground">
+            {questions.length > 0 && (
+                <>
+                    <p className="font-medium text-foreground">
+                        Questões de direito pesquisadas
+                    </p>
+                    <ol className="list-decimal space-y-1 pl-4">
+                        {questions.map((question) => (
+                            <li key={question}>{question}</li>
+                        ))}
+                    </ol>
+                </>
+            )}
+            <p>
+                {research.considered}{" "}
+                {research.considered === 1
+                    ? "tema do catálogo consultado"
+                    : "temas do catálogo consultados"}{" "}
+                {questions.length > 0
+                    ? "pela proximidade com essas questões."
+                    : "pela proximidade com o relato."}
+            </p>
         </div>
     );
 }
@@ -185,7 +219,7 @@ function LegalThemeItem({
                     {theme.reason && (
                         <div className="rounded-lg bg-muted/50 p-3">
                             <p className="text-xs font-medium">
-                                Por que se aplica
+                                Relação com o caso
                             </p>
                             <p className="mt-1 text-sm text-muted-foreground">
                                 {theme.reason}

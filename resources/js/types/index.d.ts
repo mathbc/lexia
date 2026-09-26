@@ -556,10 +556,11 @@ export interface CourtDecisionFindings {
 /**
  * Um tema do STJ vinculado à peça — espelha `LegalCaseFormProps::themes()`.
  *
- * É catálogo, só leitura, com uma afirmação nossa ao lado: `reason`, o porquê
- * de o tema se aplicar a estes fatos, escrito pelo agente de seleção. Os
- * rótulos já chegam em português (`heading`, `judging_body`), porque nada na
- * tela edita a espécie de um tema.
+ * É catálogo, só leitura, com uma afirmação nossa ao lado: `reason`, como o
+ * tema toca estes fatos, escrito pelo agente de seleção. Os rótulos já chegam
+ * em português (`heading`, `judging_body`), porque nada na tela edita a
+ * espécie de um tema. A lista chega na ordem do ranking — o mais relevante
+ * primeiro —, e é nessa ordem que o "Concluir" a devolve.
  *
  * `id` é o do **tema**, e não o do vínculo: é o que o "Concluir" posta de volta
  * como `legal_theme_id`. `settled_thesis` nulo é tema afetado, ainda sem tese —
@@ -590,11 +591,16 @@ export interface GeneralRepercussion {
  *
  * Bem menor do que o das teses, porque a rodada é: nenhum portal é aberto e
  * nenhuma citação passa por guarda. `considered` é quantos temas a busca
- * vetorial entregou ao agente — é o que deixa a aba dizer "12 temas
- * consultados" ao lado de uma lista vazia.
+ * vetorial entregou ao agente, e `questions` as questões de direito com que
+ * o catálogo foi consultado — é o que deixa o advogado ver que ângulo do caso
+ * nunca foi perguntado quando sente falta de um tema.
+ *
+ * `questions` é opcional porque uma seleção gravada antes de a busca passar a
+ * ser por questão não as tem.
  */
 export interface LegalThemeFindings {
     considered: number;
+    questions?: string[];
     researched_at: string;
 }
 

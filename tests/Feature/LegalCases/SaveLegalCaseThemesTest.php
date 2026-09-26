@@ -86,9 +86,9 @@ final class SaveLegalCaseThemesTest extends TestCase
     }
 
     /**
-     * Reabrir a peça devolve a aba como ela ficou: o id é o do tema — é o que
-     * o "Concluir" posta de volta —, os rótulos já em português, as
-     * repercussões embaixo, e o vetor, nunca.
+     * Reabrir a peça devolve a aba como ela ficou: na ordem do ranking, o id do
+     * tema — é o que o "Concluir" posta de volta —, os rótulos já em
+     * português, as repercussões embaixo, e o vetor, nunca.
      */
     #[Test]
     public function the_linked_themes_hydrate_the_step_when_the_pleading_is_reopened(): void
@@ -96,7 +96,7 @@ final class SaveLegalCaseThemesTest extends TestCase
         [$account, $owner] = $this->accountWithOwner();
         $case = LegalCase::factory()->forAccount($account)->create([
             'current_step' => LegalCaseStep::Review,
-            'theme_findings' => ['considered' => 12, 'researched_at' => '2026-09-26T10:00:00-03:00'],
+            'theme_findings' => ['considered' => 12, 'questions' => ['Definir se o reajuste é válido.'], 'researched_at' => '2026-09-26T10:00:00-03:00'],
         ]);
 
         $controversy = LegalTheme::factory()->embedded(array_fill(0, 768, 0.1))->create([
@@ -115,17 +115,39 @@ final class SaveLegalCaseThemesTest extends TestCase
             ->get(route('legal-cases.edit', $case))
             ->assertInertia(fn ($page) => $page
                 ->component('legal-cases/form')
-                // O Tema Repetitivo antes da Controvérsia: a ordem do enum.
-                ->where('legalCase.themes.0.id', $theme->id)
-                ->where('legalCase.themes.0.heading', 'Tema Repetitivo 952')
-                ->where('legalCase.themes.0.judging_body', $theme->judging_body?->label())
-                ->where('legalCase.themes.0.settled_thesis', 'O reajuste é válido.')
-                ->where('legalCase.themes.0.reason', 'O relato discute o reajuste.')
-                ->where('legalCase.themes.0.general_repercussions.0.number', 69)
-                ->missing('legalCase.themes.0.embedding')
-                ->where('legalCase.themes.1.id', $controversy->id)
-                ->where('legalCase.themes.1.heading', 'Controvérsia 7')
-                ->where('legalCase.theme_research.considered', 12));
+                // A Controvérsia antes do Tema Repetitivo: a ordem é a do
+                // ranking, e não a do tipo.
+                ->where('legalCase.themes.0.id', $controversy->id)
+                ->where('legalCase.themes.0.heading', 'Controvérsia 7')
+                ->where('legalCase.themes.1.id', $theme->id)
+                ->where('legalCase.themes.1.heading', 'Tema Repetitivo 952')
+                ->where('legalCase.themes.1.judging_body', $theme->judging_body?->label())
+                ->where('legalCase.themes.1.settled_thesis', 'O reajuste é válido.')
+                ->where('legalCase.themes.1.reason', 'O relato discute o reajuste.')
+                ->where('legalCase.themes.1.general_repercussions.0.number', 69)
+                ->missing('legalCase.themes.1.embedding')
+                ->where('legalCase.theme_research.considered', 12)
+                ->where('legalCase.theme_research.questions', ['Definir se o reajuste é válido.']));
+    }
+
+    /**
+     * O "Concluir" posta os mantidos na ordem da tela, e a gravação seguinte
+     * reescreve a posição dos vínculos que ficaram — o ranking sobrevive à
+     * curadoria sem que nenhum vínculo seja recriado.
+     */
+    #[Test]
+    public function a_second_save_rewrites_the_rank_of_the_links_that_stayed(): void
+    {
+        [$account] = $this->accountWithOwner();
+        $case = LegalCase::factory()->forAccount($account)->create(['current_step' => LegalCaseStep::Review]);
+
+        [$first, $second, $third] = LegalTheme::factory()->count(3)->create();
+
+        SaveLegalCaseThemes::run($case, $this->list([$first->id => null, $second->id => null, $third->id => null]));
+        SaveLegalCaseThemes::run($case, $this->list([$third->id => null, $first->id => null]));
+
+        $this->assertSame([$third->id, $first->id], $case->themes()->pluck('legal_themes.id')->all());
+        $this->assertSame([0, 1], $case->themes()->get()->map(static fn (LegalTheme $theme): mixed => $theme->getRelationValue('pivot')?->position)->all());
     }
 
     #[Test]

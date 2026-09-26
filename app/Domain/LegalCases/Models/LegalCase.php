@@ -254,10 +254,10 @@ class LegalCase extends Model
      * the reason it was made. The link is a model of its own, `LegalCaseTheme`,
      * so that it mints its uuid on `sync()` like every other row.
      *
-     * No order here, unlike the lists above. The agent ranks what it returns,
-     * but the ranking only decides which themes survive its ceiling; once
-     * linked they are a set, and the screen orders them the way a lawyer reads
-     * precedents, by kind and number (LegalCaseFormProps::themes()).
+     * Ordered by the pivot's `position`, which is the selection's ranking: the
+     * agent returns the themes from the most to the least relevant, and the
+     * lawyer reads them — and keeps them — in that order. The insertion order
+     * breaks ties, which only links written before the column existed have.
      *
      * @return BelongsToMany<LegalTheme, $this, LegalCaseTheme, 'pivot'>
      */
@@ -265,8 +265,10 @@ class LegalCase extends Model
     {
         return $this->belongsToMany(LegalTheme::class, 'legal_case_themes')
             ->using(LegalCaseTheme::class)
-            ->withPivot(['id', 'account_id', 'reason'])
-            ->withTimestamps();
+            ->withPivot(['id', 'account_id', 'reason', 'position'])
+            ->withTimestamps()
+            ->orderByPivot('position')
+            ->orderByPivot('created_at');
     }
 
     /**

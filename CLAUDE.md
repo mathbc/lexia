@@ -186,10 +186,11 @@ sessão. O `/register` do Fortify está desligado: o cadastro público é
 da internet? São **oito agentes**; sete rodam no Ollama com `gpt-oss:20b`, e o oitavo é
 `PleadingDraftingAgent`, que redige a minuta — ver "A minuta", abaixo. A minuta tem ainda
 um segundo agente, `PleadingGroundsReinforcementAgent`, que reforça o DO DIREITO e segue o
-provider do de redação. A etapa 6 ganhou um terceiro fora da conta original,
-`LegalThemeSelectionAgent`, que escolhe os temas do STJ que se aplicam ao caso — ver "Os
-temas do STJ", abaixo; ele segue o `#[Provider('gemini')]` dos seletores, com a linha do
-Ollama comentada acima. Os embeddings do catálogo nunca saíram da máquina:
+provider do de redação. A etapa 6 ganhou mais dois fora da conta original, em série:
+`LegalQuestionFormulationAgent`, que reescreve o relato como as questões de direito que ele
+levanta, e `LegalThemeSelectionAgent`, que ordena por relevância os temas do STJ que a busca
+trouxe para elas — ver "Os temas do STJ", abaixo; os dois seguem o `#[Provider('gemini')]`
+dos seletores, com a linha do Ollama comentada acima. Os embeddings do catálogo nunca saíram da máquina:
 `nomic-embed-text`, 768 dimensões.
 
 O **Gemini** responde por **um**: `LegalThesisResearchAgent`, que pesquisa nos portais
@@ -438,7 +439,9 @@ o vínculo e o *porquê* — a razão que o agente escreveu ligando o tema a um 
 do relato. **Não tem soft delete**, ao contrário das teses: é um vínculo com um
 catálogo que nunca some, e uma repesquisa re-vincula o mesmo tema, o que
 colidiria no `unique(legal_case_id, legal_theme_id)` com uma linha apagada só
-logicamente. Quem grava é `SaveLegalCaseThemes`, com um `sync()` que é o diff
+logicamente. O pivot guarda também a `position`, porque a seleção ordena: o
+índice na lista é a posição, na resposta do agente e no payload do "Concluir", e
+`LegalCase::themes()` devolve nessa ordem. Quem grava é `SaveLegalCaseThemes`, com um `sync()` que é o diff
 inteiro; o pivot é uma classe própria porque só uma classe de pivot passa por
 `save()` no `attach()`, que é onde o `HasUuids` cunha o id.
 
@@ -817,30 +820,65 @@ uma segunda execução não cria nem embute nada.
 
 ### A seleção de temas
 
-O RAG são duas metades em série dentro de `ResearchLegalCaseThemes`. A **recuperação** é
-`LegalThemeCandidatesQuery`: o relato (com a área na frente) vira vetor pelo
-`EmbedLegalThemes::queryFor()` — o `search_query:` do nomic, par do `search_document:` da
-gravação — e o Postgres devolve os `ai.retrieval.theme_candidates` (12) temas mais
-próximos pelo `<=>`. É **top-k de verdade**, ao contrário do catálogo de classes: ali o
-`enum` cobre todas as candidatas e o vetor só orça a janela; aqui a pergunta é "quais se
-aplicam" entre 2,4 mil, e o que não vem na consulta não é resposta possível. O vetor da
-consulta vai calculado, como array — uma string faria o framework embuti-la sem o
-prefixo. Ficam de fora os cancelados e os prejudicados (531 linhas, com as duas grafias de
-"cancelado"); afetado e sobrestado ficam, porque suspendem processo.
+O RAG são três passos em série dentro de `ResearchLegalCaseThemes`, e o primeiro existe
+porque **o relato não é consulta**. Um tema é uma questão de direito abstrata ("Definir se,
+no crime de furto, …"), sem partes nem fatos, e um relato são só fatos: "de madrugada" não
+cai perto de "repouso noturno", nem "as câmeras da loja" perto de "sistema de vigilância
+torna impossível o furto". Embutido inteiro, o relato de um furto em flagrante trouxe Maria
+da Penha e tabela de honorários da OAB entre os doze mais próximos, e nenhum dos temas de
+furto do catálogo — e **todas** as peças pesquisadas assim gravaram zero temas. Reescrito
+como seis questões no registro do STJ, o mesmo caso pôs o tema certo em primeiro lugar para
+cada uma (934, 924, 1144, 1205, 1434, 1441).
 
-A **geração** é `LegalThemeSelectionAgent`, que lê as candidatas — questão, tese, delimitação,
-órgão, situação e as repercussões gerais do STF — e fica com as que se aplicam, cada uma com
-uma razão. As candidatas viajam pela **referência** (`theme-1016`, `puil-5`), e o `enum` do
-schema é montado com elas: tema não recuperado é algo que o modelo não consegue emitir. O
-uuid nunca entra no prompt, e o número sozinho não serve porque Tema 5 e PUIL 5 são coisas
-diferentes. Lista vazia é resposta legítima e frequente, e o prompt diz isso com todas as
-letras, porque um seletor com doze candidatas lê a lista como cota.
+1. **A formulação** é `LegalQuestionFormulationAgent`: de 3 a 8 questões, cobrindo o
+   caminho inteiro do processo — qualificação dos fatos, requisitos, prova e ônus,
+   procedimento, prescrição, consequências — e as questões da parte contrária. Ele traduz
+   e só traduz: é proibido de nomear tema ou súmula, porque não vê o catálogo e um número
+   lembrado de memória não ajuda a busca. As questões vão para `theme_findings` e a aba as
+   lista, para que o advogado veja que ângulo do caso nunca foi perguntado.
+2. **A recuperação** é `LegalThemeCandidatesQuery`: cada questão vira um vetor pelo
+   `EmbedLegalThemes::queryFor()` — o `search_query:` do nomic, par do `search_document:`
+   da gravação, sem a área na frente, porque a questão já nomeia o instituto — e o
+   Postgres devolve os mais próximos pelo `<=>`. As listas são **intercaladas por
+   posição** até `ai.retrieval.theme_candidates` (20): o primeiro de cada questão entra
+   antes do segundo de qualquer uma, para que três questões sobre o furto não empurrem
+   para fora a única sobre a busca pessoal. É **top-k de verdade**, ao contrário do
+   catálogo de classes: ali o `enum` cobre todas as candidatas e o vetor só orça a janela;
+   aqui o que não vem na consulta não é resposta possível. Os vetores vão calculados, como
+   array — uma string faria o framework embuti-la sem o prefixo. Ficam de fora os
+   cancelados e os prejudicados (531 linhas, com as duas grafias de "cancelado"); afetado
+   e sobrestado ficam, porque suspendem processo.
+3. **A seleção** é `LegalThemeSelectionAgent`, que lê as candidatas — questão, tese,
+   delimitação, órgão, situação e as repercussões gerais do STF — junto das questões, e
+   devolve as que pesam sobre o caso **em ordem de relevância**, cada uma com uma razão.
+   As candidatas viajam pela **referência** (`theme-1016`, `puil-5`), e o `enum` do schema
+   é montado com elas: tema não recuperado é algo que o modelo não consegue emitir. O uuid
+   nunca entra no prompt, e o número sozinho não serve porque Tema 5 e PUIL 5 são coisas
+   diferentes.
+
+**O seletor ordena, não filtra, e sempre devolve alguns temas.** O prompt anterior dizia
+"lista vazia é resposta legítima e frequente", e era o que ele devolvia. O de hoje explica
+o que é um tema — questão de direito que alcança todo processo em que surgir, no mérito, na
+prova, no procedimento ou nas consequências, favorável ou desfavorável, com o efeito de
+cada espécie e situação — e o schema tem **piso**: de 3 a 8 (`MIN_THEMES`, `MAX_THEMES`),
+com a relação indireta dita na razão quando é o caso. É uma troca deliberada: o advogado
+desmarca o que não serve, e um tema descartado custa um clique, enquanto uma aba vazia não
+se confere — "nada se aplica" e "a busca errou" têm a mesma cara. Numa peça trabalhista,
+matéria que o STJ não julga, os três que voltam são indiretos e dizem isso. Se um provider
+ignorar o `minItems`, `LegalCaseThemeListData::fromAgent()` completa o piso pela ordem da
+recuperação, com uma razão (`UNRANKED_REASON`) que diz que ninguém analisou aquele tema.
+
+A ordem é gravada: `legal_case_themes.position` é o índice na lista, e a tela desenha, e o
+"Concluir" devolve, nessa ordem.
 
 Duas escolhas que valem a frase. A recuperação **não degrada em silêncio**, ao contrário do
-ranking das classes: sem vetor da consulta não há ordem de reserva, e uma lista vazia seria
-gravada como "nenhum tema se aplica" — afirmação falsa. A exceção sobe e a aba falha. E
-catálogo vazio **lança** em vez de chamar o agente: `enum` vazio é gramática inválida, e zero
-candidatas não é o mesmo que zero temas aplicáveis.
+ranking das classes: sem questão formulada ou sem vetor não há ordem de reserva, e consultar
+pelo relato cru seria reinstalar a busca que devolvia zero temas. A exceção sobe e a aba
+falha. E catálogo vazio **lança** em vez de chamar o agente: `enum` vazio é gramática
+inválida, e zero candidatas não é o mesmo que zero temas aplicáveis.
+
+As peças pesquisadas antes desta mudança têm o marcador gravado com zero temas, e o
+marcador não dispara sozinho de novo: é o "Pesquisar novamente" da aba que as refaz.
 
 Os temas mantidos **ainda não entram na minuta**: o "Concluir" grava o vínculo (desmarcar
 desvincula, pelo `sync()`), mas `forDrafting()` não os carrega.
