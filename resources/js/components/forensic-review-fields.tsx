@@ -24,7 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     adherenceLabel,
     keptTheses,
-    sourceLabel,
+    namedCitations,
     type ThesisDraft,
 } from "@/lib/forensic-review";
 import { keptLegalThemes, type LegalThemeDraft } from "@/lib/legal-themes";
@@ -533,9 +533,15 @@ function PrecedentItem({
  * comum de duas delas.
  */
 function Findings({ research }: { research: LegalResearchFindings }) {
+    const citations = namedCitations(research.unverified_citations);
+    // A recusa sem nome também conta: o alerta aparece, só com a mensagem.
+    const hasRefusals =
+        research.unverified_citations.length > 0 ||
+        (research.unidentified_citations ?? 0) > 0;
+
     const hasFindings =
         research.pending.length > 0 ||
-        research.unverified_citations.length > 0 ||
+        hasRefusals ||
         research.sources.length > 0;
 
     if (!hasFindings) {
@@ -560,7 +566,7 @@ function Findings({ research }: { research: LegalResearchFindings }) {
                     </Alert>
                 )}
 
-                {research.unverified_citations.length > 0 && (
+                {hasRefusals && (
                     <Alert variant="destructive">
                         <ShieldAlert />
                         <AlertTitle>
@@ -572,13 +578,13 @@ function Findings({ research }: { research: LegalResearchFindings }) {
                                 as confirmou. Não use nenhuma delas sem conferir
                                 na fonte.
                             </p>
-                            <ul className="list-disc space-y-1 pl-4">
-                                {research.unverified_citations.map(
-                                    (citation) => (
+                            {citations.length > 0 && (
+                                <ul className="list-disc space-y-1 pl-4">
+                                    {citations.map((citation) => (
                                         <li key={citation}>{citation}</li>
-                                    ),
-                                )}
-                            </ul>
+                                    ))}
+                                </ul>
+                            )}
                         </AlertDescription>
                     </Alert>
                 )}
@@ -588,6 +594,10 @@ function Findings({ research }: { research: LegalResearchFindings }) {
                         <p className="text-xs font-medium">
                             Fontes consultadas
                         </p>
+                        {/* O endereço inteiro, e não o domínio: três leis do
+                            Planalto viravam três "planalto.gov.br" com cara de
+                            link repetido. O que as distingue fica no fim da
+                            URL, então ela quebra linha em vez de ser cortada. */}
                         <ul className="mt-2 space-y-1">
                             {research.sources.map((source) => (
                                 <li key={source}>
@@ -598,10 +608,12 @@ function Findings({ research }: { research: LegalResearchFindings }) {
                                         href={source}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                                        className="inline-flex max-w-full items-start gap-1.5 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
                                     >
-                                        {sourceLabel(source)}
-                                        <ExternalLink className="size-3.5" />
+                                        <span className="break-all">
+                                            {source}
+                                        </span>
+                                        <ExternalLink className="mt-0.5 size-3.5 shrink-0" />
                                     </a>
                                 </li>
                             ))}

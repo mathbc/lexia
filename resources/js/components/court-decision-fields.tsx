@@ -457,7 +457,7 @@ function Findings({ research }: { research: CourtDecisionFindings }) {
                         <p className="text-xs font-medium">
                             Registros consultados
                         </p>
-                        {/* O endereço inteiro, e não o domínio como na etapa 5:
+                        {/* O endereço inteiro, e não o domínio, como na etapa 5:
                             aqui todas as fontes são o mesmo portal, e
                             "lexml.gov.br" repetido cinco vezes não distinguiria
                             um registro do outro. O que distingue é a URN, que

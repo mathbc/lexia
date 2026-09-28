@@ -129,6 +129,43 @@ final class LegalResearchDataTest extends TestCase
     }
 
     #[Test]
+    public function it_counts_a_refusal_it_cannot_name_without_listing_it(): void
+    {
+        // A tese sem precedente confirmado, como a ficha a escreve: "sem valor,
+        // escreva `nulo`" vale para todo rótulo, e o schema obriga `name` e
+        // `reference` a serem string — então a palavra chega como texto.
+        $research = LegalResearchData::fromAgent([
+            'theses' => [[
+                'name' => 'Da Competência do Juízo do Domicílio da Vítima',
+                'description' => 'Argumenta a competência.',
+                'legal_bases' => [
+                    ['type' => null, 'reference' => 'Súmula 314 do STJ', 'source' => 'STJ', 'source_url' => null],
+                    ['type' => null, 'reference' => 'nulo', 'source' => null, 'source_url' => null],
+                ],
+                'precedents' => [[
+                    'name' => 'nulo',
+                    'type' => null,
+                    'description' => 'Não localizado/confirmado em fonte oficial.',
+                    'citation' => 'nulo',
+                    'adherence' => null,
+                    'grounding' => null,
+                    'source_url' => 'https://www.jusbrasil.com.br/x',
+                ]],
+            ]],
+            'pending' => ['nulo', 'Juntar o comprovante do Pix.'],
+        ]);
+
+        // A recusa sem nome continua sendo recusa — é o que mantém o alerta na
+        // tela —, mas não vira um item chamado "nulo" na lista.
+        $this->assertTrue($research->hasUnverifiedCitations());
+        $this->assertSame(['Súmula 314 do STJ'], $research->unverifiedCitations);
+        $this->assertSame(2, $research->unidentifiedCitations);
+        $this->assertSame([], $research->review->precedents);
+
+        $this->assertSame(['Juntar o comprovante do Pix.'], $research->pending);
+    }
+
+    #[Test]
     public function it_mints_a_correlation_id_per_thesis_and_hangs_the_precedents_off_it(): void
     {
         $research = LegalResearchData::fromAgent([

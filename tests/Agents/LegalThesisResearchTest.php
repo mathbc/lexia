@@ -113,7 +113,7 @@ final class LegalThesisResearchTest extends TestCase
         // O contrato do payload. Um rename tem de estourar aqui.
         $payload = $research->toArray();
         $this->assertSame(
-            ['legal_question', 'theses', 'precedents', 'sources', 'pending', 'unverified_citations'],
+            ['legal_question', 'theses', 'precedents', 'sources', 'pending', 'unverified_citations', 'unidentified_citations'],
             array_keys($payload),
         );
 

@@ -512,6 +512,9 @@ export interface ResearchedPrecedent {
  * `unverified_citations` merece a tela que tem. Uma tese sem fundamentação
  * nenhuma tem duas causas opostas — a pesquisa não achou nada, ou a guarda
  * recusou o que ela achou — e as duas produzem exatamente a mesma lista vazia.
+ * `unidentified_citations` conta as recusadas que não tinham nome para a lista
+ * (o `nulo` da ficha): o alerta aparece por elas, só com a mensagem. Falta num
+ * relato gravado antes de o campo existir.
  *
  * O objeto inteiro ser nulo é a terceira coisa, e a mais importante para a
  * tela: significa que **nunca se pesquisou**, e é o que faz a etapa 5 disparar
@@ -523,6 +526,7 @@ export interface LegalResearchFindings {
     sources: string[];
     pending: string[];
     unverified_citations: string[];
+    unidentified_citations?: number;
     researched_at: string;
 }
 

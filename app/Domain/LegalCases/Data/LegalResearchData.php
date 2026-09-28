@@ -22,7 +22,8 @@ use Carbon\CarbonImmutable;
  * Every citation the agent returns carries a `source_url`, and every one is
  * checked against OfficialLegalSources. A citation whose url is missing,
  * unparseable, or served by anything other than an official portal is **removed
- * from the fundamentação** and its reference recorded in `unverifiedCitations`.
+ * from the fundamentação** and its reference recorded in `unverifiedCitations`
+ * — or, when it has none, counted in `unidentifiedCitations`.
  *
  * This is not belt-and-braces. On Gemini the provider-side allowlist is
  * discarded before the request is built — `webSearchToolOptions()` returns `[]`
@@ -76,6 +77,7 @@ final readonly class LegalResearchData
      * @param  list<string>  $sources  the official urls the run actually opened
      * @param  list<string>  $pending  what the research could not resolve
      * @param  list<string>  $unverifiedCitations  references dropped for want of an official source
+     * @param  int  $unidentifiedCitations  dropped for the same reason, but with no name to list
      */
     public function __construct(
         public ?string $legalQuestion,
@@ -83,6 +85,7 @@ final readonly class LegalResearchData
         public array $sources = [],
         public array $pending = [],
         public array $unverifiedCitations = [],
+        public int $unidentifiedCitations = 0,
     ) {}
 
     /**
@@ -102,6 +105,12 @@ final readonly class LegalResearchData
     {
         $theses = array_slice(self::rows($answer['theses'] ?? null), 0, self::MAX_THESES);
 
+        $refused = self::refused($theses);
+        $named = array_values(array_filter(
+            $refused,
+            static fn (?string $name): bool => $name !== null,
+        ));
+
         return new self(
             legalQuestion: self::nullify($answer['legal_question'] ?? null),
             review: ForensicReviewData::fromAgent(array_map(self::confirmed(...), $theses)),
@@ -110,7 +119,8 @@ final readonly class LegalResearchData
                 ...$consulted,
             ]),
             pending: self::lines($answer['pending'] ?? null),
-            unverifiedCitations: self::refused($theses),
+            unverifiedCitations: array_values(array_unique($named)),
+            unidentifiedCitations: count($refused) - count($named),
         );
     }
 
@@ -142,6 +152,7 @@ final readonly class LegalResearchData
             'sources' => $this->sources,
             'pending' => $this->pending,
             'unverified_citations' => $this->unverifiedCitations,
+            'unidentified_citations' => $this->unidentifiedCitations,
             'researched_at' => CarbonImmutable::now()->toIso8601String(),
         ];
     }
@@ -171,6 +182,7 @@ final readonly class LegalResearchData
             'sources' => $this->sources,
             'pending' => $this->pending,
             'unverified_citations' => $this->unverifiedCitations,
+            'unidentified_citations' => $this->unidentifiedCitations,
         ];
     }
 
@@ -179,7 +191,7 @@ final readonly class LegalResearchData
      */
     public function hasUnverifiedCitations(): bool
     {
-        return $this->unverifiedCitations !== [];
+        return $this->unverifiedCitations !== [] || $this->unidentifiedCitations > 0;
     }
 
     /**
@@ -214,57 +226,65 @@ final readonly class LegalResearchData
      */
     private static function official(array $rows): array
     {
+        return array_values(array_filter($rows, self::isOfficial(...)));
+    }
+
+    /**
+     * The rows no official portal confirmed — the complement of official().
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array<string, mixed>>
+     */
+    private static function unofficial(array $rows): array
+    {
         return array_values(array_filter(
             $rows,
-            static fn (array $row): bool => OfficialLegalSources::covers(
-                self::nullify($row['source_url'] ?? null),
-            ),
+            static fn (array $row): bool => ! self::isOfficial($row),
         ));
     }
 
     /**
-     * Every citation the guard removed, named the way a reader would name it.
+     * @param  array<string, mixed>  $row
+     */
+    private static function isOfficial(array $row): bool
+    {
+        return OfficialLegalSources::covers(self::nullify($row['source_url'] ?? null));
+    }
+
+    /**
+     * Every citation the guard removed, by the name a reader would give it —
+     * or null, for one it cannot name.
      *
      * A legal basis answers by its `reference` — "Súmula 393 do STJ" — and a
      * ruling by its `name`, because those are the strings the screen already
-     * shows. A row with neither is reported as the reason it was refused, which
-     * is still more useful than a blank line in the list.
+     * shows.
+     *
+     * A refusal without a name is still a refusal, and it is counted rather
+     * than listed. The commonest is the sheet's own filler: it tells the
+     * researcher to write `nulo` under every label it has no value for, and
+     * since `name` and `reference` are required strings in the transcriber's
+     * grammar, the word survives as text. Listed, it put a citation called
+     * "nulo" on screen. Dropped, it would hide that the research brought
+     * something no official portal confirmed — which is what the alert is for.
      *
      * @param  list<array<string, mixed>>  $theses
-     * @return list<string>
+     * @return list<string|null>
      */
     private static function refused(array $theses): array
     {
         $refused = [];
 
         foreach ($theses as $thesis) {
-            foreach (self::rows($thesis['legal_bases'] ?? null) as $basis) {
-                $refused[] = self::unconfirmed($basis, 'reference');
+            foreach (self::unofficial(self::rows($thesis['legal_bases'] ?? null)) as $basis) {
+                $refused[] = self::written($basis['reference'] ?? null);
             }
 
-            foreach (self::rows($thesis['precedents'] ?? null) as $precedent) {
-                $refused[] = self::unconfirmed($precedent, 'name');
+            foreach (self::unofficial(self::rows($thesis['precedents'] ?? null)) as $precedent) {
+                $refused[] = self::written($precedent['name'] ?? null);
             }
         }
 
-        return array_values(array_unique(array_filter(
-            $refused,
-            static fn (?string $citation): bool => $citation !== null,
-        )));
-    }
-
-    /**
-     * How one refused row is named, or null if it was not refused.
-     *
-     * @param  array<string, mixed>  $row
-     */
-    private static function unconfirmed(array $row, string $key): ?string
-    {
-        if (OfficialLegalSources::covers(self::nullify($row['source_url'] ?? null))) {
-            return null;
-        }
-
-        return self::nullify($row[$key] ?? null) ?? 'Citação sem identificação';
+        return $refused;
     }
 
     /**
@@ -294,6 +314,12 @@ final readonly class LegalResearchData
     }
 
     /**
+     * The written lines of a list, with the sheet's own placeholders removed.
+     *
+     * "## PENDENTE / nulo" arrives as a list containing the word, which the
+     * screen would show the lawyer as an outstanding item called "nulo" — the
+     * same leak CourtDecisionResearchData already closes for the step 6 sheet.
+     *
      * @return list<string>
      */
     private static function lines(mixed $value): array
@@ -302,12 +328,39 @@ final readonly class LegalResearchData
             return [];
         }
 
-        $lines = array_map(self::nullify(...), array_values($value));
+        $lines = array_map(self::written(...), array_values($value));
 
         return array_values(array_filter(
             $lines,
             static fn (?string $line): bool => $line !== null,
         ));
+    }
+
+    /**
+     * A value the sheet actually wrote: null for the blank and for the sheet
+     * saying it had nothing to write.
+     */
+    private static function written(mixed $value): ?string
+    {
+        $text = self::nullify($value);
+
+        return $text === null || self::isPlaceholder($text) ? null : $text;
+    }
+
+    /**
+     * The bare `nulo`, and the sentinel the prompt fixes word for word. Both
+     * are answers *about* the absence of content, never content.
+     */
+    private static function isPlaceholder(string $text): bool
+    {
+        $normalised = mb_strtolower(rtrim($text, " \t\n\r\0\x0B."));
+
+        return in_array($normalised, [
+            'nulo',
+            'nenhum',
+            'nada',
+            'não localizado/confirmado em fonte oficial',
+        ], true);
     }
 
     private static function nullify(mixed $value): ?string

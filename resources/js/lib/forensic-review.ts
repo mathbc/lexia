@@ -138,11 +138,12 @@ export const adherenceLabel = (adherence: string | null): string | null => {
 }
 
 /**
- * O domínio de uma fonte, que é o que identifica o portal numa lista de links.
+ * O domínio de uma fonte, que é como uma frase nomeia o portal — "Ler o
+ * registro no lexml.gov.br".
  *
- * O endereço inteiro de um acórdão do STJ não cabe na linha e não diz nada a
- * mais do que "stj.jus.br" já diz — e é a procedência que interessa, porque é
- * ela que a guarda de `OfficialLegalSources` conferiu. Um endereço que o
+ * Numa lista de fontes ele não serve: três leis do Planalto viravam três
+ * "planalto.gov.br" idênticos, com cara de link repetido, e o que distingue uma
+ * da outra está no caminho. Ali vai o endereço inteiro. Um endereço que o
  * navegador não consiga interpretar volta inteiro, em vez de sumir.
  */
 export const sourceLabel = (url: string): string => {
@@ -152,3 +153,20 @@ export const sourceLabel = (url: string): string => {
         return url
     }
 }
+
+/**
+ * As citações recusadas que têm nome para mostrar.
+ *
+ * Um relato gravado antes de `LegalResearchData` contar à parte as recusas sem
+ * nome as traz nesta lista, como `"nulo"` — o rótulo que a ficha escreve onde
+ * não tem valor — ou como o "Citação sem identificação" que a guarda punha no
+ * lugar. Hoje elas chegam em `unidentified_citations`, mas o relato antigo
+ * continua no banco até alguém pesquisar de novo.
+ */
+export const namedCitations = (citations: string[]): string[] =>
+    citations.filter(
+        (citation) =>
+            !['nulo', 'citação sem identificação'].includes(
+                citation.trim().toLowerCase(),
+            ),
+    )
