@@ -8,7 +8,7 @@
  * `@/lib/requirements` e `@/lib/documents`.
  */
 
-import type { LegalResearch, ResearchedPrecedent, ResearchedThesis } from '@/types'
+import type { LegalBasis, LegalResearch, ResearchedPrecedent, ResearchedThesis } from '@/types'
 
 /**
  * Uma tese da pesquisa com os seus precedentes por perto e a decisão do
@@ -115,6 +115,119 @@ export const toForensicReviewPayload = (
 /** As teses que o advogado decidiu levar para a peça. */
 export const keptTheses = (drafts: ThesisDraft[]): ThesisDraft[] =>
     drafts.filter((draft) => draft.keep)
+
+/**
+ * A decisão do advogado aplicada às teses que o servidor mandou.
+ *
+ * A decisão vive à parte, num mapa por id, e as teses são derivadas das props a
+ * cada render. É o que deixa uma tese editada chegar com o texto novo sem
+ * desfazer o que foi desmarcado nas outras: a edição não muda id nenhum, então
+ * uma assinatura de ids não a veria, e reconstruir a lista inteira remarcaria
+ * tudo. Uma tese que o mapa não conhece — a que a pesquisa acabou de trazer, a
+ * que acabou de ser cadastrada — chega marcada, como sempre chegou.
+ */
+export const withDecisions = (
+    drafts: ThesisDraft[],
+    decisions: Record<string, boolean>,
+): ThesisDraft[] =>
+    drafts.map((draft) => ({ ...draft, keep: decisions[draft.id] ?? true }))
+
+/** A tese que o advogado escreveu à mão — a única que se edita. */
+export const isManualThesis = (thesis: ResearchedThesis): boolean =>
+    thesis.origin === 'manual'
+
+/**
+ * Uma linha da tabela de fundamentação do modal, com todo campo em string.
+ *
+ * String e não nulo porque é o que os controles falam: o `Select` reserva `''`
+ * para "nada escolhido", e o `Input` não tem outro vazio. `key` é só do React —
+ * a referência não serve, porque duas linhas recém-abertas estão ambas em
+ * branco — e não viaja: `toLegalThesisPayload` a tira.
+ */
+export interface LegalBasisRow {
+    key: string
+    type: string
+    reference: string
+    source: string
+}
+
+/** O que o modal de "Cadastrar tese" e "Editar tese" edita. */
+export interface LegalThesisForm {
+    name: string
+    type: string
+    description: string
+    impact: string
+    legal_bases: LegalBasisRow[]
+}
+
+export const newLegalBasisRow = (basis?: LegalBasis): LegalBasisRow => ({
+    key: crypto.randomUUID(),
+    type: basis?.type ?? '',
+    reference: basis?.reference ?? '',
+    source: basis?.source ?? '',
+})
+
+/**
+ * O formulário vazio do cadastro, ou o preenchido da edição.
+ *
+ * O cadastro abre com uma linha de fundamentação em branco, porque quase toda
+ * tese tem ao menos um dispositivo e o primeiro clique seria sempre o de
+ * "Adicionar fundamento".
+ */
+export const toThesisForm = (thesis: ResearchedThesis | null): LegalThesisForm =>
+    thesis === null
+        ? { name: '', type: '', description: '', impact: '', legal_bases: [newLegalBasisRow()] }
+        : {
+              name: thesis.name,
+              type: thesis.type ?? '',
+              description: thesis.description,
+              impact: thesis.impact ?? '',
+              legal_bases: thesis.legal_bases.map(newLegalBasisRow),
+          }
+
+/**
+ * O formulário na forma que `CreateLegalThesis` e `UpdateLegalThesis` validam.
+ *
+ * A linha de fundamentação inteira em branco — aberta e abandonada — sai aqui,
+ * antes do envio. A meio preenchida não: ela vai, e o servidor recusa a
+ * referência que falta, porque um tipo escolhido sem citação é engano a apontar
+ * e não linha a descartar. O vazio vira `null`, que é o que a coluna guarda para
+ * o que ninguém informou.
+ */
+export const toLegalThesisPayload = (form: LegalThesisForm) => ({
+    name: form.name.trim(),
+    type: form.type,
+    description: form.description.trim(),
+    impact: blankToNull(form.impact),
+    legal_bases: form.legal_bases
+        .filter((row) => !isBlankBasisRow(row))
+        .map(
+            (row): LegalBasis => ({
+                type: blankToNull(row.type),
+                reference: row.reference.trim(),
+                source: blankToNull(row.source),
+            }),
+        ),
+})
+
+/**
+ * O índice com que cada linha da tela chega ao servidor, ou nulo para a que não
+ * vai.
+ *
+ * É por ele que o erro volta: `legal_bases.1.reference` nomeia a segunda linha
+ * **postada**, e não a segunda da tela, quando uma linha em branco acima dela
+ * foi descartada. Sem esta tradução a mensagem apareceria na linha errada.
+ */
+export const postedBasisIndexes = (rows: LegalBasisRow[]): (number | null)[] => {
+    let posted = 0
+
+    return rows.map((row) => (isBlankBasisRow(row) ? null : posted++))
+}
+
+const isBlankBasisRow = (row: LegalBasisRow): boolean =>
+    [row.type, row.reference, row.source].every((value) => value.trim() === '')
+
+const blankToNull = (value: string): string | null => (value.trim() === '' ? null : value.trim())
 
 /**
  * "95.00" como o advogado lê.

@@ -501,14 +501,32 @@ vazia, a segunda sobrescreve a primeira no mapa, e a primeira é apagada pelo
 `whereNotIn` microssegundos depois de criada.
 
 As Actions de cadastro por linha (`CreateLegalThesis`, `UpdateLegalPrecedent`,
-`DeleteLegalThesis`…) existem para a edição por linha que virá, e não têm
-`asController()` enquanto nada apontar para elas — o agente de revisão forense
-já chegou, e escreve a etapa inteira de uma vez pela dupla da pesquisa. A gravação
-também chegou: quem a dispara é o "Concluir e gerar minuta", que desde a chegada da
-etapa 6 mora nela e não na 5, por `FinalizeLegalCase` — ver "A minuta", no fim deste
-arquivo. As de precedente recebem a
+`DeleteLegalThesis`…) existem para a edição por linha, e só têm `asController()` as
+que alguma tela chama — o agente de revisão forense escreve a etapa inteira de uma
+vez pela dupla da pesquisa. A gravação da etapa é o "Concluir e gerar minuta", que
+desde a chegada da etapa 6 mora nela e não na 5, por `FinalizeLegalCase` — ver "A
+minuta", no fim deste arquivo. As de precedente recebem a
 tese como **model e não como id**, que é a mesma regra noutra forma: um id
 postado seria um buraco que nenhum teste da classe enxergaria.
+
+**A tese que a pesquisa não trouxe entra à mão.** O "Cadastrar tese", ao lado do
+"Pesquisar novamente", abre `LegalThesisDialog` e posta em `CreateLegalThesis`
+(`POST /pecas/{id}/teses`), que grava **na hora** e carimba `legal_theses.origin`
+com `manual` — o único lugar que escreve esse valor; toda outra linha nasce `ai`, e
+`LegalThesisData::toArray()` não carrega a coluna, então nenhum payload a move. A
+origem decide duas coisas. Só a manual se edita (`UpdateLegalThesis`,
+`PUT /pecas/{id}/teses/{thesis}`, com `LegalThesisPolicy::update()` exigindo
+`manual` e o `authorize()` exigindo que a tese seja da peça da URL): a da pesquisa
+é leitura de um portal oficial, e quem discorda dela a desmarca. E a manual
+**sobrevive a "Pesquisar novamente"**: `ResearchLegalCaseForensicReview::writeTheses()`
+a manda junto com o que a pesquisa achou, com o id real, para que o diff não a
+apague. Desmarcá-la continua sendo removê-la no "Concluir".
+
+A edição mudou o estado da tela: a tese editada troca o texto sem trocar id, então
+a assinatura de ids não a via. Em `pages/legal-cases/form` as teses são
+**derivadas** das props, e o estado guarda só o `keep` de cada uma num mapa por id
+(`withDecisions()`). Os temas e os julgados, que não se editam, seguem com a
+assinatura.
 
 ## A pesquisa de teses
 

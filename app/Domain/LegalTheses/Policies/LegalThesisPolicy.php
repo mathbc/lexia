@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\LegalTheses\Policies;
 
+use App\Domain\LegalTheses\Enums\LegalThesisOrigin;
 use App\Domain\LegalTheses\Models\LegalThesis;
 use App\Domain\Users\Models\User;
 
@@ -21,12 +22,17 @@ use App\Domain\Users\Models\User;
  * platform staff the query scope is deliberately open — this policy is the only
  * thing standing in the way once a route exists.
  *
- * No `update` and no `delete`, and that is the design rather than a gap, exactly
- * as on RequirementPolicy. No route ever binds a LegalThesis: the two lists are
+ * `update` exists because one route binds a LegalThesis now — the "Editar" of a
+ * thesis the lawyer wrote by hand, UpdateLegalThesis — and it answers a question
+ * the pleading's own policy cannot: *which* thesis. Only a manual one. A
+ * researched thesis is a reading of an official portal, and rewriting it would
+ * leave a citation that no longer says what the portal said; the lawyer who
+ * disagrees with it unticks it.
+ *
+ * Still no `delete`, and that is the design rather than a gap, exactly as on
+ * RequirementPolicy. Removing a thesis is unticking it, and the two lists are
  * written whole, through the pleading, by SaveLegalCaseForensicReview — which
- * asks `update` on the LegalCase. The authority over one row is the authority
- * over the pleading that argues it, and writing a second gate here would be dead
- * code implying a route that does not exist.
+ * asks `update` on the LegalCase.
  */
 final class LegalThesisPolicy
 {
@@ -43,5 +49,11 @@ final class LegalThesisPolicy
     public function create(User $user): bool
     {
         return true;
+    }
+
+    public function update(User $user, LegalThesis $thesis): bool
+    {
+        return $user->account_id === $thesis->account_id
+            && $thesis->origin === LegalThesisOrigin::Manual;
     }
 }

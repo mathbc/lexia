@@ -21,6 +21,7 @@ use App\Domain\LegalThemes\Models\LegalTheme;
 use App\Domain\LegalTheses\Data\LegalBasisData;
 use App\Domain\LegalTheses\Data\LegalThesisData;
 use App\Domain\LegalTheses\Enums\LegalBasisType;
+use App\Domain\LegalTheses\Enums\LegalThesisOrigin;
 use App\Domain\LegalTheses\Enums\LegalThesisType;
 use App\Domain\LegalTheses\Models\LegalThesis;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -179,6 +180,55 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
         $this->assertCount(1, $case->theses);
         $this->assertSame('Da Prescrição Intercorrente', $case->theses[0]->name);
         $this->assertNotSame($first, $case->theses[0]->id);
+    }
+
+    /**
+     * A exceção à substituição: a tese que o advogado escreveu à mão.
+     *
+     * Ela não é da pesquisa, então a pesquisa não a apaga — continua com o
+     * mesmo id, o mesmo texto e a mesma origem, enquanto a da rodada anterior é
+     * trocada pela nova. Sem isso, o "Cadastrar tese" que existe justamente
+     * para quando os portais não acham nada seria desfeito pelo primeiro
+     * "Pesquisar novamente".
+     */
+    #[Test]
+    public function researching_again_keeps_the_theses_written_by_hand(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $case = $this->pleading($account);
+
+        $this->fakeResearch()
+            ->shouldReceive('handle')
+            ->twice()
+            ->andReturn($this->found(), $this->found('Da Prescrição Intercorrente'));
+
+        $this->fakeThemes()->shouldNotReceive('handle');
+
+        $this->actingAs($owner)->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['theses']]);
+
+        $manual = LegalThesis::factory()->forLegalCase($case)->manual()->nth(3)->create();
+
+        $this->actingAs($owner)->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['theses']]);
+        $case->refresh();
+
+        $this->assertEqualsCanonicalizing(
+            [$manual->name, 'Da Prescrição Intercorrente'],
+            $case->theses->pluck('name')->all(),
+        );
+
+        $kept = $case->theses->firstWhere('id', $manual->id);
+
+        $this->assertInstanceOf(LegalThesis::class, $kept);
+        $this->assertSame(LegalThesisOrigin::Manual, $kept->origin);
+        $this->assertSame($manual->description, $kept->description);
+        // `assertEquals` porque o jsonb reordena as chaves de cada objeto.
+        $this->assertEquals($manual->legal_bases, $kept->legal_bases);
+
+        // A da pesquisa nasce como tal, sem que ninguém precise dizê-lo.
+        $this->assertSame(
+            LegalThesisOrigin::Ai,
+            $case->theses->firstWhere('name', 'Da Prescrição Intercorrente')?->origin,
+        );
     }
 
     /**

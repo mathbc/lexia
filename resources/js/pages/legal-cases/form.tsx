@@ -1,6 +1,6 @@
 import { Head, Link, router, useForm } from "@inertiajs/react";
 import { Mic, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppLayout } from "@/layouts/app-layout";
 import { AnalysisDialog } from "@/components/analysis-dialog";
 import { CourtDecisionFields } from "@/components/court-decision-fields";
@@ -35,7 +35,7 @@ import { toDocumentDrafts, type DocumentDraft } from "@/lib/documents";
 import {
     toForensicReviewPayload,
     toThesisDrafts,
-    type ThesisDraft,
+    withDecisions,
 } from "@/lib/forensic-review";
 import { readHandoff } from "@/lib/legal-case-handoff";
 import {
@@ -216,6 +216,10 @@ interface Props {
         português dos rótulos da revisão forense vem do enum. */
     thesisTypes: Option[];
     precedentTypes: Option[];
+    /** `LegalThesisOrigin::options()` e `LegalBasisType::options()`: o selo de
+        cada tese e os tipos da tabela do cadastro manual. */
+    thesisOrigins: Option[];
+    legalBasisTypes: Option[];
     /** Para o cadastro de cliente que acontece aqui mesmo, sem trocar de tela. */
     customerTypes: Option[];
     maritalStatuses: Option[];
@@ -280,6 +284,8 @@ export default function LegalCaseForm({
     degrees,
     thesisTypes,
     precedentTypes,
+    thesisOrigins,
+    legalBasisTypes,
     customerTypes,
     maritalStatuses,
     states,
@@ -357,63 +363,48 @@ export default function LegalCaseForm({
     const [documents, setDocuments] = useState<DocumentDraft[]>([]);
 
     /**
-     * A revisão forense, em estado local — mas não mais sem rede embaixo.
+     * A revisão forense: as teses vêm do banco, e só a decisão é local.
      *
-     * Ela tem duas origens, e a ordem entre elas é a regra: **o que está gravado
-     * manda**. Uma peça já pesquisada volta com as teses do banco, com os ids
-     * reais, e é isso que a etapa 5 mostra ao reabrir; uma peça nova começa sem
-     * nenhuma, e as recebe da pesquisa que a própria etapa 5 dispara ao abrir.
+     * **O que está gravado manda.** Uma peça já pesquisada volta com as teses
+     * do banco, com os ids reais; uma peça nova começa sem nenhuma e as recebe
+     * da pesquisa que a própria etapa 5 dispara ao abrir. E a tese cadastrada ou
+     * editada à mão também é linha antes de aparecer aqui.
      *
-     * Era aqui que ficava a única etapa em que recarregar a página custava
-     * trabalho já feito. Não é mais: `LegalCaseFormProps::draft()` projeta as
-     * duas listas, e `toThesisDrafts` as lê sem saber de onde vieram.
+     * Por isso as teses são **derivadas** das props a cada render, e o estado
+     * guarda só o `keep` de cada uma, num mapa por id. Já foi o contrário — a
+     * lista inteira em estado, reconstruída por um efeito quando a assinatura
+     * de ids mudava —, e a edição à mão quebrou o arranjo: ela troca o texto
+     * sem trocar id nenhum, então a assinatura não a via, e reconstruir por
+     * qualquer mudança remarcaria o que o advogado acabou de desmarcar. Com a
+     * decisão à parte, as duas coisas deixam de competir: a pesquisa refeita
+     * traz ids novos, que o mapa não conhece e que chegam marcados, e a tese
+     * editada chega com o texto novo e a decisão que já tinha.
+     *
+     * O mapa só vira gravação no "Concluir", e o "Continuar" o atravessa
+     * intacto porque a visita preserva o estado da página.
      */
-    const [theses, setTheses] = useState<ThesisDraft[]>(() =>
-        toThesisDrafts(
-            legalCase
-                ? {
-                      theses: legalCase.theses,
-                      precedents: legalCase.precedents,
-                  }
-                : undefined,
-        ),
+    const [thesisDecisions, setThesisDecisions] = useState<
+        Record<string, boolean>
+    >({});
+
+    const theses = useMemo(
+        () =>
+            withDecisions(
+                toThesisDrafts(
+                    legalCase
+                        ? {
+                              theses: legalCase.theses,
+                              precedents: legalCase.precedents,
+                          }
+                        : undefined,
+                ),
+                thesisDecisions,
+            ),
+        [legalCase?.theses, legalCase?.precedents, thesisDecisions],
     );
 
     /**
-     * As teses vinham do `handoff` e agora vêm do banco, então elas mudam
-     * **depois** da montagem: a pesquisa da etapa 5 grava e o Inertia
-     * re-renderiza com props novas, sem remontar a página (`preserveState`).
-     * Sem este efeito o `useState` acima continuaria mostrando a lista vazia
-     * que existia quando a etapa abriu.
-     *
-     * A dependência é uma **assinatura de ids**, e não os arrays das props. A
-     * diferença não é estilo: um `keep` desmarcado vive só em estado local até
-     * o "Concluir", e depender das referências faria qualquer re-render com
-     * props novas remarcar tudo, desfazendo em silêncio o que o advogado
-     * acabou de decidir. Com a assinatura, o efeito só dispara quando o
-     * conjunto de teses realmente muda — que é o que a pesquisa faz.
-     */
-    const thesisSignature = [
-        ...(legalCase?.theses ?? []).map((thesis) => thesis.id),
-        ...(legalCase?.precedents ?? []).map((precedent) => precedent.id),
-    ].join(",");
-
-    useEffect(() => {
-        if (!legalCase) {
-            return;
-        }
-
-        setTheses(
-            toThesisDrafts({
-                theses: legalCase.theses,
-                precedents: legalCase.precedents,
-            }),
-        );
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [thesisSignature]);
-
-    /**
-     * A jurisprudência da etapa 6, em estado local pelo mesmo arranjo das teses.
+     * A jurisprudência da etapa 6, em estado local.
      *
      * Com uma simplificação: aqui a origem é uma só. Não há `handoff` — o
      * preenchimento inteligente nunca pesquisou jurisprudência —, então o que
@@ -426,14 +417,15 @@ export default function LegalCaseForm({
     );
 
     /**
-     * O mesmo efeito das teses, e pelo mesmo motivo: a pesquisa da etapa 6
-     * grava e o Inertia re-renderiza com props novas sem remontar a página, de
-     * modo que o `useState` acima continuaria mostrando a lista vazia que
-     * existia quando a etapa abriu.
+     * A pesquisa da etapa 6 grava e o Inertia re-renderiza com props novas sem
+     * remontar a página, de modo que o `useState` acima continuaria mostrando a
+     * lista vazia que existia quando a etapa abriu.
      *
      * A dependência é a assinatura dos ids e não o array: depender da
      * referência faria qualquer re-render remarcar tudo, desfazendo em silêncio
-     * o que o advogado acabou de desmarcar.
+     * o que o advogado acabou de desmarcar. As teses já não usam este arranjo —
+     * lá a edição à mão muda o texto sem mudar id —, mas aqui nada se edita, e
+     * a assinatura basta.
      */
     const courtDecisionSignature = (legalCase?.court_decisions ?? [])
         .map((decision) => decision.id)
@@ -574,8 +566,8 @@ export default function LegalCaseForm({
         // de jurisprudência não teria marca d'água que a autorizasse.
         //
         // `preserveState` é o que separa este `router.patch` do que ele era.
-        // Sem ele a visita remonta a página, e o `useState` das teses volta a
-        // ler as props: a tese que o advogado acabou de desmarcar na etapa 5
+        // Sem ele a visita remonta a página, e o mapa de decisões das teses
+        // volta vazio: a tese que o advogado acabou de desmarcar na etapa 5
         // reapareceria marcada, e o "Concluir" da etapa 6 gravaria de volta o
         // que ele tinha acabado de tirar. Um `useForm` já preservaria sozinho
         // — aqui não há formulário nenhum para preservar.
@@ -1100,8 +1092,9 @@ export default function LegalCaseForm({
                         />
                     )}
 
-                    {currentStep === "review" && (
+                    {currentStep === "review" && legalCase && (
                         <ForensicReviewFields
+                            legalCaseId={legalCase.id}
                             research={legalCase?.research ?? null}
                             themeResearch={legalCase?.theme_research ?? null}
                             researching={researching}
@@ -1109,13 +1102,10 @@ export default function LegalCaseForm({
                             onResearch={(tab) => research([tab])}
                             theses={theses}
                             onToggle={(thesisId, keep) =>
-                                setTheses((current) =>
-                                    current.map((draft) =>
-                                        draft.id === thesisId
-                                            ? { ...draft, keep }
-                                            : draft,
-                                    ),
-                                )
+                                setThesisDecisions((current) => ({
+                                    ...current,
+                                    [thesisId]: keep,
+                                }))
                             }
                             themes={legalThemes}
                             onToggleTheme={(themeId, keep) =>
@@ -1129,6 +1119,8 @@ export default function LegalCaseForm({
                             }
                             thesisTypes={thesisTypes}
                             precedentTypes={precedentTypes}
+                            thesisOrigins={thesisOrigins}
+                            legalBasisTypes={legalBasisTypes}
                         />
                     )}
 

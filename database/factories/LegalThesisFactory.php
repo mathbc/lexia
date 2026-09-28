@@ -7,6 +7,7 @@ namespace Database\Factories;
 use App\Domain\Accounts\Models\Account;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalTheses\Enums\LegalBasisType;
+use App\Domain\LegalTheses\Enums\LegalThesisOrigin;
 use App\Domain\LegalTheses\Enums\LegalThesisType;
 use App\Domain\LegalTheses\Models\LegalThesis;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -121,6 +122,15 @@ class LegalThesisFactory extends Factory
     public function ofType(LegalThesisType $type): static
     {
         return $this->state(fn (): array => ['type' => $type]);
+    }
+
+    /**
+     * A thesis the lawyer wrote by hand — the only kind that can be edited, and
+     * the kind a new research leaves alone.
+     */
+    public function manual(): static
+    {
+        return $this->state(fn (): array => ['origin' => LegalThesisOrigin::Manual]);
     }
 
     /**

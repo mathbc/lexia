@@ -283,6 +283,10 @@ final class LegalCaseFormProps
      * re-saving update the rows instead of replacing them — the same reason
      * `requirements()` sends them.
      *
+     * `origin` rides along for the screen alone: it badges each thesis and offers
+     * "Editar" only on the ones the lawyer wrote. The "Concluir" posts it back
+     * and the validation drops it — nothing a payload says moves the column.
+     *
      * @return list<array<string, mixed>>
      */
     private static function theses(LegalCase $legalCase): array
@@ -295,6 +299,7 @@ final class LegalCaseFormProps
                 'description' => $thesis->description,
                 'impact' => $thesis->impact,
                 'legal_bases' => $thesis->legal_bases ?? [],
+                'origin' => $thesis->origin->value,
             ])
             ->all();
     }

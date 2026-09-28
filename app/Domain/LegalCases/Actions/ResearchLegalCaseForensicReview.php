@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace App\Domain\LegalCases\Actions;
 
+use App\Domain\LegalCases\Data\ForensicReviewData;
 use App\Domain\LegalCases\Data\LegalResearchData;
 use App\Domain\LegalCases\Data\LegalThemeResearchData;
 use App\Domain\LegalCases\Enums\ForensicReviewTab;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Models\LegalCase;
+use App\Domain\LegalTheses\Data\LegalThesisData;
+use App\Domain\LegalTheses\Enums\LegalThesisOrigin;
+use App\Domain\LegalTheses\Models\LegalThesis;
 use App\Domain\Shared\Tenancy\TenantContext;
 use Closure;
 use Illuminate\Http\RedirectResponse;
@@ -62,7 +66,8 @@ use Throwable;
  * writes zero rows, so a trigger keyed on an empty list would fire on every
  * visit. And firing again is not merely wasteful — both saves reconcile by
  * diff, so a silent re-run would quietly replace what the lawyer had already
- * curated. That is also why the markers are two and not one: keyed on a shared
+ * curated. The one thing even a deliberate re-run keeps is the theses the lawyer
+ * wrote by hand: they are theirs and not the research's — see `writeTheses()`. That is also why the markers are two and not one: keyed on a shared
  * column, retrying the half that failed would re-run the half that landed.
  *
  * ## What the parallelism costs, and where it lives
@@ -203,9 +208,43 @@ final class ResearchLegalCaseForensicReview
         // A Action irmã faz o trabalho inteiro das duas tabelas — o mapa de
         // ids, o diff, o `advanceTo(Review)` — e é a mesma que o "Concluir"
         // chama. Duplicá-la aqui seria manter duas gravações da mesma coisa.
-        SaveLegalCaseForensicReview::run($legalCase, $research->review);
+        //
+        // As teses manuais viajam junto com o que a pesquisa achou, com o id
+        // real: o diff reconcilia a lista inteira, e sem elas apagaria o que o
+        // advogado escreveu só porque os portais não o acharam também.
+        SaveLegalCaseForensicReview::run($legalCase, new ForensicReviewData(
+            theses: [...$research->review->theses, ...$this->manualTheses($legalCase)],
+            precedents: $research->review->precedents,
+        ));
 
         $legalCase->update(['research_findings' => $research->findings()]);
+    }
+
+    /**
+     * The theses the lawyer wrote by hand, as the save reads them back.
+     *
+     * With their persisted ids, so the save finds them among the rows the
+     * pleading owns and rewrites them unchanged instead of creating copies. A
+     * manual thesis has no precedents — nothing but the research writes one —,
+     * so the precedent diff, which only carries the research's, loses nothing.
+     *
+     * @return list<LegalThesisData>
+     */
+    private function manualTheses(LegalCase $legalCase): array
+    {
+        return $legalCase->theses()
+            ->where('origin', LegalThesisOrigin::Manual)
+            ->get()
+            ->map(static fn (LegalThesis $thesis): LegalThesisData => LegalThesisData::fromArray([
+                'id' => $thesis->id,
+                'name' => $thesis->name,
+                'type' => $thesis->type?->value,
+                'description' => $thesis->description,
+                'impact' => $thesis->impact,
+                'legal_bases' => $thesis->legal_bases,
+            ]))
+            ->values()
+            ->all();
     }
 
     private function writeThemes(LegalCase $legalCase, mixed $research): void

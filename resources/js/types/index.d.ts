@@ -465,6 +465,11 @@ export interface LegalBasis {
  *
  * `type` é o valor de `LegalThesisType` e pode faltar — uma tese cuja espécie o
  * modelo não soube classificar continua sendo uma tese.
+ *
+ * `origin` diz quem a escreveu — a pesquisa ou o advogado, no "Cadastrar tese" —
+ * e só a manual oferece "Editar". Opcional porque o mesmo tipo descreve o que o
+ * "Concluir" posta, e ali o campo não tem regra: o servidor o descarta, e nada
+ * que o navegador diga muda o autor de uma tese.
  */
 export interface ResearchedThesis {
     id: string | null;
@@ -473,7 +478,11 @@ export interface ResearchedThesis {
     description: string;
     impact: string | null;
     legal_bases: LegalBasis[];
+    origin?: LegalThesisOrigin;
 }
+
+/** O valor de `LegalThesisOrigin`: a pesquisa, ou o advogado à mão. */
+export type LegalThesisOrigin = 'ai' | 'manual';
 
 /**
  * Um julgado encontrado para sustentar uma tese, como `LegalResearchData` o

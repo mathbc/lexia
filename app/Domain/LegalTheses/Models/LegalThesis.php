@@ -7,6 +7,7 @@ namespace App\Domain\LegalTheses\Models;
 use App\Domain\Accounts\Models\Account;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalPrecedents\Models\LegalPrecedent;
+use App\Domain\LegalTheses\Enums\LegalThesisOrigin;
 use App\Domain\LegalTheses\Enums\LegalThesisType;
 use App\Domain\LegalTheses\Policies\LegalThesisPolicy;
 use App\Domain\Shared\Concerns\BelongsToAccount;
@@ -56,6 +57,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * would need a table of the gender of every sigla in Brazilian law, and would
  * write bad Portuguese until that table was complete.
  *
+ * `origin` says who wrote it — the research or the lawyer — and every new row is
+ * `ai` until CreateLegalThesis says otherwise. See LegalThesisOrigin.
+ *
  * @property string $id
  * @property string $account_id
  * @property string $legal_case_id
@@ -64,6 +68,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string $description
  * @property string|null $impact
  * @property list<array{type: string|null, reference: string, source: string|null}>|null $legal_bases
+ * @property LegalThesisOrigin $origin
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property CarbonImmutable|null $deleted_at
@@ -86,6 +91,17 @@ class LegalThesis extends Model
     protected $guarded = ['id'];
 
     /**
+     * The column's default, repeated here so a row built in memory already
+     * knows it came from the research — the database default only reaches the
+     * model on a refresh.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'origin' => 'ai',
+    ];
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
@@ -93,6 +109,7 @@ class LegalThesis extends Model
         return [
             'type' => LegalThesisType::class,
             'legal_bases' => 'array',
+            'origin' => LegalThesisOrigin::class,
         ];
     }
 

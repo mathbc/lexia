@@ -11,6 +11,8 @@ use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalPleadings\Models\LegalPleading;
 use App\Domain\LegalThemes\Models\LegalTheme;
+use App\Domain\LegalTheses\Enums\LegalThesisOrigin;
+use App\Domain\LegalTheses\Models\LegalThesis;
 use App\Domain\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Response;
@@ -170,6 +172,43 @@ final class FinalizeLegalCaseTest extends TestCase
         $this->assertSame([$kept->id], $case->courtDecisions()->pluck('id')->all());
         $this->assertSoftDeleted($unticked);
         $this->assertFalse($case->refresh()->is_draft);
+    }
+
+    /**
+     * A tese cadastrada à mão já é linha quando a etapa 5 a mostra — gravada
+     * no "Cadastrar tese" —, então desmarcá-la é apagá-la aqui, como qualquer
+     * outra. E o payload não muda quem a escreveu: a origem não está nas regras
+     * e `LegalThesisData::toArray()` não a carrega, então a que ficou continua
+     * manual mesmo que o navegador diga o contrário.
+     */
+    #[Test]
+    public function a_thesis_written_by_hand_follows_the_tick_and_keeps_its_author(): void
+    {
+        [, $owner, $case] = $this->pleading();
+
+        $kept = LegalThesis::factory()->forLegalCase($case)->manual()->nth(0)->create();
+        $unticked = LegalThesis::factory()->forLegalCase($case)->manual()->nth(1)->create();
+
+        $this->fakeDrafting()->shouldReceive('handle')->once()->andReturn($this->draft($case));
+
+        $this->actingAs($owner)->post(route('legal-cases.finalize', $case), [
+            'theses' => [[
+                'id' => $kept->id,
+                'name' => $kept->name,
+                'type' => $kept->type?->value,
+                'description' => $kept->description,
+                'impact' => $kept->impact,
+                'legal_bases' => $kept->legal_bases,
+                'origin' => LegalThesisOrigin::Ai->value,
+            ]],
+            'precedents' => [],
+            'themes' => [],
+            'court_decisions' => [],
+        ])->assertRedirect(route('legal-cases.pleading', $case));
+
+        $this->assertSame([$kept->id], $case->theses()->pluck('id')->all());
+        $this->assertSame(LegalThesisOrigin::Manual, $kept->refresh()->origin);
+        $this->assertSoftDeleted($unticked);
     }
 
     /**

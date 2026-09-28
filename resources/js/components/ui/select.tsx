@@ -168,6 +168,7 @@ function SelectInput({
     id,
     'aria-invalid': ariaInvalid,
     'aria-describedby': ariaDescribedBy,
+    'aria-label': ariaLabel,
     ...props
 }: Omit<React.ComponentProps<typeof SelectPrimitive.Root>, 'children' | 'value' | 'onValueChange'> & {
     value?: string
@@ -180,6 +181,8 @@ function SelectInput({
     id?: string
     'aria-invalid'?: boolean
     'aria-describedby'?: string
+    /** Para o select sem `Field` em volta — numa célula de tabela, por exemplo. */
+    'aria-label'?: string
 }) {
     return (
         <Select
@@ -189,7 +192,13 @@ function SelectInput({
             {...props}
         >
             {/* O gatilho é quem existe no DOM: é nele que id e aria vivem. */}
-            <SelectTrigger id={id} aria-invalid={ariaInvalid} aria-describedby={ariaDescribedBy} className={className}>
+            <SelectTrigger
+                id={id}
+                aria-invalid={ariaInvalid}
+                aria-describedby={ariaDescribedBy}
+                aria-label={ariaLabel}
+                className={className}
+            >
                 <SelectValue placeholder={placeholder} />
             </SelectTrigger>
             <SelectContent>

@@ -14,6 +14,8 @@ use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalCases\Support\LegalCaseFormProps;
 use App\Domain\LegalCases\Support\LegalCaseOptions;
 use App\Domain\LegalPrecedents\Enums\LegalPrecedentType;
+use App\Domain\LegalTheses\Enums\LegalBasisType;
+use App\Domain\LegalTheses\Enums\LegalThesisOrigin;
 use App\Domain\LegalTheses\Enums\LegalThesisType;
 use App\Domain\ProceduralClasses\Enums\JurisdictionDegree;
 use App\Domain\ProceduralClasses\Enums\JusticeBranch;
@@ -90,6 +92,10 @@ final class ShowLegalCaseForm
             // continua morando de um lado só, e é daqui que a tela o lê.
             'thesisTypes' => LegalThesisType::options(),
             'precedentTypes' => LegalPrecedentType::options(),
+            // O selo de cada tese (IA ou manual) e os tipos da tabela de
+            // fundamentação do cadastro manual, pelo mesmo motivo.
+            'thesisOrigins' => LegalThesisOrigin::options(),
+            'legalBasisTypes' => LegalBasisType::options(),
             'customerTypes' => CustomerType::options(),
             'maritalStatuses' => MaritalStatus::options(),
             'states' => BrazilianState::options(),

@@ -36,6 +36,8 @@ use App\Domain\LegalPleadings\Actions\ExportLegalPleadingDocx;
 use App\Domain\LegalPleadings\Actions\ExportLegalPleadingPdf;
 use App\Domain\LegalPleadings\Actions\GenerateLegalPleading;
 use App\Domain\LegalPleadings\Actions\SaveLegalPleadingContent;
+use App\Domain\LegalTheses\Actions\CreateLegalThesis;
+use App\Domain\LegalTheses\Actions\UpdateLegalThesis;
 use App\Domain\Users\Actions\CreateUser;
 use App\Domain\Users\Actions\ListUsers;
 use App\Domain\Users\Actions\ShowUserForm;
@@ -132,6 +134,14 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         // carrega a chave da tese que fundamenta, e ela pode nascer no mesmo
         // request. Ver SaveLegalCaseForensicReview.
         Route::put('/revisao-forense', SaveLegalCaseForensicReview::class)->name('legal-cases.forensic-review');
+
+        // A tese que a pesquisa não trouxe: o advogado a cadastra à mão, e só
+        // ela se corrige depois — a da pesquisa é leitura de um portal oficial.
+        // As duas voltam para a etapa, como a pesquisa. Ver CreateLegalThesis.
+        Route::post('/teses', CreateLegalThesis::class)->name('legal-cases.theses.store');
+        Route::put('/teses/{thesis}', UpdateLegalThesis::class)
+            ->whereUuid('thesis')
+            ->name('legal-cases.theses.update');
 
         // A pesquisa que preenche a etapa 5, disparada ao abri-la e nunca de
         // novo sozinha: `research_findings` é o marcador de que já rodou. Ela

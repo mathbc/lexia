@@ -1,12 +1,16 @@
 import {
     ExternalLink,
     LoaderCircle,
+    Pencil,
+    Plus,
     RefreshCw,
     Scale,
     ShieldAlert,
 } from "lucide-react";
-import { useId } from "react";
+import { useId, useState } from "react";
 import { LegalThemesPanel } from "@/components/legal-theme-fields";
+import { LegalThesisDialog } from "@/components/legal-thesis-dialog";
+import { RowActions } from "@/components/row-actions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +27,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     adherenceLabel,
+    isManualThesis,
     keptTheses,
     namedCitations,
     type ThesisDraft,
@@ -35,9 +40,12 @@ import type {
     LegalThemeFindings,
     Option,
     ResearchedPrecedent,
+    ResearchedThesis,
 } from "@/types";
 
 interface Props {
+    /** A peça gravada — é sob ela que o "Cadastrar tese" posta. */
+    legalCaseId: string;
     /**
      * O relato da pesquisa de teses já gravada, ou nulo quando nunca se
      * pesquisou.
@@ -65,6 +73,10 @@ interface Props {
     thesisTypes: Option[];
     /** `LegalPrecedentType::options()`, pelo mesmo motivo. */
     precedentTypes: Option[];
+    /** `LegalThesisOrigin::options()`: o selo "IA" ou "Manual" de cada tese. */
+    thesisOrigins: Option[];
+    /** `LegalBasisType::options()`: a coluna de tipo do cadastro manual. */
+    legalBasisTypes: Option[];
 }
 
 /**
@@ -85,6 +97,7 @@ interface Props {
  * tem nada a pedir ao servidor. Recarregar volta para Teses.
  */
 export function ForensicReviewFields({
+    legalCaseId,
     research,
     themeResearch,
     researching,
@@ -96,6 +109,8 @@ export function ForensicReviewFields({
     onToggleTheme,
     thesisTypes,
     precedentTypes,
+    thesisOrigins,
+    legalBasisTypes,
 }: Props) {
     return (
         <Card>
@@ -136,14 +151,18 @@ export function ForensicReviewFields({
 
                     <TabsContent value="theses">
                         <ThesesPanel
+                            legalCaseId={legalCaseId}
                             research={research}
                             researching={researching.includes("theses")}
+                            busy={researching.length > 0}
                             failed={failed.includes("theses")}
                             onResearch={() => onResearch("theses")}
                             theses={theses}
                             onToggle={onToggle}
                             thesisTypes={thesisTypes}
                             precedentTypes={precedentTypes}
+                            thesisOrigins={thesisOrigins}
+                            legalBasisTypes={legalBasisTypes}
                         />
                     </TabsContent>
 
@@ -241,27 +260,50 @@ function Count({ value, total }: { value: number; total: number }) {
  * concluir não desmarca nada no banco, e o "Continuar" daqui atravessa a
  * decisão intacta porque a visita preserva o estado da página; ver `submit()`
  * em `pages/legal-cases/form`.
+ *
+ * E há a saída para quando a pesquisa não basta: **"Cadastrar tese"**. A tese
+ * escrita à mão é gravada na hora (`CreateLegalThesis`), chega marcada ao lado
+ * das outras com o selo "Manual", sobrevive a "Pesquisar novamente" e é a única
+ * que oferece "Editar" — a da pesquisa é leitura de um portal oficial, e quem
+ * discorda dela a desmarca. Por isso a lista aparece sempre que houver tese,
+ * mesmo com a pesquisa falhada: é justamente o caso que motivou o botão.
  */
 function ThesesPanel({
+    legalCaseId,
     research,
     researching,
+    busy,
     failed,
     onResearch,
     theses,
     onToggle,
     thesisTypes,
     precedentTypes,
+    thesisOrigins,
+    legalBasisTypes,
 }: {
+    legalCaseId: string;
     research: LegalResearchFindings | null;
     researching: boolean;
+    /** Alguma pesquisa em voo, de qualquer aba: uma visita nova a cancelaria. */
+    busy: boolean;
     failed: boolean;
     onResearch: () => void;
     theses: ThesisDraft[];
     onToggle: (id: string, keep: boolean) => void;
     thesisTypes: Option[];
     precedentTypes: Option[];
+    thesisOrigins: Option[];
+    legalBasisTypes: Option[];
 }) {
     const kept = keptTheses(theses).length;
+
+    // A tese fica no estado ao fechar, para que o título do diálogo não troque
+    // de "Editar" para "Cadastrar" durante a animação de saída.
+    const [dialog, setDialog] = useState<{
+        open: boolean;
+        thesis: ResearchedThesis | null;
+    }>({ open: false, thesis: null });
 
     return (
         <div className="space-y-6">
@@ -269,30 +311,46 @@ function ThesesPanel({
                 <p className="text-sm text-muted-foreground">
                     {theses.length === 0
                         ? "As teses que a peça sustenta e os julgados que as fundamentam."
-                        : `${theses.length} ${theses.length === 1 ? "tese encontrada" : "teses encontradas"} · ${kept} ${
+                        : `${theses.length} ${theses.length === 1 ? "tese" : "teses"} · ${kept} ${
                               kept === 1
                                   ? "mantida na peça"
                                   : "mantidas na peça"
                           }`}
                 </p>
 
-                {/* Depois de uma rodada ter acontecido, ou de uma ter falhado:
-                    a primeira falha deixa `research` nulo, e o alerta abaixo
-                    manda usar este botão. Antes disso a etapa já está
-                    pesquisando sozinha, e um botão ali convidaria a uma segunda
-                    chamada simultânea. */}
-                {(research !== null || failed) && (
+                <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                    {/* Sempre à vista, e travado só enquanto alguma pesquisa
+                        corre: o cadastro é uma visita do Inertia, e começar
+                        uma no meio da outra cancelaria a da pesquisa. */}
                     <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        disabled={researching}
-                        onClick={onResearch}
+                        disabled={busy}
+                        onClick={() => setDialog({ open: true, thesis: null })}
                     >
-                        <RefreshCw />
-                        Pesquisar novamente
+                        <Plus />
+                        Cadastrar tese
                     </Button>
-                )}
+
+                    {/* Depois de uma rodada ter acontecido, ou de uma ter
+                        falhado: a primeira falha deixa `research` nulo, e o
+                        alerta abaixo manda usar este botão. Antes disso a etapa
+                        já está pesquisando sozinha, e um botão ali convidaria a
+                        uma segunda chamada simultânea. */}
+                    {(research !== null || failed) && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={researching}
+                            onClick={onResearch}
+                        >
+                            <RefreshCw />
+                            Pesquisar novamente
+                        </Button>
+                    )}
+                </div>
             </div>
 
             {researching ? (
@@ -304,30 +362,31 @@ function ThesesPanel({
                     Pesquisando as teses nos portais oficiais… Leva alguns
                     minutos: o agente lê cada página antes de responder.
                 </p>
-            ) : failed ? (
-                // A falha não gravou marcador nenhum, então a etapa não
-                // tenta de novo sozinha — e é preciso dizer isso, senão a
-                // tela parece uma pesquisa que não achou nada.
-                <Alert variant="destructive">
-                    <ShieldAlert />
-                    <AlertTitle>A pesquisa não pôde ser concluída</AlertTitle>
-                    <AlertDescription>
-                        Nada foi gravado nesta aba, e os temas não foram
-                        tocados. A pesquisa depende dos portais oficiais — um
-                        deles fora do ar basta para derrubá-la. Use "Pesquisar
-                        novamente" para tentar outra vez, ou siga sem teses: a
-                        peça pode ser concluída assim.
-                    </AlertDescription>
-                </Alert>
-            ) : research === null ? (
-                // Estado de partida numa peça que nunca pesquisou e cuja
-                // etapa ainda não disparou — um piscar, na prática.
-                <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-                    Ainda não há pesquisa de teses nesta peça.
-                </p>
             ) : (
                 <>
-                    {research.legal_question && (
+                    {/* A falha não gravou marcador nenhum, então a etapa não
+                        tenta de novo sozinha — e é preciso dizer isso, senão a
+                        tela parece uma pesquisa que não achou nada. As teses
+                        que já existiam, e as cadastradas à mão, continuam
+                        embaixo: nada foi apagado. */}
+                    {failed && (
+                        <Alert variant="destructive">
+                            <ShieldAlert />
+                            <AlertTitle>
+                                A pesquisa não pôde ser concluída
+                            </AlertTitle>
+                            <AlertDescription>
+                                Nada foi gravado nesta aba, e os temas não foram
+                                tocados. A pesquisa depende dos portais oficiais
+                                — um deles fora do ar basta para derrubá-la. Use
+                                "Pesquisar novamente" para tentar outra vez,
+                                cadastre as teses à mão, ou siga sem teses: a
+                                peça pode ser concluída assim.
+                            </AlertDescription>
+                        </Alert>
+                    )}
+
+                    {research?.legal_question && (
                         <div className="rounded-lg bg-muted/50 p-4">
                             <p className="text-xs font-medium">
                                 Questão pesquisada
@@ -338,12 +397,7 @@ function ThesesPanel({
                         </div>
                     )}
 
-                    {theses.length === 0 ? (
-                        <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-                            A pesquisa não confirmou nenhuma tese em fonte
-                            oficial. O que ficou em aberto está abaixo.
-                        </p>
-                    ) : (
+                    {theses.length > 0 ? (
                         <ol className="space-y-4">
                             {theses.map((draft, index) => (
                                 <ThesisItem
@@ -351,16 +405,45 @@ function ThesesPanel({
                                     draft={draft}
                                     position={index + 1}
                                     onToggle={onToggle}
+                                    onEdit={() =>
+                                        setDialog({
+                                            open: true,
+                                            thesis: draft.thesis,
+                                        })
+                                    }
                                     thesisTypes={thesisTypes}
                                     precedentTypes={precedentTypes}
+                                    thesisOrigins={thesisOrigins}
                                 />
                             ))}
                         </ol>
+                    ) : (
+                        !failed && (
+                            // `research` nulo é o estado de partida numa peça
+                            // que nunca pesquisou e cuja etapa ainda não
+                            // disparou — um piscar, na prática.
+                            <p className="rounded-lg border border-dashed px-4 py-10 text-center text-sm text-balance text-muted-foreground">
+                                {research === null
+                                    ? "Ainda não há pesquisa de teses nesta peça."
+                                    : 'A pesquisa não confirmou nenhuma tese em fonte oficial. O que ficou em aberto está abaixo — e a tese que você conhece pode entrar pelo "Cadastrar tese".'}
+                            </p>
+                        )
                     )}
 
-                    <Findings research={research} />
+                    {research !== null && <Findings research={research} />}
                 </>
             )}
+
+            <LegalThesisDialog
+                legalCaseId={legalCaseId}
+                thesis={dialog.thesis}
+                open={dialog.open}
+                onOpenChange={(open) =>
+                    setDialog((current) => ({ ...current, open }))
+                }
+                thesisTypes={thesisTypes}
+                legalBasisTypes={legalBasisTypes}
+            />
         </div>
     );
 }
@@ -369,24 +452,32 @@ function ThesesPanel({
  * Uma tese, com a caixa que decide se ela fica.
  *
  * A caixa fica fora do corpo e não é apagada com ele: desmarcar uma tese
- * esmaece o que ela diz, e não o controle que a traz de volta.
+ * esmaece o que ela diz, e não o controle que a traz de volta. O menu de três
+ * pontos também fica fora, pelo mesmo motivo — e só existe na tese manual, a
+ * única que se edita.
  */
 function ThesisItem({
     draft,
     position,
     onToggle,
+    onEdit,
     thesisTypes,
     precedentTypes,
+    thesisOrigins,
 }: {
     draft: ThesisDraft;
     position: number;
     onToggle: (id: string, keep: boolean) => void;
+    onEdit: () => void;
     thesisTypes: Option[];
     precedentTypes: Option[];
+    thesisOrigins: Option[];
 }) {
     const id = useId();
     const { thesis } = draft;
     const type = labelOf(thesisTypes, thesis.type);
+    const origin = labelOf(thesisOrigins, thesis.origin ?? null);
+    const manual = isManualThesis(thesis);
 
     return (
         <li className="rounded-lg border p-4">
@@ -412,9 +503,10 @@ function ThesisItem({
                                 {position}. {thesis.name}
                             </Label>
                             {type && <Badge variant="secondary">{type}</Badge>}
+                            {origin && <Badge variant="outline">{origin}</Badge>}
                         </div>
 
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm whitespace-pre-line text-muted-foreground">
                             {thesis.description}
                         </p>
                     </div>
@@ -434,9 +526,12 @@ function ThesisItem({
                         <div>
                             <p className="text-xs font-medium">Fundamentação</p>
                             <div className="mt-2 flex flex-wrap gap-2">
-                                {thesis.legal_bases.map((basis) => (
+                                {/* O índice na chave: a referência digitada à
+                                    mão pode se repetir, e duas chaves iguais
+                                    fariam o React trocar um chip pelo outro. */}
+                                {thesis.legal_bases.map((basis, index) => (
                                     <Badge
-                                        key={basis.reference}
+                                        key={`${index}-${basis.reference}`}
                                         variant="outline"
                                     >
                                         {basis.reference}
@@ -446,30 +541,52 @@ function ThesisItem({
                         </div>
                     )}
 
-                    <div>
-                        <p className="text-xs font-medium">
-                            Precedentes
-                            {draft.precedents.length > 0 &&
-                                ` (${draft.precedents.length})`}
-                        </p>
-
-                        {draft.precedents.length === 0 ? (
-                            <p className="mt-2 text-sm text-muted-foreground">
-                                Nenhum julgado confirmado para esta tese.
+                    {/* "Nenhum julgado confirmado" é frase da pesquisa: diz que
+                        ela procurou e não achou. Numa tese escrita à mão
+                        ninguém procurou, e o bloco vazio some. */}
+                    {(!manual || draft.precedents.length > 0) && (
+                        <div>
+                            <p className="text-xs font-medium">
+                                Precedentes
+                                {draft.precedents.length > 0 &&
+                                    ` (${draft.precedents.length})`}
                             </p>
-                        ) : (
-                            <ul className="mt-2 space-y-2">
-                                {draft.precedents.map((precedent, index) => (
-                                    <PrecedentItem
-                                        key={`${draft.id}-${index}`}
-                                        precedent={precedent}
-                                        precedentTypes={precedentTypes}
-                                    />
-                                ))}
-                            </ul>
-                        )}
-                    </div>
+
+                            {draft.precedents.length === 0 ? (
+                                <p className="mt-2 text-sm text-muted-foreground">
+                                    Nenhum julgado confirmado para esta tese.
+                                </p>
+                            ) : (
+                                <ul className="mt-2 space-y-2">
+                                    {draft.precedents.map(
+                                        (precedent, index) => (
+                                            <PrecedentItem
+                                                key={`${draft.id}-${index}`}
+                                                precedent={precedent}
+                                                precedentTypes={precedentTypes}
+                                            />
+                                        ),
+                                    )}
+                                </ul>
+                            )}
+                        </div>
+                    )}
                 </div>
+
+                {manual && (
+                    <div className="-my-1">
+                        <RowActions
+                            label={`Ações de ${thesis.name}`}
+                            actions={[
+                                {
+                                    label: "Editar",
+                                    icon: Pencil,
+                                    onSelect: onEdit,
+                                },
+                            ]}
+                        />
+                    </div>
+                )}
             </div>
         </li>
     );

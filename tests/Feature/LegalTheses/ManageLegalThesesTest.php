@@ -11,6 +11,7 @@ use App\Domain\LegalTheses\Actions\DeleteLegalThesis;
 use App\Domain\LegalTheses\Actions\UpdateLegalThesis;
 use App\Domain\LegalTheses\Data\LegalThesisData;
 use App\Domain\LegalTheses\Enums\LegalBasisType;
+use App\Domain\LegalTheses\Enums\LegalThesisOrigin;
 use App\Domain\LegalTheses\Enums\LegalThesisType;
 use App\Domain\LegalTheses\Models\LegalThesis;
 use App\Domain\Shared\Tenancy\TenantContext;
@@ -49,6 +50,11 @@ final class ManageLegalThesesTest extends TestCase
         $this->assertSame($account->id, $thesis->account_id);
         $this->assertSame($case->id, $thesis->legalCase->id);
         $this->assertSame(LegalThesisType::Preliminary, $thesis->type);
+
+        // Nobody said who wrote it, so the research did — in memory and in the
+        // row, which is what every thesis written before the column is.
+        $this->assertSame(LegalThesisOrigin::Ai, $thesis->origin);
+        $this->assertSame(LegalThesisOrigin::Ai, $thesis->refresh()->origin);
     }
 
     #[Test]
@@ -221,6 +227,10 @@ final class ManageLegalThesesTest extends TestCase
 
         // O fundamento em branco não virou item.
         $this->assertSame(['Art. 135, III, do CTN'], $thesis->citedLegalBases());
+
+        // Registrar uma tese uma a uma é o "Cadastrar tese": quem a escreveu
+        // foi o advogado.
+        $this->assertSame(LegalThesisOrigin::Manual, $thesis->refresh()->origin);
     }
 
     #[Test]
@@ -243,10 +253,12 @@ final class ManageLegalThesesTest extends TestCase
         $this->assertNull($updated->impact);
         $this->assertSame([], $updated->citedLegalBases());
 
-        // Nem a chave nem as duas colunas de propriedade se movem num update.
+        // Nem a chave, nem as duas colunas de propriedade, nem o autor se
+        // movem num update.
         $this->assertSame($thesis->id, $updated->id);
         $this->assertSame($account->id, $updated->account_id);
         $this->assertSame($case->id, $updated->legal_case_id);
+        $this->assertSame(LegalThesisOrigin::Ai, $updated->origin);
     }
 
     #[Test]
