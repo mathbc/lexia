@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Accounts\Actions;
 
+use App\Domain\Accounts\Enums\AccountLogo;
 use App\Domain\Accounts\Enums\AccountType;
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Accounts\Models\Account;
@@ -35,6 +36,10 @@ final class ShowAccount
                 ? AccountType::options()
                 : AccountType::customerOptions(),
             'states' => BrazilianState::options(),
+            'logos' => [
+                'light' => $account->logoUrl(AccountLogo::Light),
+                'dark' => $account->logoUrl(AccountLogo::Dark),
+            ],
         ]);
     }
 }

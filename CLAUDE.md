@@ -151,6 +151,28 @@ URL, e não a do ator, é a que vale — daí `UserIndexQuery` filtrar por
 alheia e um usuário que não pertence à conta da URL; ele só funciona se o
 `asController()` tipar `Account`, que é o que dispara o binding.
 
+### A logo da conta
+
+Duas por conta, uma por tema (`AccountLogo::Light` e `::Dark`), no card "Identidade
+visual" de `/contas/nova` e da aba Dados gerais; o cadastro público não as oferece. São
+**arquivos, não Base64**: a conta é carregada em toda requisição e vai inteira nas props
+compartilhadas, e Base64 na linha pesaria em todas elas sem cache nenhum. Ficam no disco
+`local` (privado) em `accounts/{id}/`, com nome novo a cada envio — é o que muda o `v` da
+URL e deixa `ShowAccountLogo` (`GET /contas/{id}/logo?tema=claro|escuro`) responder
+`immutable`. A rota passa pela `AccountPolicy::view`, porque URL pública pularia a
+fronteira. Só PNG e JPEG: SVG executa script servido da nossa origem, e WebP o PhpWord
+não embute.
+
+O sidebar desenha a logo no quadrado do ícone, pelas `auth.user.account.logos`. O tema
+escuro cai para a principal quando não tem a própria; o claro não cai para a do escuro,
+que costuma ser clara. A moldura de pré-visualização usa `.light`/`.dark` numa subárvore
+— `.light` é o par de `.dark` em `app.css` — para mostrar cada logo no fundo a que se
+destina, qualquer que seja o tema da tela.
+
+Com arquivo, o formulário de edição posta `POST` com `_method=put` (o PHP só lê multipart
+em POST), e o Inertia 3 promove o enviado a padrão depois do sucesso: por isso o
+`onSuccess` zera os campos de logo com `setData`, e não com `reset()`.
+
 ## Autenticação
 
 Fortify com telas Inertia próprias, registradas em `FortifyServiceProvider`.

@@ -2,6 +2,7 @@ import { Head, Link, useForm } from '@inertiajs/react'
 import type { FormEvent } from 'react'
 import { AppLayout } from '@/layouts/app-layout'
 import { AccountFormFields, type AccountFormValues } from '@/components/account-form-fields'
+import { AccountLogoFields, NO_LOGO_CHANGES, type AccountLogoValues } from '@/components/account-logo-fields'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, Input, Select } from '@/components/ui/field'
@@ -14,7 +15,7 @@ interface OwnerValues {
     owner_birth_date: string
 }
 
-type Values = AccountFormValues & OwnerValues
+type Values = AccountFormValues & AccountLogoValues & OwnerValues
 
 interface Props {
     accountTypes: Option[]
@@ -39,6 +40,7 @@ export default function AccountCreate({ accountTypes, states, userTypes }: Props
         district: '',
         city: '',
         state: '',
+        ...NO_LOGO_CHANGES,
         owner_name: '',
         owner_email: '',
         owner_type: '',
@@ -61,6 +63,12 @@ export default function AccountCreate({ accountTypes, states, userTypes }: Props
                     set={(patch) => form.setData((current) => ({ ...current, ...patch }))}
                     accountTypes={accountTypes}
                     states={states}
+                />
+
+                <AccountLogoFields
+                    values={form.data}
+                    errors={form.errors}
+                    set={(patch) => form.setData((current) => ({ ...current, ...patch }))}
                 />
 
                 <Card>

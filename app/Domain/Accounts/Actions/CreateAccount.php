@@ -6,12 +6,14 @@ namespace App\Domain\Accounts\Actions;
 
 use App\Domain\Accounts\Actions\Concerns\ValidatesAccount;
 use App\Domain\Accounts\Data\AccountData;
+use App\Domain\Accounts\Data\AccountLogosData;
 use App\Domain\Accounts\Models\Account;
 use App\Domain\Users\Actions\SendUserInvitation;
 use App\Domain\Users\Data\UserData;
 use App\Domain\Users\Enums\UserType;
 use App\Domain\Users\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
@@ -24,19 +26,29 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * which is why the creation itself is delegated rather than repeated. No
  * password is chosen here: the owner is invited through the reset flow, as
  * CreateUser does for every other user.
+ *
+ * The logos are stored inside the same transaction. They need the account's
+ * id for their folder, so they come after it; and a logo that failed to store
+ * must not leave behind an account whose CNPJ would then refuse the retry.
  */
 final class CreateAccount
 {
     use AsAction;
     use ValidatesAccount;
 
-    public function handle(AccountData $accountData, UserData $ownerData): User
+    public function handle(AccountData $accountData, UserData $ownerData, AccountLogosData $logos): User
     {
-        return RegisterAccountWithOwner::make()->handle(
-            $accountData,
-            $ownerData,
-            str()->random(64),
-        );
+        return DB::transaction(function () use ($accountData, $ownerData, $logos): User {
+            $owner = RegisterAccountWithOwner::make()->handle(
+                $accountData,
+                $ownerData,
+                str()->random(64),
+            );
+
+            SaveAccountLogos::make()->handle($owner->account, $logos);
+
+            return $owner;
+        });
     }
 
     public function authorize(ActionRequest $request): bool
@@ -51,6 +63,7 @@ final class CreateAccount
     {
         return [
             ...$this->accountRules(),
+            ...$this->logoRules(),
             'owner_name' => ['required', 'string', 'max:255'],
             'owner_email' => ['required', 'email:rfc', 'max:255', 'unique:users,email'],
             'owner_birth_date' => ['nullable', 'date', 'before:today'],
@@ -65,6 +78,7 @@ final class CreateAccount
     {
         return [
             ...$this->accountAttributes(),
+            ...$this->logoAttributes(),
             'owner_name' => 'nome do responsável',
             'owner_email' => 'e-mail do responsável',
             'owner_birth_date' => 'data de nascimento',
@@ -79,6 +93,7 @@ final class CreateAccount
         $owner = $this->handle(
             AccountData::fromArray($validated),
             UserData::forOwner($validated),
+            AccountLogosData::fromArray($validated),
         );
 
         // The invitation replaces the framework's verification e-mail; see

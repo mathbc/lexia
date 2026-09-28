@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Domain\Accounts\Enums\AccountLogo;
 use App\Domain\Users\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -69,6 +70,12 @@ class HandleInertiaRequests extends Middleware
                 'type' => $user->account->type->value,
                 'type_label' => $user->account->type->label(),
                 'is_operational' => $user->account->isOperational(),
+                // The sidebar draws the logo in place of the LexIA mark, so it
+                // is needed on every page — as URLs, never as the image itself.
+                'logos' => [
+                    'light' => $user->account->logoUrl(AccountLogo::Light),
+                    'dark' => $user->account->logoUrl(AccountLogo::Dark),
+                ],
             ],
         ];
     }

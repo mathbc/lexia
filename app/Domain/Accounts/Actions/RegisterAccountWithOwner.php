@@ -47,6 +47,10 @@ final class RegisterAccountWithOwner
             $owner->account_id = $account->id;
             $owner->save();
 
+            // Callers go on to work with the account — CreateAccount stores
+            // the logos in it — and the row is already in hand.
+            $owner->setRelation('account', $account);
+
             return $owner;
         });
     }

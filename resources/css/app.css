@@ -38,7 +38,13 @@
    abaixo, o `neutral-*` do próprio Tailwind está à mão. Uma cor de marca
    futura entra aqui, e em nenhum outro lugar.
    --------------------------------------------------------------------------- */
-:root {
+/* `.light` é o par de `.dark` para uma subárvore: o tema claro forçado dentro
+   de uma tela escura. Quem usa é a moldura da logo no cadastro da conta, que
+   mostra cada logo sobre o fundo a que ela se destina, e não sobre o da tela —
+   a logo do tema claro é conferida no claro mesmo com a interface no escuro.
+   Nenhum valor novo: são os mesmos tokens, alcançáveis por classe. */
+:root,
+.light {
     --radius: 0.625rem;
 
     /* O corpo é ink-50 e os cartões são brancos: é o contraste que separa

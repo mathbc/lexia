@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Accounts\Actions\Concerns;
 
+use App\Domain\Accounts\Enums\AccountLogo;
 use App\Domain\Accounts\Enums\AccountType;
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Accounts\Models\Account;
@@ -11,6 +12,7 @@ use App\Domain\Shared\Concerns\ValidatesAddress;
 use App\Domain\Shared\Rules\Cnpj;
 use App\Domain\Shared\Rules\OabNumber;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\File;
 use Illuminate\Validation\Rules\Unique;
 
 /**
@@ -62,6 +64,51 @@ trait ValidatesAccount
 
             ...$this->addressRules(),
         ];
+    }
+
+    /**
+     * The logos, apart from the account rules because only the panel offers
+     * them: public sign-up asks for the essentials and nothing more.
+     *
+     * PNG and JPEG and nothing else. SVG is the format designers hand over,
+     * and the one that runs script when opened from our own origin; WebP is
+     * what PhpWord cannot embed in the DOCX export. The dimension cap is not
+     * about looks: a small PNG can decompress to a bitmap that exhausts memory
+     * wherever it is read back.
+     *
+     * @return array<string, mixed>
+     */
+    protected function logoRules(): array
+    {
+        $rules = [];
+
+        foreach (AccountLogo::cases() as $logo) {
+            $rules[$logo->field()] = [
+                'nullable',
+                File::image()
+                    ->types(['png', 'jpg', 'jpeg'])
+                    ->max(2 * 1024)
+                    ->dimensions(Rule::dimensions()->maxWidth(4000)->maxHeight(4000)),
+            ];
+            $rules[$logo->removalField()] = ['boolean'];
+        }
+
+        return $rules;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    protected function logoAttributes(): array
+    {
+        $attributes = [];
+
+        foreach (AccountLogo::cases() as $logo) {
+            $attributes[$logo->field()] = $logo->attribute();
+            $attributes[$logo->removalField()] = "remoção da {$logo->attribute()}";
+        }
+
+        return $attributes;
     }
 
     /**

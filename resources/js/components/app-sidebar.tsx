@@ -44,7 +44,7 @@ import {
 import { useAppearance, type Appearance } from '@/hooks/use-appearance'
 import { initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import type { AuthUser } from '@/types'
+import type { AccountLogos, AuthUser } from '@/types'
 
 interface NavItem {
     label: string
@@ -91,6 +91,56 @@ function registrationsFor(user: AuthUser): NavItem[] {
     ]
 }
 
+/**
+ * O ícone do menu: a logo da conta quando ela existe, a balança da LexIA
+ * quando não.
+ *
+ * Cada tema usa a sua. O escuro cai para a principal quando não tem a própria
+ * — é a mesma marca, e quem enviou uma só espera vê-la —, mas o claro não cai
+ * para a do escuro: essa costuma ser clara, e sumiria no menu branco.
+ *
+ * A troca é por `dark:`, uma das exceções que a regra admite: não é um cinza
+ * nomeado, é qual arquivo desenhar. E é a classe na raiz, e não o
+ * `useAppearance`, que responde qual é o tema — o "sistema" pediria resolver a
+ * media query aqui, e a classe já chega aplicada antes da primeira pintura.
+ */
+function AccountMark({ logos }: { logos: AccountLogos }) {
+    const dark = logos.dark ?? logos.light
+
+    if (dark === logos.light) {
+        return <MarkSlot src={dark} />
+    }
+
+    return (
+        <>
+            <MarkSlot src={logos.light} className="dark:hidden" />
+            <MarkSlot src={dark} className="hidden dark:flex" />
+        </>
+    )
+}
+
+/** O quadrado de 32 px do cabeçalho, com a logo contida nele ou a balança. */
+function MarkSlot({ src, className }: { src: string | null; className?: string }) {
+    if (src === null) {
+        return (
+            <div
+                className={cn(
+                    'flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground',
+                    className,
+                )}
+            >
+                <Scale className="size-4" />
+            </div>
+        )
+    }
+
+    return (
+        <div className={cn('flex aspect-square size-8 items-center justify-center', className)}>
+            <img src={src} alt="" className="max-h-full max-w-full object-contain" />
+        </div>
+    )
+}
+
 const THEMES: { value: Appearance; label: string; icon: ComponentType<{ className?: string }> }[] = [
     { value: 'light', label: 'Claro', icon: Sun },
     { value: 'dark', label: 'Escuro', icon: Moon },
@@ -111,9 +161,7 @@ export function AppSidebar({ user, currentPath }: { user: AuthUser; currentPath:
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
                             <Link href="/painel">
-                                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                                    <Scale className="size-4" />
-                                </div>
+                                <AccountMark logos={user.account.logos} />
                                 <div className="grid flex-1 text-left leading-tight">
                                     <span className="truncate text-base font-semibold">LexIA</span>
                                     <span className="truncate text-xs text-muted-foreground" title={user.account.name}>

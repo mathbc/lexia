@@ -7,6 +7,7 @@ use App\Domain\Accounts\Actions\ListAccounts;
 use App\Domain\Accounts\Actions\RegisterAccountWithOwner;
 use App\Domain\Accounts\Actions\ShowAccount;
 use App\Domain\Accounts\Actions\ShowAccountForm;
+use App\Domain\Accounts\Actions\ShowAccountLogo;
 use App\Domain\Accounts\Actions\ToggleAccountStatus;
 use App\Domain\Accounts\Actions\UpdateAccount;
 use App\Domain\Accounts\Enums\AccountType;
@@ -74,6 +75,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::get('/', ShowAccount::class)->name('accounts.show');
         Route::put('/', UpdateAccount::class)->name('accounts.update');
         Route::patch('/status', ToggleAccountStatus::class)->name('accounts.toggle');
+        Route::get('/logo', ShowAccountLogo::class)->name('accounts.logo');
 
         // Os usuários são uma aba da conta, não um cadastro à parte.
         Route::get('/usuarios', ListUsers::class)->name('users.index');

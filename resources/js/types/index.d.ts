@@ -14,6 +14,8 @@ export interface AuthUser {
         type: string;
         type_label: string;
         is_operational: boolean;
+        /** Drawn in the sidebar in place of the LexIA mark. */
+        logos: AccountLogos;
     };
 }
 
@@ -76,6 +78,15 @@ export interface Account {
     state: string;
     active: boolean;
     enabled: boolean;
+}
+
+/**
+ * Where ShowAccountLogo serves each logo, or null when there is none. The URL
+ * changes with the file, so the browser may cache it for good.
+ */
+export interface AccountLogos {
+    light: string | null;
+    dark: string | null;
 }
 
 export interface AccountRow extends Account {

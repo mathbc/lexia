@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Accounts\Models;
 
+use App\Domain\Accounts\Enums\AccountLogo;
 use App\Domain\Accounts\Enums\AccountType;
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Accounts\Policies\AccountPolicy;
@@ -42,6 +43,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property BrazilianState $state
  * @property bool $active
  * @property bool $enabled
+ * @property string|null $logo_path
+ * @property string|null $logo_dark_path
  * @property CarbonImmutable|null $deleted_at
  * @property-read Collection<int, User> $users
  */
@@ -63,7 +66,22 @@ class Account extends Model
      */
     public const string PLATFORM_ID = '5bb42959-5e28-48dc-9dd5-3dae33a9dde9';
 
+    /**
+     * The disk every file an account uploads lives on. Private on purpose:
+     * nothing on it has a public URL, so each read goes through an Action and
+     * its Policy — see ShowAccountLogo.
+     */
+    public const string FILES_DISK = 'local';
+
     protected $guarded = ['id'];
+
+    /**
+     * Where a logo sits on the disk means nothing to the browser, and
+     * publishing it would invite building URLs by hand. Pages get logoUrl().
+     *
+     * @var list<string>
+     */
+    protected $hidden = ['logo_path', 'logo_dark_path'];
 
     /**
      * @return array<string, string>
@@ -147,5 +165,48 @@ class Account extends Model
     public function displayName(): string
     {
         return $this->legal_name ?? $this->name;
+    }
+
+    /**
+     * The account's own folder on FILES_DISK, named after its id.
+     */
+    public function storageDirectory(): string
+    {
+        return "accounts/{$this->id}";
+    }
+
+    public function logoPath(AccountLogo $logo): ?string
+    {
+        $path = $this->getAttribute($logo->column());
+
+        return is_string($path) ? $path : null;
+    }
+
+    /**
+     * The URL ShowAccountLogo serves the logo from, or null when there is none.
+     *
+     * `v` changes whenever the file does — every upload is stored under a
+     * fresh name —, which is what lets the response be cached indefinitely.
+     * Relative, like every other href the pages build: an absolute URL taken
+     * from APP_URL breaks as soon as the app is served under another host.
+     */
+    public function logoUrl(AccountLogo $logo): ?string
+    {
+        $path = $this->logoPath($logo);
+
+        if ($path === null) {
+            return null;
+        }
+
+        return route('accounts.logo', [
+            'account' => $this->id,
+            'tema' => $logo->slug(),
+            'v' => self::logoVersion($path),
+        ], absolute: false);
+    }
+
+    public static function logoVersion(string $path): string
+    {
+        return substr(md5($path), 0, 12);
     }
 }

@@ -3,20 +3,22 @@ import type { FormEvent } from 'react'
 import { AppLayout } from '@/layouts/app-layout'
 import { AccountTabs } from '@/components/account-tabs'
 import { AccountFormFields, type AccountFormValues } from '@/components/account-form-fields'
+import { AccountLogoFields, NO_LOGO_CHANGES, type AccountLogoValues } from '@/components/account-logo-fields'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { accountIdentifier } from '@/lib/format'
-import type { Account, AccountAbilities, Option } from '@/types'
+import type { Account, AccountAbilities, AccountLogos, Option } from '@/types'
 
 interface Props {
     account: Account
     can: AccountAbilities
     accountTypes: Option[]
     states: Option[]
+    logos: AccountLogos
 }
 
-export default function AccountShow({ account, can, accountTypes, states }: Props) {
-    const form = useForm<AccountFormValues>({
+export default function AccountShow({ account, can, accountTypes, states, logos }: Props) {
+    const form = useForm<AccountFormValues & AccountLogoValues>({
         name: account.name,
         legal_name: account.legal_name ?? '',
         type: account.type,
@@ -32,11 +34,21 @@ export default function AccountShow({ account, can, accountTypes, states }: Prop
         district: account.district,
         city: account.city,
         state: account.state,
+        ...NO_LOGO_CHANGES,
     })
 
     const submit = (event: FormEvent) => {
         event.preventDefault()
-        form.put(`/contas/${account.id}`)
+
+        // Com arquivo, o corpo é multipart, e o PHP só lê multipart num POST:
+        // o PUT viaja como `_method`, que o Laravel desfaz na rota.
+        form.transform((data) => ({ ...data, _method: 'put' }))
+        form.post(`/contas/${account.id}`, {
+            // O Inertia promove o que foi enviado a padrão depois do sucesso,
+            // então `reset()` devolveria o próprio arquivo: a logo já gravada
+            // chega pela prop, e o formulário volta a não pedir mudança.
+            onSuccess: () => form.setData((current) => ({ ...current, ...NO_LOGO_CHANGES })),
+        })
     }
 
     const identifier = accountIdentifier(account)
@@ -63,6 +75,14 @@ export default function AccountShow({ account, can, accountTypes, states }: Prop
                     set={(patch) => form.setData((current) => ({ ...current, ...patch }))}
                     accountTypes={accountTypes}
                     states={states}
+                    disabled={!can.update}
+                />
+
+                <AccountLogoFields
+                    values={form.data}
+                    errors={form.errors}
+                    set={(patch) => form.setData((current) => ({ ...current, ...patch }))}
+                    stored={logos}
                     disabled={!can.update}
                 />
 
