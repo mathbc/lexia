@@ -57,6 +57,13 @@ use Laravel\Ai\Promptable;
  * before any other: one closed figure per request, and the field says what the
  * sentence says.
  *
+ * The *tutela de urgência* is kept out too, and for a different reason: it has
+ * a field of its own in the first step and an agent of its own,
+ * InjunctiveReliefSuggestionAgent, which weighs the two requirements of art.
+ * 300 instead of noticing a hurry. The drafting agent writes the request for it
+ * into DOS PEDIDOS from that field, so a copy here would reach the petição
+ * twice.
+ *
  * The boilerplate a lawyer already has one click away — citação, provas,
  * honorários — is deliberately kept out. `SUGGESTED_REQUIREMENTS` in
  * `resources/js/lib/requirements.ts` writes those in canned form, and an agent
@@ -139,8 +146,7 @@ final class RequirementExtractionAgent implements Agent, HasProviderOptions, Has
         pagar o que se combinou) e a de não fazer (cessar o barulho, parar a obra, retirar
         a publicação); a rescisão ou a anulação do contrato; a declaração de inexistência
         do débito; a baixa do protesto ou da negativação; a busca e apreensão; a guarda, a
-        visitação e o reconhecimento de união; a reintegração de posse; a tutela de
-        urgência, quando o relato mostrar o perigo que a justifica.
+        visitação e o reconhecimento de união; a reintegração de posse.
 
         # O que não entra
 
@@ -155,6 +161,8 @@ final class RequirementExtractionAgent implements Agent, HasProviderOptions, Has
 
         Também não entram:
 
+        - a tutela de urgência, ainda que o relato mostre pressa: ela tem campo e agente
+          próprios na peça, e o pedido dela é escrito a partir de lá;
         - o que já aconteceu ou já foi resolvido — o acordo cumprido, o valor já devolvido;
         - a providência que não se pede ao juiz: registrar boletim de ocorrência, reclamar
           no Procon, notificar extrajudicialmente, procurar o síndico;
@@ -169,8 +177,8 @@ final class RequirementExtractionAgent implements Agent, HasProviderOptions, Has
         3. As partes são "o Autor" e "o Réu" ("a Ré", se o relato descrever uma empresa ou
            uma mulher). Não use nomes próprios: a peça qualifica as partes antes disso.
         4. Não numere e não escreva marcadores. A numeração é da tela, e ela numera pela
-           ordem em que os pedidos chegam — coloque primeiro os de urgência, depois os do
-           mérito.
+           ordem em que os pedidos chegam — coloque primeiro o principal, depois os que
+           dependem dele.
         5. Um pedido por pretensão. Danos materiais e danos morais são dois pedidos, ainda
            que o relato peça os dois na mesma frase. Não parta uma pretensão em duas nem
            junte duas numa só, e não repita o mesmo pedido com outras palavras.
@@ -187,20 +195,7 @@ final class RequirementExtractionAgent implements Agent, HasProviderOptions, Has
            nenhum. Quando o cliente dá uma medida para uma pretensão e outra medida para a
            seguinte, são duas: repetir a primeira na segunda é reescrever o que ele disse.
            E medida que o relato não deu a pedido nenhum não entra em pedido nenhum.
-        9. Nada de análise jurídica, de fundamentação e de citação de artigo de lei — salvo
-           quando o nome do instituto exigir, como na tutela de urgência.
-
-        # A urgência
-
-        Quando o relato mostrar que **esperar o fim do processo já é o prejuízo** — o nome
-        negativado às vésperas de um financiamento, o plano de saúde que negou a cirurgia, a
-        obra que avança sobre o terreno, o filho que será levado do país —, escreva também o
-        pedido de tutela de urgência, dizendo o que se quer que o juiz determine **desde já**.
-
-        Ele vem em primeiro lugar na lista, porque é a ordem em que será numerado na peça, e
-        é o único pedido em que a citação do artigo é parte do nome: "nos termos do art. 300
-        do CPC". Não o escreva quando o relato não mostrar pressa nenhuma — urgência
-        inventada é o pedido que o juiz indefere primeiro.
+        9. Nada de análise jurídica, de fundamentação e de citação de artigo de lei.
 
         # O valor
 

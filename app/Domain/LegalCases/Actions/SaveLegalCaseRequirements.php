@@ -15,7 +15,7 @@ use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 
 /**
- * Saves what the pleading asks the court for — the fourth step.
+ * Saves what the pleading asks the court for — the third step.
  *
  * The list is written whole, not row by row: the screen holds it as a list, the
  * step submits it as one, and the result is a diff — rows that stayed are

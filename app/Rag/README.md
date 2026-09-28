@@ -7,6 +7,7 @@ O conhecimento que os agentes de `app/Ai` leem. Markdown em `knowledge/`, carreg
 |---|---|
 | `knowledge/practice-areas.md` | `PracticeAreaClassificationAgent` |
 | `knowledge/procedural-classes.md` | `ProceduralClassSelectionAgent` |
+| `knowledge/injunctive-relief.md` | `InjunctiveReliefSuggestionAgent` |
 
 ## Duas recuperações diferentes, e por quê
 
@@ -31,7 +32,7 @@ top-k acima, evitada por construção.
 
 **Os temas do STJ são o terceiro regime, e o único top-k de verdade.** As 2.364 linhas de
 `legal_themes` (Temas Repetitivos, Controvérsias, PUIL, IAC, SIRDR) chegam pelo
-`lexia:import-legal-themes` já com o vetor, e a aba Temas da etapa 6 as lê em três
+`lexia:import-legal-themes` já com o vetor, e a aba Temas da etapa 5 as lê em três
 passos: `LegalQuestionFormulationAgent` reescreve o relato como as questões de direito
 que ele levanta, `LegalThemeCandidatesQuery` ordena no Postgres (`<=>`) pela proximidade
 com cada questão e entrega os `ai.retrieval.theme_candidates` (20) intercalados, e

@@ -177,7 +177,7 @@ final class LegalCaseDossierTest extends TestCase
      * As teses entram; os precedentes, não.
      *
      * Os precedentes são achados sobre uma tese, e não os documentos que o
-     * advogado escolheu citar — esses são os julgados da etapa 7, abaixo. A
+     * advogado escolheu citar — esses são os julgados da etapa 6, abaixo. A
      * instrução negativa do prompt ("nada se cita que o dossiê não traga") se
      * apoia no dossiê carregar uma lista só de julgados.
      */
@@ -250,7 +250,7 @@ final class LegalCaseDossierTest extends TestCase
     }
 
     /**
-     * Os julgados que o advogado manteve na etapa 7 entram, cada um com o seu
+     * Os julgados que o advogado manteve na etapa 6 entram, cada um com o seu
      * marcador — é o que o agente escreve onde o julgado deve ser citado.
      *
      * A ementa que viaja é a que vai ser citada: sem a certidão do julgamento
@@ -322,6 +322,73 @@ final class LegalCaseDossierTest extends TestCase
             new Document(['name' => 'Boletim de Ocorrência', 'description' => 'BO nº 123456']),
         ]));
         $this->assertStringContainsString('- Boletim de Ocorrência — BO nº 123456', $with);
+    }
+
+    /**
+     * A tutela tem seção própria, e só no dossiê da redação.
+     *
+     * É dali que sai a seção DA TUTELA DE URGÊNCIA da petição, e "Nada
+     * registrado" sob o título é o que diz ao agente que a peça não pede
+     * nenhuma — nem seção, nem pedido, nem "COM PEDIDO DE TUTELA" no nome.
+     */
+    #[Test]
+    public function the_drafting_dossier_carries_the_injunction_in_a_section_of_its_own(): void
+    {
+        $asked = $this->fullPleading();
+        $asked->fill([
+            'injunctive_relief' => true,
+            'injunctive_relief_description' => "Medida pretendida: que se determine a suspensão da obra.\n\nPerigo de dano: A obra chega ao muro nesta semana.",
+        ]);
+
+        $this->assertStringContainsString(implode(PHP_EOL, [
+            '## A tutela de urgência',
+            '',
+            'Medida pretendida: que se determine a suspensão da obra.',
+            '',
+            'Perigo de dano: A obra chega ao muro nesta semana.',
+        ]), LegalCaseDossier::forDrafting($asked));
+
+        $this->assertStringContainsString(
+            '## A tutela de urgência'.PHP_EOL.PHP_EOL.'Nada registrado nesta peça até aqui.',
+            LegalCaseDossier::forDrafting($this->fullPleading()),
+        );
+
+        // Pedida e ainda sem texto continua sendo pedida: a seção é escrita,
+        // com colchetes onde a medida deveria estar.
+        $blank = $this->fullPleading();
+        $blank->fill(['injunctive_relief' => true, 'injunctive_relief_description' => null]);
+
+        $this->assertStringContainsString(
+            '## A tutela de urgência'.PHP_EOL.PHP_EOL.'Pedida, sem descrição escrita ainda.',
+            LegalCaseDossier::forDrafting($blank),
+        );
+    }
+
+    /**
+     * A descrição da tutela é texto livre do advogado, e um nome cabe nela tão
+     * bem quanto um fato. Nenhuma outra projeção a leva — em especial a da
+     * pesquisa, que sai da máquina, e a do reforço do DO DIREITO, que não deve
+     * dobrá-la numa tese.
+     */
+    #[Test]
+    public function no_other_projection_carries_the_injunction(): void
+    {
+        $pleading = $this->fullPleading();
+        $pleading->fill([
+            'injunctive_relief' => true,
+            'injunctive_relief_description' => 'Medida pretendida: que se determine a Joaquim a suspensão da obra.',
+        ]);
+
+        foreach ([
+            LegalCaseDossier::forResearch($pleading),
+            LegalCaseDossier::forGrounds($pleading),
+            LegalCaseDossier::forThemes($pleading),
+            LegalCaseDossier::forCourtDecisions($pleading),
+            LegalCaseDossier::of($pleading),
+        ] as $dossier) {
+            $this->assertStringNotContainsString('tutela', mb_strtolower($dossier));
+            $this->assertStringNotContainsString('suspensão da obra', $dossier);
+        }
     }
 
     /**

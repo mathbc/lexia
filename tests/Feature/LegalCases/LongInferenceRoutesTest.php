@@ -34,6 +34,7 @@ final class LongInferenceRoutesTest extends TestCase
     {
         return [
             'o enquadramento' => ['legal-cases.classify'],
+            'a sugestão de tutela' => ['legal-cases.injunctive-relief.suggest'],
             'a pesquisa de teses' => ['legal-cases.forensic-review.research'],
             'a pesquisa de jurisprudência' => ['legal-cases.jurisprudence.research'],
             'a conclusão da peça' => ['legal-cases.finalize'],
@@ -57,7 +58,7 @@ final class LongInferenceRoutesTest extends TestCase
         // O contraponto: se o middleware acabasse no grupo `web`, este teste é
         // o que diria. Uma etapa que só grava não deve esperar quinze minutos
         // por um banco que não responde.
-        $route = Route::getRoutes()->getByName('legal-cases.facts');
+        $route = Route::getRoutes()->getByName('legal-cases.basics');
 
         $this->assertNotNull($route);
         $this->assertNotContains('inference', $route->gatherMiddleware());

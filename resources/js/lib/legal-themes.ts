@@ -1,5 +1,5 @@
 /**
- * Os temas do STJ da revisão forense — a segunda aba da etapa 6 —, fora do
+ * Os temas do STJ da revisão forense — a segunda aba da etapa 5 —, fora do
  * componente.
  *
  * O mesmo arranjo de `@/lib/forensic-review` e `@/lib/court-decisions`: o que

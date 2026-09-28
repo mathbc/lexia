@@ -1,5 +1,5 @@
 import { Head, Link, router, useForm } from "@inertiajs/react";
-import { Sparkles } from "lucide-react";
+import { Mic, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/layouts/app-layout";
 import { AnalysisDialog } from "@/components/analysis-dialog";
@@ -10,11 +10,8 @@ import {
     type DefendantFormValues,
 } from "@/components/defendant-form-fields";
 import { DocumentUploadFields } from "@/components/document-upload-fields";
-import {
-    FactsFormFields,
-    type FactsFormValues,
-} from "@/components/facts-form-fields";
 import { ForensicReviewFields } from "@/components/forensic-review-fields";
+import { InjunctiveReliefFields } from "@/components/injunctive-relief-fields";
 import { LegalCaseSteps, type StepItem } from "@/components/legal-case-steps";
 import { LegalCaseTabs } from "@/components/legal-case-tabs";
 import { PracticeAreaPicker } from "@/components/practice-area-picker";
@@ -28,7 +25,7 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
-import { Field, Input, Select } from "@/components/ui/field";
+import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import {
     toCourtDecisionDrafts,
     toCourtDecisionPayload,
@@ -66,11 +63,14 @@ import type {
 /**
  * A ordem em que o assistente é preenchido. Espelha `LegalCaseStep::cases()`,
  * e é ela que traduz o valor do enum no índice com que a trilha trabalha.
+ *
+ * O índice só vale para a trilha: o resto da tela pergunta pela etapa pelo
+ * valor (`currentStep === "review"`), para que pôr ou tirar uma etapa seja uma
+ * linha aqui e outra no enum, e nenhuma conta de índice pelo arquivo.
  */
 const STEP_ORDER: LegalCaseStepValue[] = [
     "basics",
     "defendant",
-    "facts",
     "requirements",
     "documents",
     "review",
@@ -83,9 +83,8 @@ const STEP_ORDER: LegalCaseStepValue[] = [
  * no servidor.
  */
 const STEP_DESCRIPTIONS: Record<LegalCaseStepValue, string> = {
-    basics: "Cliente, endereçamento, área de atuação e classe processual",
+    basics: "Cliente, endereçamento, o relato dos fatos, o enquadramento e a urgência, se houver",
     defendant: "Quem é a parte contrária e como localizá-la",
-    facts: "O relato que sustenta os fundamentos e os pedidos, e a urgência, se houver",
     requirements:
         "O que se pede ao juízo, e quanto vale cada pedido que tem cifra",
     documents: "Os anexos que instruem a peça",
@@ -94,10 +93,10 @@ const STEP_DESCRIPTIONS: Record<LegalCaseStepValue, string> = {
 };
 
 /**
- * O que a pesquisa de teses está fazendo enquanto a etapa 6 espera.
+ * O que a pesquisa de teses está fazendo enquanto a etapa 5 espera.
  *
  * Estas frases moravam no preenchimento inteligente, porque era lá que a
- * pesquisa rodava. Vieram junto com ela: hoje a etapa 6 é quem abre os portais
+ * pesquisa rodava. Vieram junto com ela: hoje a etapa 5 é quem abre os portais
  * oficiais, e é a única espera do assistente que sai da máquina.
  *
  * Como em `ANALYSIS_STEPS`, são frases sobre o trabalho e não sobre o
@@ -128,7 +127,7 @@ const THEME_STEPS = [
 ] as const;
 
 /**
- * O que a pesquisa de jurisprudência está fazendo enquanto a etapa 7 espera.
+ * O que a pesquisa de jurisprudência está fazendo enquanto a etapa 6 espera.
  *
  * A segunda espera que sai da máquina, e a segunda mais longa: dois agentes em
  * série e, depois deles, a leitura do registro de cada julgado confirmado. As
@@ -199,13 +198,6 @@ const suggestedDefendant = (
     ) as Partial<DefendantFormValues>;
 };
 
-/** A peça não pede tutela até o advogado dizer que pede — ver `FactsFormFields`. */
-const EMPTY_FACTS: FactsFormValues = {
-    facts: "",
-    injunctive_relief: false,
-    injunctive_relief_description: "",
-};
-
 interface Props {
     /** A peça em edição, ou null em `/pecas/nova`. */
     legalCase: LegalCaseDraft | null;
@@ -238,13 +230,13 @@ interface Props {
  * de edição com a próxima em `?etapa`. Por isso a peça nasce no fim da etapa 1
  * e o trabalho passa a sobreviver ao fechamento da aba.
  *
- * São quatro `useForm`, um por etapa que persiste, e não um formulário só com
+ * São três `useForm`, um por etapa que persiste, e não um formulário só com
  * vinte e cinco campos: cada componente de campos já expõe exatamente
  * `{ values, errors, set }` da sua própria forma, então encaixam sem adaptação,
  * e o `processing` desabilita só o botão da etapa que está salvando.
  *
  * Uma consequência a saber: o `useForm` do Inertia espelha o bag único de erros
- * da página, então os quatro enxergam todos os erros. É inofensivo aqui porque
+ * da página, então os três enxergam todos os erros. É inofensivo aqui porque
  * nenhuma etapa compartilha nome de campo com outra.
  *
  * Os documentos, a revisão forense e a jurisprudência continuam em estado
@@ -252,20 +244,20 @@ interface Props {
  * um documento carrega o próprio `File`, que não sobrevive a um reload; a
  * decisão de manter ou tirar uma tese ou um julgado só vira gravação no
  * "Concluir". As duas do meio avançam a etapa e nada mais, que é informação
- * verdadeira sobre a peça — e a sétima, sendo a última, é quem carrega o botão
+ * verdadeira sobre a peça — e a sexta, sendo a última, é quem carrega o botão
  * que fecha tudo.
  *
  * Uma peça nova pode chegar aqui preenchida: quem vem do preenchimento
- * inteligente traz o cliente, a classe, o relato, os dados do réu, os pedidos e
- * a revisão forense numa entrega guardada pelo browser, e a área na própria URL
- * — ver `@/lib/legal-case-handoff`. Nada disso está salvo, e cada etapa grava o
- * que é dela quando o advogado clica em "Continuar": a primeira grava o
- * enquadramento junto com o relato, a segunda grava o réu se ele for aceito, a
- * quarta grava os pedidos que sobreviverem à revisão. O advogado vê as
- * sugestões antes de aceitá-las, que é o ponto de devolvê-las ao assistente em
- * vez de abrir a minuta direto.
+ * inteligente traz o cliente, a classe, o relato, os dados do réu e os pedidos
+ * numa entrega guardada pelo browser, e a área na própria URL — ver
+ * `@/lib/legal-case-handoff`. Nada disso está salvo, e cada etapa grava o que é
+ * dela quando o advogado clica em "Continuar": a primeira grava o enquadramento
+ * e o relato, a segunda grava o réu se ele for aceito, a terceira grava os
+ * pedidos que sobreviverem à revisão. O advogado vê as sugestões antes de
+ * aceitá-las, que é o ponto de devolvê-las ao assistente em vez de abrir a
+ * minuta direto.
  *
- * As etapas 6 e 7 são as duas que abrem **pesquisando**, e são a mesma tela
+ * As etapas 5 e 6 são as duas que abrem **pesquisando**, e são a mesma tela
  * duas vezes: a revisão forense procura as teses nos portais oficiais, a
  * análise de jurisprudência procura os julgados no LexML, as duas disparam ao
  * abrir e **uma vez só** — o marcador é a coluna de relato da rodada e nunca a
@@ -273,7 +265,7 @@ interface Props {
  * advogado **tire** o que não serve. Ver `ForensicReviewFields` e
  * `CourtDecisionFields`, e os dois efeitos mais abaixo.
  *
- * A etapa 7, sendo a última, é também quem carrega o "Concluir e gerar minuta",
+ * A etapa 6, sendo a última, é também quem carrega o "Concluir e gerar minuta",
  * e é por isso que ele leva as duas decisões de uma vez.
  */
 export default function LegalCaseForm({
@@ -297,6 +289,8 @@ export default function LegalCaseForm({
         Math.max(STEP_ORDER.indexOf(initialStep), 0),
     );
 
+    const currentStep = STEP_ORDER[step];
+
     /**
      * A entrega do preenchimento inteligente, lida uma vez na montagem.
      *
@@ -310,6 +304,14 @@ export default function LegalCaseForm({
         readHandoff(legalCase ? "" : selectedArea),
     );
 
+    // O relato é desta etapa, e é o campo dela que a entrega traz escrito em
+    // vez de escolhido. A tutela vem **sugerida**: quando a IA a recomenda, a
+    // caixa abre marcada e o texto escrito, com o selo que diz de onde veio —
+    // mas pedir urgência continua sendo decisão do advogado, que desmarca, e a
+    // peça só pede depois que ele salvar. A peça salva manda na entrega, como
+    // em todo o resto.
+    const suggestedRelief = handoff?.injunctive_relief ?? null;
+
     const basics = useForm({
         customer_id: legalCase?.customer_id ?? handoff?.customer_id ?? "",
         practice_area: selectedArea,
@@ -318,6 +320,18 @@ export default function LegalCaseForm({
             handoff?.procedural_class_id ??
             "",
         court_addressing: legalCase?.court_addressing ?? "",
+        facts: legalCase?.facts ?? handoff?.facts ?? "",
+        injunctive_relief:
+            legalCase?.injunctive_relief ??
+            suggestedRelief?.recommended ??
+            false,
+        injunctive_relief_description:
+            legalCase?.injunctive_relief_description ??
+            (suggestedRelief?.recommended
+                ? (suggestedRelief.description ?? "")
+                : ""),
+        injunctive_relief_suggestion:
+            legalCase?.injunctive_relief_suggestion ?? suggestedRelief,
     });
 
     // A sugestão vem antes da peça salva de propósito: a entrega só existe numa
@@ -327,10 +341,6 @@ export default function LegalCaseForm({
         ...suggestedDefendant(handoff?.defendant),
         ...(legalCase?.defendant as Partial<DefendantFormValues> | undefined),
     });
-
-    const facts = useForm<FactsFormValues>(
-        legalCase?.facts ?? { ...EMPTY_FACTS, facts: handoff?.facts ?? "" },
-    );
 
     // A peça montada à mão continua começando com a lista vazia, e é de
     // propósito: pedido que ninguém escolheu é pior do que nenhum, e os botões
@@ -350,10 +360,9 @@ export default function LegalCaseForm({
      * A revisão forense, em estado local — mas não mais sem rede embaixo.
      *
      * Ela tem duas origens, e a ordem entre elas é a regra: **o que está gravado
-     * manda**. Uma peça já concluída volta com as teses do banco, com os ids
-     * reais, e é isso que a etapa 6 mostra ao reabrir; uma peça nova as recebe da
-     * pesquisa que `ClassifyLegalCase` fez, pelo `sessionStorage`, e essas só
-     * viram linha quando o advogado clicar em Concluir.
+     * manda**. Uma peça já pesquisada volta com as teses do banco, com os ids
+     * reais, e é isso que a etapa 5 mostra ao reabrir; uma peça nova começa sem
+     * nenhuma, e as recebe da pesquisa que a própria etapa 5 dispara ao abrir.
      *
      * Era aqui que ficava a única etapa em que recarregar a página custava
      * trabalho já feito. Não é mais: `LegalCaseFormProps::draft()` projeta as
@@ -372,7 +381,7 @@ export default function LegalCaseForm({
 
     /**
      * As teses vinham do `handoff` e agora vêm do banco, então elas mudam
-     * **depois** da montagem: a pesquisa da etapa 6 grava e o Inertia
+     * **depois** da montagem: a pesquisa da etapa 5 grava e o Inertia
      * re-renderiza com props novas, sem remontar a página (`preserveState`).
      * Sem este efeito o `useState` acima continuaria mostrando a lista vazia
      * que existia quando a etapa abriu.
@@ -404,7 +413,7 @@ export default function LegalCaseForm({
     }, [thesisSignature]);
 
     /**
-     * A jurisprudência da etapa 7, em estado local pelo mesmo arranjo das teses.
+     * A jurisprudência da etapa 6, em estado local pelo mesmo arranjo das teses.
      *
      * Com uma simplificação: aqui a origem é uma só. Não há `handoff` — o
      * preenchimento inteligente nunca pesquisou jurisprudência —, então o que
@@ -417,7 +426,7 @@ export default function LegalCaseForm({
     );
 
     /**
-     * O mesmo efeito das teses, e pelo mesmo motivo: a pesquisa da etapa 7
+     * O mesmo efeito das teses, e pelo mesmo motivo: a pesquisa da etapa 6
      * grava e o Inertia re-renderiza com props novas sem remontar a página, de
      * modo que o `useState` acima continuaria mostrando a lista vazia que
      * existia quando a etapa abriu.
@@ -440,7 +449,7 @@ export default function LegalCaseForm({
     }, [courtDecisionSignature]);
 
     /**
-     * Os temas do STJ, a segunda aba da etapa 6 — o mesmo arranjo, pela mesma
+     * Os temas do STJ, a segunda aba da etapa 5 — o mesmo arranjo, pela mesma
      * razão: a seleção grava, o Inertia re-renderiza sem remontar, e a
      * assinatura de ids é o que impede um re-render de remarcar o que o
      * advogado desmarcou.
@@ -463,7 +472,7 @@ export default function LegalCaseForm({
     }, [themeSignature]);
 
     /**
-     * A conclusão é um `useForm` como as quatro etapas que gravam, e não um
+     * A conclusão é um `useForm` como as três etapas que gravam, e não um
      * `router.post` solto: é ele que dá o `processing` que tranca o botão, e é
      * ele que aceita as três listas sem que cada tese precise de uma assinatura
      * de índice para satisfazer o tipo de payload do Inertia.
@@ -515,10 +524,7 @@ export default function LegalCaseForm({
 
     const id = legalCase?.id;
     const saving =
-        basics.processing ||
-        defendant.processing ||
-        facts.processing ||
-        requirements.processing;
+        basics.processing || defendant.processing || requirements.processing;
 
     /**
      * O que acontece quando a etapa é salva: abre a que o servidor mandou abrir.
@@ -546,30 +552,17 @@ export default function LegalCaseForm({
     };
 
     const submit = () => {
-        if (step === 0) {
-            if (id) {
-                return basics.put(`/pecas/${id}/dados-basicos`, openSavedStep);
-            }
-
-            // O relato viaja junto da criação, e só dela: até aqui ele vive no
-            // navegador, e é o primeiro reload que o perderia — a etapa de
-            // fatos abriria em branco depois de o advogado já a ter escrito lá
-            // atrás, no preenchimento inteligente. Numa peça montada à mão a
-            // caixa está vazia e o servidor grava null.
-            basics.transform((data) => ({ ...data, facts: facts.data.facts }));
-
-            return basics.post("/pecas", openSavedStep);
+        if (currentStep === "basics") {
+            return id
+                ? basics.put(`/pecas/${id}/dados-basicos`, openSavedStep)
+                : basics.post("/pecas", openSavedStep);
         }
 
-        if (step === 1) {
+        if (currentStep === "defendant") {
             return defendant.put(`/pecas/${id}/reu`, openSavedStep);
         }
 
-        if (step === 2) {
-            return facts.put(`/pecas/${id}/fatos`, openSavedStep);
-        }
-
-        if (step === 3) {
+        if (currentStep === "requirements") {
             return requirements.put(`/pecas/${id}/pedidos`, openSavedStep);
         }
 
@@ -577,13 +570,13 @@ export default function LegalCaseForm({
         // `File` ainda não têm onde ser salvos, e a revisão forense, cujas
         // teses já são linhas e cujo `keep` só vira gravação no "Concluir" —
         // dizem a única coisa verdadeira que têm a dizer: a peça chegou até
-        // aqui. E é esse `patch` que destrava a etapa 7, sem o qual a pesquisa
+        // aqui. E é esse `patch` que destrava a etapa 6, sem o qual a pesquisa
         // de jurisprudência não teria marca d'água que a autorizasse.
         //
         // `preserveState` é o que separa este `router.patch` do que ele era.
         // Sem ele a visita remonta a página, e o `useState` das teses volta a
-        // ler as props: a tese que o advogado acabou de desmarcar na etapa 6
-        // reapareceria marcada, e o "Concluir" da etapa 7 gravaria de volta o
+        // ler as props: a tese que o advogado acabou de desmarcar na etapa 5
+        // reapareceria marcada, e o "Concluir" da etapa 6 gravaria de volta o
         // que ele tinha acabado de tirar. Um `useForm` já preservaria sozinho
         // — aqui não há formulário nenhum para preservar.
         return router.patch(
@@ -597,7 +590,7 @@ export default function LegalCaseForm({
      * O fim do assistente.
      *
      * Um gesto só, e três efeitos: grava o que sobreviveu à leitura do advogado
-     * nas etapas 6 e 7, tira a peça do rascunho e manda o agente redigir a
+     * nas etapas 5 e 6, tira a peça do rascunho e manda o agente redigir a
      * minuta. O servidor redireciona para a aba do documento, e por isso aqui
      * não há `openSavedStep` — não há próxima etapa para abrir.
      *
@@ -607,8 +600,7 @@ export default function LegalCaseForm({
      */
     const finalise = () => {
         // As três decisões vivem em estado local, então o payload é montado na
-        // hora do envio — `transform` é o mesmo mecanismo que leva o relato
-        // junto da criação na etapa 1. O que não estiver nestas listas é
+        // hora do envio, pelo `transform`. O que não estiver nestas listas é
         // apagado pelo diff do servidor: é assim que desmarcar vira remoção.
         review.transform(() => ({
             ...toForensicReviewPayload(theses),
@@ -620,7 +612,7 @@ export default function LegalCaseForm({
     };
 
     /**
-     * As duas pesquisas do assistente, que preenchem as etapas 6 e 7.
+     * As duas pesquisas do assistente, que preenchem as etapas 5 e 6.
      *
      * `router.post` solto e não um `useForm`: não há payload nenhum — a peça
      * está na URL e tudo o que os agentes leem já está no banco. O `researching`
@@ -629,9 +621,9 @@ export default function LegalCaseForm({
      *
      * Um estado por etapa, e não um compartilhado: as duas rodadas falham por
      * motivos diferentes — o STJ fora do ar, o LexML fora do ar — e uma falha na
-     * etapa 6 não pode impedir a etapa 7 de tentar, nem o contrário.
+     * etapa 5 não pode impedir a etapa 6 de tentar, nem o contrário.
      *
-     * Na etapa 6 o estado é **por aba**, pelo mesmo motivo um nível abaixo: as
+     * Na etapa 5 o estado é **por aba**, pelo mesmo motivo um nível abaixo: as
      * teses e os temas correm juntos no servidor, mas cada metade tem marcador
      * próprio e falha por si — a pesquisa de teses pode cair com o STJ enquanto
      * a de temas volta.
@@ -731,7 +723,7 @@ export default function LegalCaseForm({
      * render. Uma aba que falhou fica de fora até o botão dela ser apertado.
      */
     useEffect(() => {
-        if (step !== 5 || !id || researching.length > 0) {
+        if (currentStep !== "review" || !id || researching.length > 0) {
             return;
         }
 
@@ -756,7 +748,7 @@ export default function LegalCaseForm({
     ]);
 
     /**
-     * O mesmo disparo na etapa 7, com o marcador que é dela.
+     * O mesmo disparo na etapa 6, com o marcador que é dela.
      *
      * `court_decision_research` e não `court_decisions.length`, pelo motivo que
      * o efeito acima explica por extenso — e aqui ele é ainda mais visível: um
@@ -767,7 +759,7 @@ export default function LegalCaseForm({
      */
     useEffect(() => {
         if (
-            step === 6 &&
+            currentStep === "court-decisions" &&
             id &&
             legalCase?.court_decision_research == null &&
             !researchingDecisions &&
@@ -813,7 +805,7 @@ export default function LegalCaseForm({
                         chegam preenchidos e nada clica. O que falta é a peça
                         existir — nada foi gravado ainda, e é o "Continuar"
                         desta etapa que a cria. Tudo o que vem depois precisa
-                        dela: a etapa 6 pesquisa teses e as grava, e não há
+                        dela: a etapa 5 pesquisa teses e as grava, e não há
                         onde gravá-las sem uma chave primária. */}
                     {!id && (
                         <p className="text-xs text-muted-foreground">
@@ -825,13 +817,14 @@ export default function LegalCaseForm({
                 </div>
 
                 <div className="min-w-0 space-y-6">
-                    {step === 0 && (
+                    {currentStep === "basics" && (
                         <Card>
                             <CardHeader>
-                                <CardTitle>Dados básicos</CardTitle>
+                                <CardTitle>Dados básicos e fatos</CardTitle>
                                 <CardDescription>
-                                    Para quem é a peça, a quem ela é dirigida e
-                                    sob que enquadramento será redigida.
+                                    Para quem é a peça, a quem ela é dirigida, o
+                                    que aconteceu e sob que enquadramento será
+                                    redigida.
                                 </CardDescription>
                             </CardHeader>
 
@@ -897,6 +890,45 @@ export default function LegalCaseForm({
                                     </Field>
                                 </div>
 
+                                {/* Uma caixa de texto e nada mais: os fatos
+                                    vêm na ordem em que aconteceram, e qualquer
+                                    estrutura imposta aqui seria uma aposta
+                                    sobre uma peça que ainda não existe. O
+                                    microfone é a porta do ditado, que ainda não
+                                    existe — desabilitado de propósito, porque
+                                    um botão que aceita o clique e não faz nada
+                                    é pior do que um que assume não estar
+                                    pronto. */}
+                                <Field
+                                    label="Fatos"
+                                    error={basics.errors.facts}
+                                    hint="O ditado por voz entra numa próxima versão."
+                                    action={
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            disabled
+                                            aria-label="Ditar os fatos (em breve)"
+                                        >
+                                            <Mic />
+                                            Ditar
+                                        </Button>
+                                    }
+                                >
+                                    <Textarea
+                                        value={basics.data.facts}
+                                        onChange={(e) =>
+                                            basics.setData(
+                                                "facts",
+                                                e.target.value,
+                                            )
+                                        }
+                                        rows={12}
+                                        placeholder="Relate o caso como o cliente o contou: quando começou, o que foi feito, o que foi cobrado, o que se tentou resolver antes de procurar a Justiça…"
+                                    />
+                                </Field>
+
                                 <fieldset className="space-y-3">
                                     <legend className="text-sm font-medium">
                                         Área de atuação
@@ -958,11 +990,40 @@ export default function LegalCaseForm({
                                         </p>
                                     )}
                                 </fieldset>
+
+                                <InjunctiveReliefFields
+                                    injunctive_relief={
+                                        basics.data.injunctive_relief
+                                    }
+                                    injunctive_relief_description={
+                                        basics.data
+                                            .injunctive_relief_description
+                                    }
+                                    injunctive_relief_suggestion={
+                                        basics.data
+                                            .injunctive_relief_suggestion
+                                    }
+                                    facts={basics.data.facts}
+                                    practiceArea={selectedArea}
+                                    proceduralClassId={
+                                        basics.data.procedural_class_id
+                                    }
+                                    error={
+                                        basics.errors
+                                            .injunctive_relief_description
+                                    }
+                                    onChange={(patch) =>
+                                        basics.setData((data) => ({
+                                            ...data,
+                                            ...patch,
+                                        }))
+                                    }
+                                />
                             </CardContent>
                         </Card>
                     )}
 
-                    {step === 1 && (
+                    {currentStep === "defendant" && (
                         <DefendantFormFields
                             values={defendant.data}
                             errors={defendant.errors}
@@ -977,21 +1038,7 @@ export default function LegalCaseForm({
                         />
                     )}
 
-                    {step === 2 && (
-                        <FactsFormFields
-                            values={facts.data}
-                            errors={facts.errors}
-                            set={(patch) =>
-                                facts.setData((current) => ({
-                                    ...current,
-                                    ...patch,
-                                }))
-                            }
-                            disabled={facts.processing}
-                        />
-                    )}
-
-                    {step === 3 && (
+                    {currentStep === "requirements" && (
                         <RequirementFormFields
                             requirements={requirements.data.requirements}
                             disabled={requirements.processing}
@@ -1024,7 +1071,7 @@ export default function LegalCaseForm({
                         />
                     )}
 
-                    {step === 4 && (
+                    {currentStep === "documents" && (
                         <DocumentUploadFields
                             documents={documents}
                             onAdd={(files) =>
@@ -1053,7 +1100,7 @@ export default function LegalCaseForm({
                         />
                     )}
 
-                    {step === 5 && (
+                    {currentStep === "review" && (
                         <ForensicReviewFields
                             research={legalCase?.research ?? null}
                             themeResearch={legalCase?.theme_research ?? null}
@@ -1085,7 +1132,7 @@ export default function LegalCaseForm({
                         />
                     )}
 
-                    {step === 6 && (
+                    {currentStep === "court-decisions" && (
                         <CourtDecisionFields
                             research={
                                 legalCase?.court_decision_research ?? null
@@ -1135,7 +1182,7 @@ export default function LegalCaseForm({
                         ) : (
                             /* A última etapa é onde a peça acaba, e o rótulo
                                diz as duas coisas que vão acontecer. As teses
-                               que ele grava são as da etapa 6, que seguem em
+                               que ele grava são as da etapa 5, que seguem em
                                estado local até aqui — ver `finalise`. */
                             <Button
                                 type="button"

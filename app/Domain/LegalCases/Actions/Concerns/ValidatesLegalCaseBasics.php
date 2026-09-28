@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Domain\LegalCases\Actions\Concerns;
 
+use App\Domain\LegalCases\Data\InjunctiveReliefSuggestionData;
 use App\Domain\LegalCases\Data\LegalCaseBasicsData;
+use App\Domain\LegalCases\Enums\InjunctiveReliefKind;
 use App\Domain\PracticeAreas\Models\PracticeArea;
 use Illuminate\Validation\Rule;
 
@@ -13,8 +15,13 @@ use Illuminate\Validation\Rule;
  * first step.
  *
  * Two callers, one trait — the same arrangement, and the same reason, as
- * ValidatesCustomer. The defendant, the facts and the requests have one caller
- * each and keep their rules in their own Action.
+ * ValidatesCustomer. The defendant and the requests have one caller each and
+ * keep their rules in their own Action.
+ *
+ * The facts and the injunction are here because the step is: they used to be a
+ * step of their own, and now close the first one. The narrative stays optional
+ * — the pleading is written in passes, and a lawyer who frames the case first
+ * and writes the story later is doing the ordinary thing.
  *
  * Two invariants live here that the database cannot hold:
  *
@@ -63,6 +70,24 @@ trait ValidatesLegalCaseBasics
             ],
 
             'court_addressing' => ['nullable', 'string', 'max:255'],
+
+            'facts' => ['nullable', 'string'],
+            'injunctive_relief' => ['required', 'boolean'],
+            'injunctive_relief_description' => ['nullable', 'string'],
+
+            // O envelope que a tela recebeu do agente e devolve ao salvar. É o
+            // registro de uma resposta, e não a resposta: só a forma é
+            // conferida aqui, e nada nele é recalculado.
+            'injunctive_relief_suggestion' => ['nullable', 'array'],
+            'injunctive_relief_suggestion.recommended' => ['required_with:injunctive_relief_suggestion', 'boolean'],
+            'injunctive_relief_suggestion.kind' => ['nullable', Rule::enum(InjunctiveReliefKind::class)],
+            'injunctive_relief_suggestion.description' => ['nullable', 'string'],
+            'injunctive_relief_suggestion.justification' => ['nullable', 'string'],
+            'injunctive_relief_suggestion.evidence' => ['nullable', 'array', 'max:'.InjunctiveReliefSuggestionData::MAX_EVIDENCE],
+            'injunctive_relief_suggestion.evidence.*' => ['string'],
+            'injunctive_relief_suggestion.unsupported_amounts' => ['nullable', 'array'],
+            'injunctive_relief_suggestion.unsupported_amounts.*' => ['string'],
+            'injunctive_relief_suggestion.suggested_at' => ['required_with:injunctive_relief_suggestion', 'date'],
         ];
     }
 
@@ -76,6 +101,10 @@ trait ValidatesLegalCaseBasics
             'practice_area' => 'área de atuação',
             'procedural_class_id' => 'classe processual',
             'court_addressing' => 'endereçamento',
+            'facts' => 'fatos',
+            'injunctive_relief' => 'tutela de urgência',
+            'injunctive_relief_description' => 'descrição da tutela',
+            'injunctive_relief_suggestion' => 'sugestão de tutela',
         ];
     }
 

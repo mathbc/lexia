@@ -14,10 +14,10 @@ use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 
 /**
- * Saves the case law a pleading cites — the seventh step.
+ * Saves the case law a pleading cites — the sixth step.
  *
  * The list is written whole and reconciled as a diff, exactly as
- * `SaveLegalCaseRequirements` writes the fourth step and
+ * `SaveLegalCaseRequirements` writes the third step and
  * `SaveLegalCaseForensicReview` writes the sixth: rows that stayed are updated,
  * rows that left are removed, rows that arrived are created.
  *
@@ -28,7 +28,7 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * accounts in it.
  *
  * This is where a lawyer's unticking becomes a deletion. The research writes
- * every ruling it confirmed; the seventh step ticks them all and lets the
+ * every ruling it confirmed; the sixth step ticks them all and lets the
  * lawyer untick what does not serve, and the untick lives in the browser until
  * `FinalizeLegalCase` posts the list without it. Removing rather than flagging
  * is deliberate and is the sibling's decision too: a pleading cites the rulings
@@ -37,7 +37,7 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * "Pesquisar novamente".
  *
  * One thing it does **not** do, and the omission is the difference from the
- * sixth step: there is no map from posted id to persisted id here. A court
+ * fifth step: there is no map from posted id to persisted id here. A court
  * decision is nothing's parent — no row points at it — so a fresh one has
  * nobody waiting for its key.
  *

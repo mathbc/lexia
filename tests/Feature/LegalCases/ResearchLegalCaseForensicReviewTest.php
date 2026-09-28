@@ -31,7 +31,7 @@ use RuntimeException;
 use Tests\TestCase;
 
 /**
- * The research that fills step 6, now that it has somewhere to be written.
+ * The research that fills step 5, now that it has somewhere to be written.
  *
  * This used to be the fifth step of `POST /pecas/classificar`, and what is
  * pinned here is the two things that move made possible: the result **is

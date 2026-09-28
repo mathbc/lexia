@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Domain\Shared\Concurrency\IsolatedProcessDriver;
 use App\Domain\Shared\Tenancy\TenantContext;
 use App\Rag\KnowledgeBase;
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Process\Factory as ProcessFactory;
+use Illuminate\Support\Facades\Concurrency;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\ServiceProvider;
 
@@ -35,5 +39,13 @@ class AppServiceProvider extends ServiceProvider
         Model::automaticallyEagerLoadRelationships();
 
         Date::use(CarbonImmutable::class);
+
+        // O `process` do framework dá 60 s a cada task e, quando uma estoura,
+        // descarta as que já tinham voltado. Não é estática porque o manager
+        // faz `bindTo()` na closure.
+        Concurrency::extend('process', fn (Application $app): IsolatedProcessDriver => new IsolatedProcessDriver(
+            $app->make(ProcessFactory::class),
+            (int) config('concurrency.timeout'),
+        ));
     }
 }

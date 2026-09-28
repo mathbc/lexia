@@ -8,7 +8,7 @@ use App\Domain\CourtDecisions\Models\CourtDecision;
 use Illuminate\Support\Collection;
 
 /**
- * The seventh step's rulings, as the drafted document quotes them.
+ * The sixth step's rulings, as the drafted document quotes them.
  *
  * **The agent decides where a ruling goes, and never writes one.** The dossier
  * hands PleadingDraftingAgent each ruling the lawyer kept under a marker —
@@ -22,7 +22,7 @@ use Illuminate\Support\Collection;
  * - **An ementa is copy, not composition.** A model asked to transcribe two
  *   thousand characters of a ruling paraphrases, trims and — worst — fills in
  *   from memory, and a rewritten ementa is shaped exactly like a real one. The
- *   seventh step exists to refuse that failure; letting it back in at the last
+ *   sixth step exists to refuse that failure; letting it back in at the last
  *   step would undo the guard at the moment the text becomes a filing.
  * - **The indent is structure, not style.** The NBR 10520 indent is the `>`
  *   paragraph that `blocksOf()` and PleadingBlocks both read, on screen and in

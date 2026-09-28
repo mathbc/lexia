@@ -17,8 +17,9 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * Re-saves the first step of a pleading that already exists.
  *
  * The counterpart of CreateLegalCase, and not a redundancy: the lawyer walks
- * back to step 1 on the edit URL to change the client or the class, and without
- * this that Continuar would either be dead or open a second pleading.
+ * back to step 1 on the edit URL to change the client or the class, or to
+ * finish the narrative and the injunction, and without this that Continuar
+ * would either be dead or open a second pleading.
  *
  * Note what it does *not* do: the step does not retreat. `advanceTo` takes the
  * furthest of the two, so correcting the heading of a pleading that already

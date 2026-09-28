@@ -10,9 +10,15 @@ use App\Domain\Shared\Contracts\HasLabel;
 /**
  * Where the drafting of a pleading stands.
  *
- * The seven steps of the assembly form, in the order they are filled: who the
- * pleading is for, who it is against, what happened, what is asked, what
+ * The six steps of the assembly form, in the order they are filled: who the
+ * pleading is for and what happened, who it is against, what is asked, what
  * instructs it, the read-through, and the case law the argument leans on.
+ *
+ * The narrative and the urgency had a step of their own, between the
+ * defendant and the requests; they now close the first one, which is where the
+ * smart fill already delivered them. Rows stored on the retired `facts` value
+ * were moved on by a migration, since a string the enum no longer knows would
+ * break the cast on read.
  *
  * Stored on `legal_cases.current_step` as a high-water mark — the furthest step
  * reached, never the last one edited. That is what lets the listing say where a
@@ -29,7 +35,6 @@ enum LegalCaseStep: string implements HasLabel
 
     case Basics = 'basics';
     case Defendant = 'defendant';
-    case Facts = 'facts';
     case Requirements = 'requirements';
     case Documents = 'documents';
     case Review = 'review';
@@ -38,9 +43,8 @@ enum LegalCaseStep: string implements HasLabel
     public function label(): string
     {
         return match ($this) {
-            self::Basics => 'Dados básicos',
+            self::Basics => 'Dados básicos e fatos',
             self::Defendant => 'Dados do réu',
-            self::Facts => 'Fatos e tutela',
             self::Requirements => 'Pedidos e requerimentos',
             self::Documents => 'Documentos',
             self::Review => 'Revisão forense',

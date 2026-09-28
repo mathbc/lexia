@@ -55,6 +55,7 @@ processual, contra quem é e o que aconteceu. Os anexos ficam em `documents`.
 | `court_addressing` | string, nula | o endereçamento — "Ao Juízo da 3ª Vara Cível da Comarca de Florianópolis/SC" |
 | `facts` | longtext, nulo | a narrativa do que aconteceu |
 | `injunctive_relief` / `injunctive_relief_description` | bool / longtext | a tutela de urgência, se houver |
+| `injunctive_relief_suggestion` | jsonb | o que a IA disse sobre a tutela (espécie, justificativa, documentos), gravado ao lado da decisão para o selo "Sugestão da IA" sobreviver ao reload |
 | `current_step` | string, `'basics'` | até onde o preenchimento chegou (`LegalCaseStep`) |
 | `is_draft` | bool, `true` | rascunho ou peça fechada |
 | `created_at` / `updated_at` / `deleted_at` | timestamp | `SoftDeletes` |
@@ -91,7 +92,7 @@ avança `current_step`.
 retrocesso — sob a outra semântica a trilha trancaria as etapas já preenchidas
 e a listagem diria "Dados básicos" para uma peça três quartos escrita. A regra
 mora em `LegalCaseStep::furthest()` e é aplicada pelo trait
-`AdvancesLegalCaseStep`, usado pelas seis Actions de escrita.
+`AdvancesLegalCaseStep`, usado pelas Actions de escrita de cada etapa.
 
 A etapa em que o navegador abre é coisa separada: vem do `?etapa` da URL, e cai
 na marca d'água quando não há query. É o que permite regravar a etapa 1 sem que
@@ -131,17 +132,17 @@ sua descrição, e entram e saem um a um. Ver [document.md](document.md).
 ## O que ainda não existe
 
 A peça já é escrita e salva: `POST /pecas` a abre, e
-`/pecas/{legalCase}/dados-basicos`, `/reu`, `/fatos`, `/pedidos` e
+`/pecas/{legalCase}/dados-basicos` (que leva também os fatos e a tutela), `/reu`, `/pedidos` e
 `/revisao-forense` gravam uma etapa cada. `GET /pecas/{legalCase}/editar` a
 reabre onde parou.
 
-**A etapa 6 tem dados, mas ainda não tem tela.** `LegalThesis` e
+**A etapa 5 tem dados, mas ainda não tem tela.** `LegalThesis` e
 `LegalPrecedent` existem, a rota grava as duas listas e as Actions de cadastro
 por linha estão prontas para o agente de revisão forense — o que falta é o
 formulário e o agente.
 
 **Os documentos são a exceção**: o rascunho carrega o próprio `File`, e onde
-guardá-lo é decisão que ainda não foi tomada — a etapa 5 segue em estado local
+guardá-lo é decisão que ainda não foi tomada — a etapa 4 segue em estado local
 no navegador, e o "Continuar" dela só avança `current_step`, via
 `PATCH /pecas/{legalCase}/etapa`. O que o produto precisa acrescentar:
 
@@ -168,7 +169,7 @@ Requerido etc.
   existentes no banco e respeita o par área↔classe)
 - Enum das etapas: `app/Domain/LegalCases/Enums/LegalCaseStep.php`
 - Actions de escrita: `app/Domain/LegalCases/Actions/` (`CreateLegalCase`,
-  `UpdateLegalCaseBasics`, `UpdateLegalCaseDefendant`, `UpdateLegalCaseFacts`,
+  `UpdateLegalCaseBasics`, `UpdateLegalCaseDefendant`,
   `SaveLegalCaseRequirements`, `SaveLegalCaseForensicReview`,
   `AdvanceLegalCaseStep`)
 - Testes: `tests/Feature/LegalCases/ManageLegalCasesTest.php` (model e schema),

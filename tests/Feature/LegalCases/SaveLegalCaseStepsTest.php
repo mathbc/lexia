@@ -13,6 +13,7 @@ use App\Domain\PracticeAreas\Models\PracticeArea;
 use App\Domain\Shared\Tenancy\TenantContext;
 use App\Domain\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -41,6 +42,7 @@ final class SaveLegalCaseStepsTest extends TestCase
             'practice_area' => 'imobiliario',
             'procedural_class_id' => $class->id,
             'court_addressing' => 'Ao Juízo da 3ª Vara Cível da Comarca de Florianópolis/SC',
+            'injunctive_relief' => false,
         ]);
 
         $legalCase = LegalCase::query()->sole();
@@ -93,13 +95,13 @@ final class SaveLegalCaseStepsTest extends TestCase
     }
 
     /**
-     * O relato é da etapa 3 e entra na etapa 1 mesmo assim, quando existe.
+     * O relato é da etapa 1, e a criação o grava.
      *
      * Quem vem do preenchimento inteligente escreveu os fatos antes de a peça
-     * existir, e foram eles que produziram a área e a classe. Salvá-los junto é
-     * o que os faz sobreviver à navegação que a criação provoca — sem isso a
-     * etapa de fatos abriria em branco depois de escrita. A marca d'água não se
-     * mexe: o advogado continua devendo as etapas do meio.
+     * existir, e foram eles que produziram a área e a classe. Gravá-los na
+     * criação é o que os faz sobreviver à navegação que ela provoca. A marca
+     * d'água segue a regra de sempre: a primeira etapa feita, a peça está na
+     * segunda.
      */
     #[Test]
     public function the_narrative_that_framed_the_case_is_saved_with_it(): void
@@ -137,6 +139,47 @@ final class SaveLegalCaseStepsTest extends TestCase
         $this->assertNull(LegalCase::query()->sole()->facts);
     }
 
+    /**
+     * A tutela também é da etapa 1: quem a marca já na criação não precisa
+     * voltar para escrevê-la.
+     */
+    #[Test]
+    public function the_first_step_saves_the_injunction_it_asks_for(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        $this->actingAs($owner)
+            ->post('/pecas', [
+                'injunctive_relief' => true,
+                'injunctive_relief_description' => '  Risco de demolição iminente.  ',
+            ] + $this->basics($account, addressing: null))
+            ->assertSessionHasNoErrors();
+
+        $legalCase = LegalCase::query()->sole();
+
+        $this->assertTrue($legalCase->injunctive_relief);
+        $this->assertSame('Risco de demolição iminente.', $legalCase->injunctive_relief_description);
+    }
+
+    /**
+     * A tutela é uma decisão: a etapa não a supõe, e um payload sem ela é
+     * recusado em vez de gravar um "não" que ninguém disse.
+     */
+    #[Test]
+    public function the_first_step_refuses_a_payload_that_does_not_decide_the_injunction(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        $payload = $this->basics($account, addressing: null);
+        unset($payload['injunctive_relief']);
+
+        $this->actingAs($owner)
+            ->post('/pecas', $payload)
+            ->assertSessionHasErrors('injunctive_relief');
+
+        $this->assertSame(0, LegalCase::query()->count());
+    }
+
     #[Test]
     public function a_class_that_does_not_belong_to_the_chosen_area_is_refused(): void
     {
@@ -153,6 +196,7 @@ final class SaveLegalCaseStepsTest extends TestCase
                 // vive no pivot e o banco não o impede.
                 'practice_area' => 'imobiliario',
                 'procedural_class_id' => $stranger->id,
+                'injunctive_relief' => false,
             ])
             ->assertSessionHasErrors('procedural_class_id');
 
@@ -174,6 +218,7 @@ final class SaveLegalCaseStepsTest extends TestCase
                 'customer_id' => $stranger->id,
                 'practice_area' => 'imobiliario',
                 'procedural_class_id' => $class->id,
+                'injunctive_relief' => false,
             ])
             ->assertSessionHasErrors('customer_id');
     }
@@ -192,7 +237,7 @@ final class SaveLegalCaseStepsTest extends TestCase
 
         $this->assertSame('Construtora Atlântico Ltda.', $legalCase->defendant_name);
         $this->assertNull($legalCase->defendant_postal_code);
-        $this->assertSame(LegalCaseStep::Facts, $legalCase->current_step);
+        $this->assertSame(LegalCaseStep::Requirements, $legalCase->current_step);
     }
 
     #[Test]
@@ -221,32 +266,148 @@ final class SaveLegalCaseStepsTest extends TestCase
         $this->assertSame(BrazilianState::SC, $legalCase->defendant_state);
     }
 
+    /**
+     * Voltar à etapa 1 é também onde o relato é terminado: o re-salvar grava os
+     * fatos e a tutela, e não só o enquadramento.
+     */
+    #[Test]
+    public function re_saving_the_first_step_writes_the_narrative_and_the_injunction(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $legalCase = $this->openPleading($account);
+
+        $this->actingAs($owner)
+            ->put("/pecas/{$legalCase->id}/dados-basicos", [
+                'facts' => 'O imóvel foi ocupado em março.',
+                'injunctive_relief' => true,
+                'injunctive_relief_description' => 'Risco de demolição iminente.',
+            ] + $this->basics($account, addressing: null))
+            ->assertSessionHasNoErrors();
+
+        $legalCase->refresh();
+
+        $this->assertSame('O imóvel foi ocupado em março.', $legalCase->facts);
+        $this->assertTrue($legalCase->injunctive_relief);
+        $this->assertSame('Risco de demolição iminente.', $legalCase->injunctive_relief_description);
+    }
+
     #[Test]
     public function unchecking_the_relief_clears_its_description(): void
     {
         [$account, $owner] = $this->accountWithOwner();
         $legalCase = $this->openPleading($account);
+        $basics = $this->basics($account, addressing: null);
 
-        $this->actingAs($owner)->put("/pecas/{$legalCase->id}/fatos", [
+        $this->actingAs($owner)->put("/pecas/{$legalCase->id}/dados-basicos", [
             'facts' => 'O imóvel foi ocupado em março.',
             'injunctive_relief' => true,
             'injunctive_relief_description' => 'Risco de demolição iminente.',
-        ]);
+        ] + $basics);
 
         $this->assertSame('Risco de demolição iminente.', $legalCase->refresh()->injunctive_relief_description);
 
         // A descrição não sobrevive ao desmarcar: texto guardado sob um pedido
         // que não existe é dado que ninguém consegue interpretar depois.
-        $this->actingAs($owner)->put("/pecas/{$legalCase->id}/fatos", [
+        $this->actingAs($owner)->put("/pecas/{$legalCase->id}/dados-basicos", [
             'facts' => 'O imóvel foi ocupado em março.',
             'injunctive_relief' => false,
             'injunctive_relief_description' => 'Risco de demolição iminente.',
-        ]);
+        ] + $basics);
 
         $legalCase->refresh();
 
         $this->assertFalse($legalCase->injunctive_relief);
         $this->assertNull($legalCase->injunctive_relief_description);
+    }
+
+    /**
+     * A sugestão da IA é gravada ao lado da decisão, como a tela a recebeu: é
+     * o que mantém o selo "Sugestão da IA" depois de um reload.
+     */
+    #[Test]
+    public function the_first_step_keeps_the_suggestion_it_was_given(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        $this->actingAs($owner)
+            ->post('/pecas', [
+                'injunctive_relief' => true,
+                'injunctive_relief_description' => 'Medida pretendida: que se determine a suspensão da obra.',
+                'injunctive_relief_suggestion' => $this->suggestion(),
+            ] + $this->basics($account, addressing: null))
+            ->assertSessionHasNoErrors();
+
+        $legalCase = LegalCase::query()->sole();
+
+        // `assertEquals`, e não `assertSame`: o jsonb do Postgres reordena as
+        // chaves ao gravar, e a ordem delas não é contrato de ninguém.
+        $this->assertEquals($this->suggestion(), $legalCase->injunctive_relief_suggestion);
+
+        // E volta para a tela na mesma forma, pela projeção do formulário.
+        $this->actingAs($owner)
+            ->get("/pecas/{$legalCase->id}/editar")
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('legalCase.injunctive_relief_suggestion.kind', 'anticipatory')
+                ->where('legalCase.injunctive_relief_suggestion.kind_label', 'Antecipada')
+                ->where('legalCase.injunctive_relief_suggestion.recommended', true));
+    }
+
+    /**
+     * Desmarcar apaga a descrição, mas não o registro do que a IA disse: "a IA
+     * recomendou e o advogado recusou" é informação, e é exatamente essa.
+     */
+    #[Test]
+    public function unchecking_the_relief_keeps_what_the_ai_said(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $legalCase = $this->openPleading($account);
+
+        $this->actingAs($owner)->put("/pecas/{$legalCase->id}/dados-basicos", [
+            'injunctive_relief' => false,
+            'injunctive_relief_description' => 'Medida pretendida: que se determine a suspensão da obra.',
+            'injunctive_relief_suggestion' => $this->suggestion(),
+        ] + $this->basics($account, addressing: null))->assertSessionHasNoErrors();
+
+        $legalCase->refresh();
+
+        $this->assertFalse($legalCase->injunctive_relief);
+        $this->assertNull($legalCase->injunctive_relief_description);
+        $this->assertTrue($legalCase->injunctive_relief_suggestion['recommended']);
+    }
+
+    /**
+     * Sem sugestão é o estado de uma peça montada à mão, e é nulo — não um
+     * envelope vazio que a tela leria como uma consulta que aconteceu.
+     */
+    #[Test]
+    public function a_pleading_built_by_hand_has_no_suggestion(): void
+    {
+        $legalCase = $this->openPleading();
+
+        $this->assertNull($legalCase->injunctive_relief_suggestion);
+    }
+
+    #[Test]
+    public function a_malformed_suggestion_is_refused(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        $this->actingAs($owner)
+            ->post('/pecas', [
+                'injunctive_relief_suggestion' => [
+                    'recommended' => 'talvez',
+                    'kind' => 'provisional',
+                    'evidence' => array_fill(0, 6, 'Documento'),
+                ],
+            ] + $this->basics($account, addressing: null))
+            ->assertSessionHasErrors([
+                'injunctive_relief_suggestion.recommended',
+                'injunctive_relief_suggestion.kind',
+                'injunctive_relief_suggestion.evidence',
+                'injunctive_relief_suggestion.suggested_at',
+            ]);
+
+        $this->assertSame(0, LegalCase::query()->count());
     }
 
     #[Test]
@@ -256,9 +417,6 @@ final class SaveLegalCaseStepsTest extends TestCase
         $legalCase = $this->openPleading($account);
 
         $this->actingAs($owner)->put("/pecas/{$legalCase->id}/reu", ['defendant_name' => 'Réu']);
-        $this->assertSame(LegalCaseStep::Facts, $legalCase->refresh()->current_step);
-
-        $this->actingAs($owner)->put("/pecas/{$legalCase->id}/fatos", ['injunctive_relief' => false]);
         $this->assertSame(LegalCaseStep::Requirements, $legalCase->refresh()->current_step);
 
         $this->actingAs($owner)->put("/pecas/{$legalCase->id}/pedidos", ['requirements' => []]);
@@ -353,9 +511,28 @@ final class SaveLegalCaseStepsTest extends TestCase
         return [
             ['put', "/pecas/{$id}/dados-basicos"],
             ['put', "/pecas/{$id}/reu"],
-            ['put', "/pecas/{$id}/fatos"],
             ['put', "/pecas/{$id}/pedidos"],
             ['patch', "/pecas/{$id}/etapa"],
+        ];
+    }
+
+    /**
+     * The envelope the screen received from the urgent-relief agent, as it
+     * posts it back.
+     *
+     * @return array<string, mixed>
+     */
+    private function suggestion(): array
+    {
+        return [
+            'recommended' => true,
+            'kind' => 'anticipatory',
+            'kind_label' => 'Antecipada',
+            'description' => 'Medida pretendida: que se determine a suspensão da obra.',
+            'justification' => 'A obra avança sobre o terreno do Autor.',
+            'evidence' => ['Fotos da obra'],
+            'unsupported_amounts' => [],
+            'suggested_at' => '2026-09-27T12:00:00-03:00',
         ];
     }
 
@@ -375,6 +552,7 @@ final class SaveLegalCaseStepsTest extends TestCase
             'practice_area' => 'imobiliario',
             'procedural_class_id' => $class->id,
             'court_addressing' => $addressing,
+            'injunctive_relief' => false,
         ];
     }
 
@@ -399,7 +577,7 @@ final class SaveLegalCaseStepsTest extends TestCase
      * alcançou.
      *
      * Era um buraco com duas pontas. `?etapa=review` numa peça parada na etapa
-     * 2 abria a revisão forense de um caso sem fatos e sem pedidos — e, agora
+     * 2 abria a revisão forense de um caso sem pedidos — e, agora
      * que abrir aquela etapa dispara a pesquisa de teses, gastaria uma
      * inferência de nuvem sobre um dossiê que não diz nada.
      *

@@ -19,7 +19,7 @@ use RuntimeException;
 /**
  * Researches the rulings the courts have handed down in cases like this one.
  *
- * The entry point for the seventh step — "Análise de Jurisprudência". Two
+ * The entry point for the sixth step — "Análise de Jurisprudência". Two
  * inferences in series, and the order is imposed rather than chosen:
  * CourtDecisionResearchAgent searches the LexML and writes a labelled sheet,
  * CourtDecisionTranscriptionAgent copies that sheet into the flat structure.
@@ -87,7 +87,7 @@ use RuntimeException;
  *
  * ## Who calls it, and what that costs
  *
- * `ResearchLegalCaseJurisprudence`, which is the seventh step opening — and
+ * `ResearchLegalCaseJurisprudence`, which is the sixth step opening — and
  * nobody else. There is still no `asController()` here, because no route points
  * at this Action: what the route points at is the step, which decides whether
  * the run is worth paying for and writes down what comes back. That route

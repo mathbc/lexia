@@ -119,7 +119,7 @@ de verdade.
 As abas de um **registro** continuam sendo links, não o primitivo do Radix:
 quem guarda o estado é a URL (ver abaixo) — `LinkTabs`, em
 `resources/js/components/ui/link-tabs.tsx`. A exceção são os **painéis dentro
-de uma tela**, e hoje há um: as abas Teses e Temas da etapa 6. Ali o estado é
+de uma tela**, e hoje há um: as abas Teses e Temas da etapa 5. Ali o estado é
 local de propósito, porque o que a etapa decide (o `keep` de cada linha) já vive
 em estado local até o "Concluir" e trocar de aba não tem o que pedir ao
 servidor. Esses usam o `Tabs` do Radix em `ui/tabs.tsx`, o nome que o
@@ -186,12 +186,14 @@ sessão. O `/register` do Fortify está desligado: o cadastro público é
 da internet? São **oito agentes**; sete rodam no Ollama com `gpt-oss:20b`, e o oitavo é
 `PleadingDraftingAgent`, que redige a minuta — ver "A minuta", abaixo. A minuta tem ainda
 um segundo agente, `PleadingGroundsReinforcementAgent`, que reforça o DO DIREITO e segue o
-provider do de redação. A etapa 6 ganhou mais dois fora da conta original, em série:
+provider do de redação. A etapa 5 ganhou mais dois fora da conta original, em série:
 `LegalQuestionFormulationAgent`, que reescreve o relato como as questões de direito que ele
 levanta, e `LegalThemeSelectionAgent`, que ordena por relevância os temas do STJ que a busca
 trouxe para elas — ver "Os temas do STJ", abaixo; os dois seguem o `#[Provider('gemini')]`
-dos seletores, com a linha do Ollama comentada acima. Os embeddings do catálogo nunca saíram da máquina:
-`nomic-embed-text`, 768 dimensões.
+dos seletores, com a linha do Ollama comentada acima. E o enquadramento ganhou um terceiro
+elo, `InjunctiveReliefSuggestionAgent`, que diz se a inicial deve pedir tutela de urgência —
+ver "A tutela de urgência", abaixo; ele segue o `#[Provider]` dos irmãos da cadeia. Os
+embeddings do catálogo nunca saíram da máquina: `nomic-embed-text`, 768 dimensões.
 
 O **Gemini** responde por **um**: `LegalThesisResearchAgent`, que pesquisa nos portais
 oficiais. Ele não tem opção local, e a falha não seria graciosa —
@@ -289,6 +291,12 @@ gramática no Ollama, `response_json_schema` na nuvem —, então nem uma área 
 classe inventada é algo que o modelo consiga emitir. E as classes candidatas só existem depois que a área é conhecida: daí não
 caber numa chamada só.
 
+A cadeia tem hoje um **terceiro elo**, `InjunctiveReliefSuggestionAgent`, exposto por
+`SuggestInjunctiveRelief`, e pelo mesmo motivo: ele precisa da classe. Uma possessória de
+força nova, um despejo, uma ação de alimentos ou um mandado de segurança trazem liminar
+própria, com o seu artigo, e é a classe que diz isso. O preço é explícito — a task mais
+longa do bloco ganha uma inferência — e está no docblock de `ClassifyLegalCase`.
+
 A classe é escolhida pelo **código do CNJ**, um inteiro, e não pelo slug: slug de
 classe processual **não é único** (559 distintos em 615 linhas). O uuid nunca entra
 no prompt — é gerado na migration de carga e difere entre bancos —, só sai no
@@ -318,12 +326,14 @@ devolve os dados do réu nas doze chaves `defendant_*` de `legal_cases`, já no
 formato de `DefendantData` — o objeto que `UpdateLegalCaseDefendant` recebe.
 `RequirementExtractionAgent`, exposto por `ExtractLegalCaseRequirements`, devolve
 o que o cliente pede ao juízo como `RequirementListData` — o objeto que
-`SaveLegalCaseRequirements` recebe. O que os pôs ali foi o chamador, porque o
+`SaveLegalCaseRequirements` recebe. **A tutela de urgência não está entre os pedidos**, e já
+esteve: ela tem caixa, texto e agente próprios na etapa 1, e a minuta escreve o pedido dela
+a partir de lá — ver "A tutela de urgência". O que os pôs ali foi o chamador, porque o
 preenchimento inteligente é um gesto só e o advogado não deve esperar três vezes
 pelo mesmo relato. E como não dependem de nada, eles não esperam a vez: as duas
 extrações e o enquadramento são as **três tasks** de um `Concurrency::run` dentro
 de `ClassifyLegalCase`, começando juntas. As Actions seguem chamáveis sozinhas, e
-é assim que a etapa 2 ou a etapa 4 de uma peça já salva deve pedir a sugestão:
+é assim que a etapa 2 ou a etapa 3 de uma peça já salva deve pedir a sugestão:
 uma inferência, e não cinco.
 
 Houve uma quinta etapa aqui, e ela saiu: `ResearchLegalCaseTheses` — a dupla da seção "A
@@ -332,7 +342,7 @@ concorrente e ficava em série depois dele. Duas coisas a tiraram. É a única i
 sai da máquina e abre páginas antes de responder, então anulava o ganho do paralelismo: o
 advogado esperava por ela antes de ver o primeiro campo. E uma peça não salva não tem onde
 guardar o que ela acha — as teses voltavam no JSON, atravessavam o `sessionStorage` e
-morriam com a aba. Hoje ela roda ao abrir a etapa 6, sobre uma peça gravada, e
+morriam com a aba. Hoje ela roda ao abrir a etapa 5, sobre uma peça gravada, e
 `ClassifyLegalCase::pleading()` deixou de existir junto. O teste
 `the_classification_never_researches_and_never_leaves_the_machine` é o que impede a volta.
 
@@ -359,12 +369,15 @@ que custou minutos — sobrevive. No payload, `null` é a extração que falhou;
 campos nulos dentro do objeto são o relato que não identifica ninguém, e a lista
 vazia é o relato que não pede nada.
 
-`POST /pecas/classificar` é a única rota das Actions de agente: ela aponta para
-`ClassifyLegalCase`, e as demais não têm `asController()` enquanto nada apontar para elas.
+`POST /pecas/classificar` e `POST /pecas/tutela-de-urgencia/sugerir` são as rotas das
+Actions de agente: a primeira aponta para `ClassifyLegalCase`, a segunda para
+`SuggestInjunctiveRelief` — o "Consultar IA" da etapa 1 —, e as demais não têm
+`asController()` enquanto nada apontar para elas.
 O preço da rota continua sendo latência, com o navegador esperando, mas encolheu duas
-vezes. As quatro etapas estão num `Concurrency::run` — três tasks, porque área e classe
-são uma cadeia —, então a espera é a mais longa delas e não o total; e a saída da pesquisa
-tirou da conta a única que saía da máquina. Sobram quatro inferências locais.
+vezes. As cinco etapas estão num `Concurrency::run` — três tasks, porque área, classe e
+tutela são uma cadeia —, então a espera é a mais longa delas e não o total; e a saída da
+pesquisa tirou da conta a única que abria páginas. Sobram cinco inferências, e a cadeia do
+enquadramento é a mais longa.
 **A dívida da fila continua de pé**, e agora por um motivo menor do que era.
 
 Duas consequências operacionais. O driver vive em `CONCURRENCY_DRIVER`
@@ -378,6 +391,18 @@ testes iriam ao provedor de verdade. `tests/Agents/LegalCaseClassificationTest` 
 isso de propósito — é o único lugar que exercita o bloco como produção o roda, e custa
 minutos de máquina, mais a cota do Gemini e a rede da última etapa, podendo ficar vermelho
 porque um portal caiu.
+
+O `process` daqui **não é o do framework**, e a diferença já custou uma pesquisa. O
+`ProcessDriver` não chama `timeout()` — cada filho herda os 60 s do `PendingProcess`, menos
+do que a pesquisa de teses leva — e o estouro é lançado pelo pool, no pai, fora do alcance do
+`try/catch` de cada task: a seleção de temas que já tinha voltado ia junto. E esperar filho
+por filho não bastaria, porque um resultado maior que o buffer do pipe trava o filho rápido
+no `write()` atrás do lento, até o próprio relógio abatê-lo. `IsolatedProcessDriver`,
+registrado sob o nome `process` no `AppServiceProvider`, sonda todos no mesmo laço — é a
+sondagem que esvazia os pipes —, dá a cada um `concurrency.timeout` (840 s: acima dos 720 s
+de dois `#[Timeout(360)]` em série, abaixo do `ai.request_time_limit`) e devolve `null` na
+chave do que não voltou, a mesma convenção do `stage()`. `IsolatedProcessDriverTest` roda
+com filhos de verdade, e na suíte padrão: um filho sobe em um décimo de segundo.
 
 Um agente continua fora da cadeia e não é chamado por ela. `FactsRefinementAgent`,
 exposto por `RefineLegalCaseFacts`, reescreve o relato do cliente como a narrativa de
@@ -422,7 +447,7 @@ composer test:agents
 
 ## A revisão forense
 
-A sexta etapa da peça (`LegalCaseStep::Review`) tem **duas abas**, e cada uma é
+A quinta etapa da peça (`LegalCaseStep::Review`) tem **duas abas**, e cada uma é
 preenchida por uma pesquisa: **Teses**, o que a peça argumenta, e **Temas**, os
 precedentes qualificados do STJ em que ela se apoia. As abas são o `Tabs` do
 Radix, em estado local — ver "O design system".
@@ -480,15 +505,15 @@ As Actions de cadastro por linha (`CreateLegalThesis`, `UpdateLegalPrecedent`,
 `asController()` enquanto nada apontar para elas — o agente de revisão forense
 já chegou, e escreve a etapa inteira de uma vez pela dupla da pesquisa. A gravação
 também chegou: quem a dispara é o "Concluir e gerar minuta", que desde a chegada da
-etapa 7 mora nela e não na 6, por `FinalizeLegalCase` — ver "A minuta", no fim deste
+etapa 6 mora nela e não na 5, por `FinalizeLegalCase` — ver "A minuta", no fim deste
 arquivo. As de precedente recebem a
 tese como **model e não como id**, que é a mesma regra noutra forma: um id
 postado seria um buraco que nenhum teste da classe enxergaria.
 
 ## A pesquisa de teses
 
-A segunda metade da etapa 6, e um dos dois lugares do projeto que **saem da máquina** — o
-outro é a pesquisa de jurisprudência da etapa 7, que é este mesmo desenho contra outro
+A segunda metade da etapa 5, e um dos dois lugares do projeto que **saem da máquina** — o
+outro é a pesquisa de jurisprudência da etapa 6, que é este mesmo desenho contra outro
 portal. Um agente
 de pesquisa que não consegue abrir o `stj.jus.br` é um modelo recitando súmula de memória,
 que é exatamente o que o prompt inteiro existe para impedir — e buscar e ler página são
@@ -532,7 +557,7 @@ em duas listas e cunha o uuid em PHP é `ForensicReviewData::fromAgent()`, que �
 
 ### Quem dispara a pesquisa, e exatamente uma vez
 
-Não é mais o `ClassifyLegalCase`: é **abrir a etapa 6**, por
+Não é mais o `ClassifyLegalCase`: é **abrir a etapa 5**, por
 `ResearchLegalCaseForensicReview` (`POST /pecas/{id}/revisao-forense/pesquisar`). A troca
 resolveu duas coisas de uma vez — a espera saiu do preenchimento inteligente, e o
 resultado passou a ter onde ser gravado, porque ali a peça já tem chave primária. A
@@ -574,7 +599,7 @@ recusou o que achou".
 
 Consequência a montante: **a etapa 1 precisa ter sido salva antes de qualquer navegação**,
 senão não há peça para a pesquisa gravar em cima. A trilha do assistente já travava as
-outras etapas numa peça nova; o que faltava era o `?etapa`, que abria a etapa 6 de uma
+outras etapas numa peça nova; o que faltava era o `?etapa`, que abria a etapa 5 de uma
 peça parada na 2 — `ShowLegalCaseForm::initialStep()` agora limita pela marca d'água.
 
 A dívida da fila continua de pé aqui, e agora só aqui: são dois `Timeout(360)` em série, e
@@ -599,7 +624,7 @@ volta de fora (`fastcgi_read_timeout`, `request_terminate_timeout`), onde nenhum
 
 ## A análise de jurisprudência
 
-A sétima etapa, e a segunda que abre **pesquisando**. A etapa 6 procura *teses* — o que a
+A sexta etapa, e a segunda que abre **pesquisando**. A etapa 5 procura *teses* — o que a
 peça argumenta — nos portais oficiais; esta procura *julgados* no LexML: o acórdão de um
 caso parecido, que se cita para mostrar como aquele tribunal já resolveu a questão. No
 sistema a jurisprudência se chama `CourtDecision`, e a distinção com `LegalPrecedent` é o
@@ -608,7 +633,7 @@ de uma tese, carrega aderência e fundamentação), um julgado é o **documento*
 do registro, sem nenhuma pontuação ao lado. A leitura é do advogado, e é por isso que a
 linha não tem `legal_thesis_id`, nem `adherence`, nem `grounding`.
 
-A mecânica é a da etapa 6, deliberadamente repetida para que quem aprendeu uma não
+A mecânica é a da etapa 5, deliberadamente repetida para que quem aprendeu uma não
 precise aprender a outra:
 
 - **Abrir a etapa dispara a pesquisa**, por `ResearchLegalCaseJurisprudence`
@@ -637,9 +662,49 @@ linha sem ementa e a que não aponta para um registro `/urn/`, porque no caminho
 o payload do navegador — não há ninguém a quem relatar a recusa, e `source_url` é a única
 razão pela qual uma ementa desta tabela pode ser conferida.
 
+## A tutela de urgência
+
+A etapa 1 guarda a decisão como sempre guardou — `injunctive_relief`, a caixa, e
+`injunctive_relief_description`, o texto —, e **a decisão continua sendo do advogado**. O
+que mudou é que ela vem **sugerida**. `InjunctiveReliefSuggestionAgent` lê área, classe e
+fatos e responde se a inicial deve pedir tutela, de que espécie (`InjunctiveReliefKind`:
+antecipada ou cautelar), com que medida e fundamento, e por que os dois requisitos do art.
+300 estão presentes — ou qual falta. **Não recomendar é resposta legítima e frequente**, e o
+prompt gasta mais palavras com quando não pedir do que com como pedir: urgência inventada é
+o pedido que o juiz indefere primeiro.
+
+O agente responde em partes, e quem compõe o texto é `InjunctiveReliefSuggestionData`, em
+parágrafos rotulados ("Medida pretendida:", "Perigo de dano:"…): o advogado edita uma caixa
+só, e o agente de minuta lê os rótulos. Três limites o prompt segura: o pedido é sempre
+**incidental** (a peça é a inicial completa, então o rito antecedente dos arts. 303 e 305
+nunca é a resposta); **prazo e multa viram colchete** (`[prazo]`, `[valor da multa diária]`);
+e `legal_basis` é **só lei**, nunca súmula ou tema — o texto cai no dossiê de onde a minuta
+pode citar. A cifra que o relato não escreve é **relatada** em `unsupported_amounts`, como em
+`RefinedFactsData`. O conhecimento é `app/Rag/knowledge/injunctive-relief.md`, tirado da
+leitura que os tribunais fazem do art. 300 (TJDFT, STJ, CNJ, TST) — requisitos, espécies,
+padrões por área, regimes próprios por classe e onde a tutela não cabe.
+
+Na tela, o preenchimento inteligente abre a etapa com **a caixa marcada e o texto escrito**
+quando a IA recomenda, e o selo "Sugestão da IA" ao lado — "· editada" quando o texto deixou
+de ser o sugerido, "· desmarcada" quando o advogado recusou. O selo sobrevive a um reload
+porque o **envelope** da resposta viaja com o formulário e é gravado em
+`legal_cases.injunctive_relief_suggestion` (jsonb) ao salvar a etapa; desmarcar apaga a
+descrição, mas não o envelope. O botão é "Gerar novamente" quando há sugestão que recomenda,
+e "Consultar IA" em todo o resto — peça montada à mão, IA que não viu urgência, etapa que
+falhou. Os dois chamam `POST /pecas/tutela-de-urgencia/sugerir` com o relato e o par CNJ da
+tela, porque a peça pode ainda não existir; uma resposta que recomenda substitui o texto
+(confirmando antes, se havia texto do advogado), e uma que não recomenda não toca na caixa.
+
+**A etapa 1 é a fonte única da tutela.** `RequirementExtractionAgent` não a escreve mais e o
+atalho "Tutela de urgência" saiu dos pedidos frequentes: uma cópia na lista chegaria à peça
+duas vezes, com duas redações. A linha "Tutela de urgência" também saiu de
+`LegalCaseDossier::pleading()` — que vai para todas as projeções, inclusive as da pesquisa
+na nuvem, e a descrição é texto livre onde um nome cabe — e virou a seção `## A tutela de
+urgência` só de `forDrafting()`.
+
 ## A minuta
 
-A oitava etapa que não é etapa. Concluir a análise de jurisprudência é o **primeiro gesto
+A sétima etapa que não é etapa. Concluir a análise de jurisprudência é o **primeiro gesto
 do projeto que termina uma peça**: `FinalizeLegalCase` grava as teses, os temas do STJ e
 os julgados pelas três Actions irmãs, vira `is_draft` para `false` — até aqui nada escrevia
 essa coluna, e a `LegalCasePolicy` documentava a ausência — e manda `PleadingDraftingAgent`
@@ -684,6 +749,16 @@ no outro. Duas armadilhas do PhpWord, ambas geram arquivo que o Word chama de co
 ele não escapa `&` sem `Settings::setOutputEscapingEnabled(true)`, e o `Converter` devolve
 twips fracionados onde o schema só aceita inteiros.
 
+**A tutela de urgência tem seção própria**, `DA TUTELA DE URGÊNCIA`, logo depois de `DO
+DIREITO` — a IV com preliminar, a III sem, porque os romanos continuam sequenciais. A
+seção sai da seção do dossiê, e "Nada registrado" sob o título desliga as três coisas que
+a tutela acrescenta: a seção, o pedido de tutela em `DOS PEDIDOS` (o **único** item que o
+agente escreve sem uma linha de `requirements` atrás, logo depois das preliminares, com o
+mérito "confirmando-se a tutela") e o "COM PEDIDO DE TUTELA DE URGÊNCIA" no nome da ação.
+Fora de `DO DIREITO` de propósito: `PleadingSections` corta o corpo no título romano
+seguinte, então o reforço nunca vê a tutela e não tem como dobrá-la numa tese. A descrição
+da tutela entra nas fontes que autorizam cifra em `DraftLegalPleading::sources()`.
+
 A guarda central do agente não é a cifra, é a **lacuna**. A qualificação das partes
 exige estado civil e profissão; um modelo escreve "brasileiro, casado, comerciante"
 porque é gramaticalmente obrigatório, banal e errado sobre uma pessoa real. Então tudo
@@ -717,7 +792,7 @@ com idade negativa.
 
 `LegalCaseDossier::forDrafting()` é a terceira projeção, e a mais larga: qualifica as
 duas partes com endereço inteiro, mascara o documento (vai copiado para um parágrafo
-que um juiz lê), leva as teses e leva os **julgados da etapa 7**. **Não leva os
+que um juiz lê), leva as teses e leva os **julgados da etapa 6**. **Não leva os
 precedentes**: são achados sobre uma tese, e não os documentos que o advogado escolheu
 citar. A instrução negativa do prompt ("nada se cita que o dossiê não traga") se apoia no
 dossiê carregar uma lista só de julgados. `LegalCaseDossierTest` fixa as duas coisas.
@@ -751,7 +826,7 @@ corte com `[...]`. Duas coisas não dependem da escolha: o **cabeçalho** em cai
 ementa (`heading()`, até o primeiro item "1." ou "- ") entra sempre, e a **referência** —
 título, órgão, "julgado em dd/mm/aaaa" — continua composta das colunas. Número que não
 nomeia trecho é ignorado, e sem nenhum válido a ementa vai inteira, como antes. A
-abreviação vive **só no documento**: `court_decisions.summary` não muda, e a etapa 7
+abreviação vive **só no documento**: `court_decisions.summary` não muda, e a etapa 6
 continua mostrando a ementa completa. `[...]` não é lacuna — `gapsIn()` exige letra.
 
 Números, e não texto, por uma armadilha medida: pedida a cópia literal dos trechos, o
@@ -784,7 +859,7 @@ novamente", dentro dos 900 s do `AllowLongInference`.
 
 `LegalTheme` é o catálogo dos precedentes qualificados do STJ — Temas Repetitivos,
 Controvérsias, PUIL, IAC e SIRDR —, trazido do portal de dados abertos por
-`php artisan lexia:import-legal-themes` e vetorizado para o RAG da aba Temas da etapa 6
+`php artisan lexia:import-legal-themes` e vetorizado para o RAG da aba Temas da etapa 5
 (ver "A seleção de temas", abaixo). É dado de referência como o catálogo de classes, global,
 sem `account_id` e sem soft delete, mas carregado por **comando** e não por migration,
 porque o STJ afeta e julga temas toda semana e um snapshot versionado envelheceria no
@@ -885,7 +960,7 @@ desvincula, pelo `sync()`), mas `forDrafting()` não os carrega.
 
 ## Ainda não implementado
 
-Os temas do STJ na minuta: a etapa 6 já grava os que o advogado manteve, falta
+Os temas do STJ na minuta: a etapa 5 já grava os que o advogado manteve, falta
 `LegalCaseDossier::forDrafting()`/`forGrounds()` levá-los e a guarda do reforço aceitar
 "Tema N" só quando o dossiê o traz.
 

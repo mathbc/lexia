@@ -30,7 +30,7 @@ use Throwable;
  * theses decide the DO DIREITO section, and the requests are copied out
  * verbatim and numbered.
  *
- * The rulings are the ones the seventh step kept, read here and not passed in:
+ * The rulings are the ones the sixth step kept, read here and not passed in:
  * FinalizeLegalCase deletes what the lawyer unticked before calling this, so the
  * relation *is* the list they chose, and the dossier and the quotation both
  * number that one list.
@@ -170,6 +170,10 @@ final class DraftLegalPleading
      * introduces a ruling may repeat the figure it fixed — "que manteve a
      * indenização de R$ 8.000,00" — and that figure is the court's, written in
      * the record, not one the model composed.
+     *
+     * And the injunction the lawyer wrote in the first step. The measure may
+     * carry a daily fine or a freeze ceiling the lawyer set — "sob pena de multa
+     * diária de R$ 500,00" — and the section DA TUTELA DE URGÊNCIA repeats it.
      */
     private function sources(LegalCase $legalCase, string $narrative): string
     {
@@ -184,6 +188,8 @@ final class DraftLegalPleading
             ->map(static fn (CourtDecision $decision): string => PleadingJurisprudence::ementa($decision->summary))
             ->implode(' ');
 
-        return $narrative.' '.$claimed.' '.$quoted;
+        $relief = $legalCase->injunctive_relief ? (string) $legalCase->injunctive_relief_description : '';
+
+        return $narrative.' '.$claimed.' '.$quoted.' '.$relief;
     }
 }

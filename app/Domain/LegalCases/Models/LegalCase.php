@@ -59,6 +59,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * and the text that justifies it is written, erased and rewritten while the
  * decision holds. False is the answer until the lawyer says otherwise.
  *
+ * The urgent-relief agent may **suggest** that decision — the smart fill opens
+ * the first step with the box ticked and the text written when it recommends
+ * one —, but it is still the lawyer's save that writes the flag, and unticking
+ * it still erases the text. `injunctive_relief_suggestion` is the provenance
+ * kept beside them: what the agent said, and when, so the screen can go on
+ * calling that text an AI suggestion after a reload.
+ *
  * The requests it makes and the documents that instruct it are rows of their
  * own, unlike the defendant: there are many of each, they are written and
  * described separately, and they are added and removed one at a time.
@@ -97,6 +104,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string|null $facts
  * @property bool $injunctive_relief
  * @property string|null $injunctive_relief_description
+ * @property array<string, mixed>|null $injunctive_relief_suggestion
  * @property LegalCaseStep $current_step
  * @property bool $is_draft
  * @property array<string, mixed>|null $research_findings
@@ -139,6 +147,7 @@ class LegalCase extends Model
         return [
             'defendant_state' => BrazilianState::class,
             'injunctive_relief' => 'boolean',
+            'injunctive_relief_suggestion' => 'array',
             'current_step' => LegalCaseStep::class,
             'is_draft' => 'boolean',
             'research_findings' => 'array',
@@ -246,7 +255,7 @@ class LegalCase extends Model
     }
 
     /**
-     * The STJ themes the pleading leans on — the sixth step's second tab.
+     * The STJ themes the pleading leans on — the fifth step's second tab.
      *
      * The one relation here that crosses into the catalogue, which is why it is
      * a `BelongsToMany` and not a `HasMany`: the theme is reference data shared

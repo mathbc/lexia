@@ -16,7 +16,7 @@ use RuntimeException;
 /**
  * Researches the rulings a saved pleading can cite, and writes them down.
  *
- * The seventh step's entry point — "Análise de Jurisprudência" — and the twin
+ * The sixth step's entry point — "Análise de Jurisprudência" — and the twin
  * of `ResearchLegalCaseForensicReview` one step later. The naming follows the
  * rule the two pairs share: **the step Action is named after the step**
  * (ForensicReview, Jurisprudence) and the Action it calls is named after what
@@ -26,7 +26,7 @@ use RuntimeException;
  *
  * ## Exactly once, and the lawyer asks for the rest
  *
- * The screen fires this when step 7 opens on a pleading whose
+ * The screen fires this when step 6 opens on a pleading whose
  * `court_decision_findings` is null, and never again — not when the tabs
  * change, not when the step is revisited, not on a reload.
  *
@@ -51,7 +51,7 @@ use RuntimeException;
  * Failure is therefore total and clean: no rows, no marker, and the screen
  * offers the button again. That is the right shape for something that fails
  * because the LexML is down — which, being a single portal rather than the
- * three of step six, is a likelier way for this one to fail than for its twin.
+ * three of step five, is a likelier way for this one to fail than for its twin.
  */
 final class ResearchLegalCaseJurisprudence
 {
@@ -79,7 +79,7 @@ final class ResearchLegalCaseJurisprudence
     /**
      * The one thing the research cannot run without.
      *
-     * The facts, as in step six. The rest of what
+     * The facts, as in step five. The rest of what
      * `LegalCaseDossier::forCourtDecisions()` sends — the area and the class —
      * needs no check, because both columns are NOT NULL: a pleading that exists
      * has been framed, and step 1 is what writes the row and them.

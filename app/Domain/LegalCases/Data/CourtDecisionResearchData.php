@@ -26,7 +26,7 @@ use Carbon\CarbonImmutable;
  * is **removed** and its title recorded in `unverifiedCitations`.
  *
  * The stricter test is what this envelope adds to its sibling, and the reason
- * is the catalogue's own shape. In step six a court's home page is a plausible
+ * is the catalogue's own shape. In step five a court's home page is a plausible
  * thing for a model to cite and a useless one; here the equivalent mistake is
  * citing `lexml.gov.br` itself, or a `/busca/` url — which is worse than
  * useless, because `/busca/` is `Disallow`ed in the portal's robots.txt and

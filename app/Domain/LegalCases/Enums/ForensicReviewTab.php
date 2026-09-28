@@ -11,7 +11,7 @@ use App\Domain\Shared\Contracts\HasLabel;
  * The two halves of the forensic review, which are researched in parallel but
  * marked, retried and failed apart.
  *
- * Each case names one tab of the sixth step and one task of the
+ * Each case names one tab of the fifth step and one task of the
  * `Concurrency::run` in ResearchLegalCaseForensicReview, and each has its own
  * marker column: `research_findings` for the theses, `theme_findings` for the
  * themes. The values travel in the request (`tabs[]`) and in the error bag the

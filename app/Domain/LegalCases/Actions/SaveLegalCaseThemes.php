@@ -13,7 +13,7 @@ use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 
 /**
- * Saves which STJ themes a pleading leans on — the sixth step's second tab.
+ * Saves which STJ themes a pleading leans on — the fifth step's second tab.
  *
  * The sibling of SaveLegalCaseCourtDecisions, and simpler, because what it
  * writes is a link and not a document: `sync()` on the N-N is the whole diff.

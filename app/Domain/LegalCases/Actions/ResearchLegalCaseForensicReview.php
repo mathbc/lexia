@@ -23,7 +23,7 @@ use Throwable;
 
 /**
  * Researches what a saved pleading can lean on, and writes it down — both tabs
- * of the sixth step.
+ * of the fifth step.
  *
  * Two halves, run in parallel: the **theses** (ResearchLegalCaseTheses, the
  * portal research and its transcriber) and the **themes**
@@ -51,7 +51,7 @@ use Throwable;
  *
  * ## Exactly once per half, and the lawyer asks for the rest
  *
- * The screen fires this when step 6 opens and sends, in `tabs`, **only the
+ * The screen fires this when step 5 opens and sends, in `tabs`, **only the
  * halves that were never researched**: `research_findings` null for the theses,
  * `theme_findings` null for the themes. A pleading researched before the themes
  * tab existed asks for the themes alone; one where both landed asks for nothing.
@@ -68,14 +68,19 @@ use Throwable;
  * ## What the parallelism costs, and where it lives
  *
  * The rules ClassifyLegalCase documents, unchanged. The `try/catch` lives
- * **inside** each task (`attempt()`), because the process driver rethrows the
- * first escaped exception in the parent and discards every result — a theme
- * selection that fell would take the theses with it. The closures are static
- * and capture two strings, the pleading's id and account: a child process has
- * no session and no authenticated user, so it reloads the pleading under
- * `TenantContext::actingAs()`, which is explicit where a scope silently left
- * open would not be. And what comes back crosses `serialize()`: both results
- * are readonly DTOs of strings and ids, no model.
+ * **inside** each task (`attempt()`): it is what logs the real stack trace,
+ * from the child that saw it, and under `sync` an escaped exception would
+ * leave `Concurrency::run` and take the other half with it. What no closure
+ * can catch — the child killed by its clock, a fatal error — belongs to
+ * IsolatedProcessDriver, which settles that task as the same null. Either way
+ * a theme selection that fell does not take the theses with it, nor the
+ * reverse, and each half has `concurrency.timeout` of its own.
+ *
+ * The closures are static and capture two strings, the pleading's id and
+ * account: a child process has no session and no authenticated user, so it
+ * reloads the pleading under `TenantContext::actingAs()`, which is explicit
+ * where a scope silently left open would not be. And what comes back crosses
+ * `serialize()`: both results are readonly DTOs of strings and ids, no model.
  *
  * ## The two effects, and why only one of them is a transaction
  *
@@ -221,11 +226,11 @@ final class ResearchLegalCaseForensicReview
      * the area — needs no check here because `legal_cases.practice_area_id` is
      * NOT NULL: a pleading that exists has an area.
      *
-     * The facts are nullable, though, and reachable while null: step 1 carries
-     * them only when the pleading is born of the smart fill, and otherwise they
-     * arrive at step 3. Without them both inner Actions would throw the same
-     * refusal, one of them after a round trip to the cloud. Better here, before
-     * anything is spent.
+     * The facts are nullable, though, and reachable while null: they belong to
+     * step 1, but a lawyer may frame the case first and write the story later,
+     * and every step after it opens regardless. Without them both inner
+     * Actions would throw the same refusal, one of them after a round trip to
+     * the cloud. Better here, before anything is spent.
      */
     private function refuseUnresearchable(LegalCase $legalCase): void
     {

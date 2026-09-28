@@ -44,7 +44,7 @@ export interface RequirementSuggestion {
  * A redação de praxe dos pedidos que aparecem em quase toda petição inicial.
  *
  * É ponto de partida, não formulário: o texto cai no campo e continua editável
- * — os dois que terminam em aberto ("para ", "de ") são assim de propósito,
+ * — o que termina em aberto ("de ") é assim de propósito,
  * porque o que vem depois é o caso e não a fórmula, e deixar a frase pela
  * metade põe o cursor exatamente onde está o trabalho.
  *
@@ -52,15 +52,15 @@ export interface RequirementSuggestion {
  * vem depois de "Ante o exposto, requer:".
  *
  * Valor nenhum vem junto: sugerir a cifra seria sugerir o pedido.
+ *
+ * A tutela de urgência não está aqui, e já esteve. Ela tem caixa e texto na
+ * etapa 1, com agente próprio, e a minuta escreve o pedido dela a partir de lá:
+ * um atalho aqui a levaria à peça duas vezes, com duas redações.
  */
 export const SUGGESTED_REQUIREMENTS: RequirementSuggestion[] = [
     {
         label: 'Gratuidade da justiça',
         description: 'A concessão da Gratuidade da Justiça;',
-    },
-    {
-        label: 'Tutela de urgência',
-        description: 'A concessão da TUTELA DE URGÊNCIA, nos termos do art. 300 do CPC, para ',
     },
     {
         label: 'Citação do réu',

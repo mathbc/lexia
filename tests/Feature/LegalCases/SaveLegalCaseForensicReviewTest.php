@@ -18,7 +18,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * The sixth step: what the pleading argues, and what sustains it.
+ * The fifth step: what the pleading argues, and what sustains it.
  *
  * Two lists written whole and reconciled as a diff, like the requirements step —
  * and one thing that step does not have: a precedent quotes the id of the thesis
@@ -236,11 +236,11 @@ final class SaveLegalCaseForensicReviewTest extends TestCase
     }
 
     /**
-     * A revisão gravada volta para a etapa 6 ao reabrir a peça.
+     * A revisão gravada volta para a etapa 5 ao reabrir a peça.
      *
      * Era a única etapa do assistente em que recarregar a página custava
      * trabalho já feito: as teses vinham da pesquisa, viviam no `sessionStorage`
-     * e morriam com a aba, de modo que a etapa 6 de uma peça que tinha teses
+     * e morriam com a aba, de modo que a etapa 5 de uma peça que tinha teses
      * gravadas abria dizendo que não havia pesquisa nesta sessão.
      *
      * Os ids são os persistidos, que é o que faz a próxima gravação atualizar as

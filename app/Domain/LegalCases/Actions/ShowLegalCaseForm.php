@@ -24,7 +24,7 @@ use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 
 /**
- * The seven-step form for drafting a pleading — opening a new one, and
+ * The six-step form for drafting a pleading — opening a new one, and
  * reopening one already saved.
  *
  * Both routes land here, as they do for users on ShowUserForm, and both render
@@ -49,7 +49,7 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * finds its way back — CreateCustomer flashes it and redirects here, so the
  * select can show it chosen without a second round trip.
  *
- * `thesisTypes` and `precedentTypes` are the sixth step's share of the same
+ * `thesisTypes` and `precedentTypes` are the fifth step's share of the same
  * rule: the forensic review arrives from the classification carrying the enum's
  * backing value, because that is what will be written, and the Portuguese label
  * is resolved here rather than restated in TypeScript.
@@ -115,7 +115,7 @@ final class ShowLegalCaseForm
      * Where to open: the step the URL names, but never past the high-water mark.
      *
      * The `?etapa` used to be taken at face value, and that was a hole with two
-     * ends. `GET /pecas/{id}/editar?etapa=review` opened step 6 on a pleading
+     * ends. `GET /pecas/{id}/editar?etapa=review` opened step 5 on a pleading
      * whose `current_step` was `defendant`, showing a forensic review for a
      * matter with no facts and no requests — and, now that opening that step
      * fires the research, it would have spent a cloud inference on a dossier
@@ -131,7 +131,7 @@ final class ShowLegalCaseForm
      * the distinction the class docblock draws still holds: the mark is the
      * furthest the pleading ever got, while this is where *this* visit begins.
      * Re-saving step 1 still redirects to `?etapa=defendant` and still opens
-     * there, on a pleading whose mark stays at step 6.
+     * there, on a pleading whose mark stays at step 5.
      */
     private function initialStep(ActionRequest $request, ?LegalCase $legalCase): LegalCaseStep
     {

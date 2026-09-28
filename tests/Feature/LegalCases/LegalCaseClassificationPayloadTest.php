@@ -6,7 +6,9 @@ namespace Tests\Feature\LegalCases;
 
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\LegalCases\Data\DefendantData;
+use App\Domain\LegalCases\Data\InjunctiveReliefSuggestionData;
 use App\Domain\LegalCases\Data\LegalCaseClassification;
+use App\Domain\LegalCases\Enums\InjunctiveReliefKind;
 use App\Domain\PracticeAreas\Models\PracticeArea;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
 use App\Domain\Requirements\Data\RequirementData;
@@ -62,6 +64,15 @@ final class LegalCaseClassificationPayloadTest extends TestCase
                     amount: '4300.00',
                 ),
             ]),
+            injunctiveRelief: new InjunctiveReliefSuggestionData(
+                recommended: true,
+                kind: InjunctiveReliefKind::Precautionary,
+                description: 'Medida pretendida: que se determine o arresto de bens do Réu.',
+                justification: 'O Réu está vendendo os bens depois do dano.',
+                evidence: ['Anúncios de venda do imóvel do Réu'],
+                unsupportedAmounts: [],
+                suggestedAt: '2026-09-27T12:00:00-03:00',
+            ),
         ))->toArray();
 
         $this->assertSame(
@@ -72,9 +83,19 @@ final class LegalCaseClassificationPayloadTest extends TestCase
                 'procedural_class_justification',
                 'defendant',
                 'requirements',
+                'injunctive_relief',
             ],
             array_keys($payload),
         );
+
+        // A tutela é o envelope inteiro, na forma que a etapa 1 devolve ao
+        // salvar: é isso que mantém o selo "Sugestão da IA" depois do reload.
+        $this->assertSame(
+            ['recommended', 'kind', 'kind_label', 'description', 'justification', 'evidence', 'unsupported_amounts', 'suggested_at'],
+            array_keys($payload['injunctive_relief']),
+        );
+        $this->assertSame('precautionary', $payload['injunctive_relief']['kind']);
+        $this->assertSame('Cautelar', $payload['injunctive_relief']['kind_label']);
 
         // The ids are here to be written to `legal_cases`, so they have to be
         // the rows' own — the slug and the CNJ code are what a human reads.
@@ -129,6 +150,10 @@ final class LegalCaseClassificationPayloadTest extends TestCase
 
         $this->assertSame([], $payload['requirements']);
         $this->assertNull($payload['defendant']);
+        // Sem etapa de tutela, a chave continua lá, nula: a tela oferece o
+        // "Consultar IA" em vez de ler um campo que não veio.
+        $this->assertArrayHasKey('injunctive_relief', $payload);
+        $this->assertNull($payload['injunctive_relief']);
     }
 
     /**

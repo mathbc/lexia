@@ -53,7 +53,7 @@ final class CourtDecisionResearchDataTest extends TestCase
                 'https://www.lexml.gov.br/busca/SRU?operation=searchRetrieve',
                 false,
             ],
-            'o STJ, que é fonte oficial para a etapa 6 e não é o catálogo desta' => [
+            'o STJ, que é fonte oficial para a etapa 5 e não é o catálogo desta' => [
                 'https://scon.stj.jus.br/SCON/urn/urn:lex:br:x',
                 false,
             ],

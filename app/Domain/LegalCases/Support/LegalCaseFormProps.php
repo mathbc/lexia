@@ -6,6 +6,7 @@ namespace App\Domain\LegalCases\Support;
 
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\CourtDecisions\Models\CourtDecision;
+use App\Domain\LegalCases\Data\InjunctiveReliefSuggestionData;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalPrecedents\Models\LegalPrecedent;
 use App\Domain\LegalThemes\Models\GeneralRepercussion;
@@ -21,7 +22,9 @@ use App\Domain\Requirements\Models\Requirement;
  * one answers what is already written. It is a projection and not the model:
  * the form receives the fields it draws and nothing else, and each group
  * arrives under the key the matching fields component already expects, so the
- * screen hydrates without translating anything.
+ * screen hydrates without translating anything. The first step is the top
+ * level itself: the narrative and the injunction sit beside the addressing,
+ * because that is the form they are saved with.
  *
  * Two shapes are deliberate. The practice area goes out as a **slug**, because
  * that is the currency the picker and the query string work in — the uuid is
@@ -42,10 +45,17 @@ final class LegalCaseFormProps
             'practice_area' => $legalCase->practiceArea->slug,
             'procedural_class_id' => $legalCase->procedural_class_id,
             'court_addressing' => self::text($legalCase->court_addressing),
+            'facts' => self::text($legalCase->facts),
+            'injunctive_relief' => $legalCase->injunctive_relief,
+            'injunctive_relief_description' => self::text($legalCase->injunctive_relief_description),
+            // Relido pela classe que o escreveu, para que um envelope gravado
+            // antes de uma mudança de forma chegue à tela na forma de hoje.
+            'injunctive_relief_suggestion' => InjunctiveReliefSuggestionData::fromArray(
+                $legalCase->injunctive_relief_suggestion,
+            )?->toArray(),
             'current_step' => $legalCase->current_step->value,
             'is_draft' => $legalCase->is_draft,
             'defendant' => self::defendant($legalCase),
-            'facts' => self::facts($legalCase),
             'requirements' => self::requirements($legalCase),
             'theses' => self::theses($legalCase),
             'precedents' => self::precedents($legalCase),
@@ -66,7 +76,7 @@ final class LegalCaseFormProps
      * screen reads it whole and nothing queries it.
      *
      * **Null is the signal, not an absence of detail.** It means this pleading
-     * has never been researched, and it is what makes step 6 call the agent
+     * has never been researched, and it is what makes step 5 call the agent
      * when it opens. Present-but-empty is the opposite statement — a run
      * happened and confirmed nothing — and the step must not ask again for that
      * one, which is why the screen keys on this and never on `theses` being
@@ -102,7 +112,7 @@ final class LegalCaseFormProps
     }
 
     /**
-     * The STJ themes the pleading leans on — the sixth step's second tab.
+     * The STJ themes the pleading leans on — the fifth step's second tab.
      *
      * Read-only catalogue beside the one claim that is ours, the pivot's
      * `reason`. That is why the labels go out already in Portuguese, from the
@@ -169,7 +179,7 @@ final class LegalCaseFormProps
     }
 
     /**
-     * The case law of the seventh step, with the real ids.
+     * The case law of the sixth step, with the real ids.
      *
      * The rows as the LexML record wrote them, in the shape
      * `CourtDecisionData::toArray()` publishes and `SaveLegalCaseCourtDecisions`
@@ -238,18 +248,6 @@ final class LegalCaseFormProps
     }
 
     /**
-     * @return array<string, mixed>
-     */
-    private static function facts(LegalCase $legalCase): array
-    {
-        return [
-            'facts' => self::text($legalCase->facts),
-            'injunctive_relief' => $legalCase->injunctive_relief,
-            'injunctive_relief_description' => self::text($legalCase->injunctive_relief_description),
-        ];
-    }
-
-    /**
      * The requests with their real ids, so re-saving updates the rows instead
      * of replacing them.
      *
@@ -267,7 +265,7 @@ final class LegalCaseFormProps
     }
 
     /**
-     * The forensic review as the sixth step draws it, with the real ids.
+     * The forensic review as the fifth step draws it, with the real ids.
      *
      * Until a pleading could be concluded there was nothing to send: the theses
      * arrived from the research, lived in `sessionStorage` and died with the

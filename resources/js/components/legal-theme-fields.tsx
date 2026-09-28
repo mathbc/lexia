@@ -42,7 +42,7 @@ interface Props {
  * A decisão é **tirar**, como nas teses: todo tema chega marcado, e desmarcar o
  * esmaece sem tirá-lo da lista. A seleção sempre devolve alguns temas, mesmo
  * quando a relação é indireta — é mais barato desmarcar do que procurar o que
- * não veio. O desvínculo acontece no "Concluir e gerar minuta", na etapa 7,
+ * não veio. O desvínculo acontece no "Concluir e gerar minuta", na etapa 6,
  * pelo `sync()` de `SaveLegalCaseThemes`, que também grava a ordem.
  */
 export function LegalThemesPanel({

@@ -1,4 +1,8 @@
-import type { DefendantSuggestion, ExtractedRequirement } from "@/types";
+import type {
+    DefendantSuggestion,
+    ExtractedRequirement,
+    InjunctiveReliefSuggestion,
+} from "@/types";
 
 /**
  * O que o preenchimento inteligente entrega ao assistente.
@@ -13,7 +17,7 @@ import type { DefendantSuggestion, ExtractedRequirement } from "@/types";
  * da entrega que nada salvava: as outras são gravadas quando o advogado clica
  * em "Continuar" na etapa delas, enquanto as teses só existiam enquanto esta
  * aba estivesse de pé — pesquisa que custa minutos e não sobrevive a um F5.
- * Hoje ela roda ao abrir a etapa 6, sobre uma peça já gravada, e é gravada no
+ * Hoje ela roda ao abrir a etapa 5, sobre uma peça já gravada, e é gravada no
  * mesmo gesto.
  */
 export interface LegalCaseHandoff {
@@ -23,6 +27,7 @@ export interface LegalCaseHandoff {
     facts: string;
     defendant: DefendantSuggestion | null;
     requirements: ExtractedRequirement[] | null;
+    injunctive_relief: InjunctiveReliefSuggestion | null;
 }
 
 const KEY = "lexia:legal-case-handoff";
@@ -106,6 +111,7 @@ const parse = (value: string | null): LegalCaseHandoff | null => {
                   ...(data as LegalCaseHandoff),
                   defendant: defendantOf(data.defendant),
                   requirements: requirementsOf(data.requirements),
+                  injunctive_relief: injunctiveReliefOf(data.injunctive_relief),
               }
             : null;
     } catch {
@@ -142,3 +148,33 @@ const requirementsOf = (value: unknown): ExtractedRequirement[] | null =>
                   typeof row.description === "string",
           )
         : null;
+
+/**
+ * A tutela segue a regra do réu: é sugestão, e não invalida a entrega.
+ *
+ * Uma entrega gravada antes deste campo existir, ou fora de forma, vira nulo, e
+ * a etapa 1 abre com a caixa desmarcada e o "Consultar IA" à mão — que é como
+ * ela abre numa peça montada à mão. As listas são peneiradas por item, como os
+ * pedidos: o que não é frase cai, e o resto fica.
+ */
+const injunctiveReliefOf = (value: unknown): InjunctiveReliefSuggestion | null => {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        return null;
+    }
+
+    const data = value as Partial<InjunctiveReliefSuggestion>;
+
+    return typeof data.recommended === "boolean" &&
+        typeof data.justification === "string"
+        ? {
+              ...(data as InjunctiveReliefSuggestion),
+              evidence: stringsOf(data.evidence),
+              unsupported_amounts: stringsOf(data.unsupported_amounts),
+          }
+        : null;
+};
+
+const stringsOf = (value: unknown): string[] =>
+    Array.isArray(value)
+        ? value.filter((item): item is string => typeof item === "string")
+        : [];

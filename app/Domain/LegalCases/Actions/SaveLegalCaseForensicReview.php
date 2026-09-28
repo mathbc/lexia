@@ -20,10 +20,10 @@ use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 
 /**
- * Saves what the pleading argues and what sustains it — the sixth step.
+ * Saves what the pleading argues and what sustains it — the fifth step.
  *
  * Two lists, written whole and reconciled as a diff, exactly as
- * SaveLegalCaseRequirements writes the fourth step: rows that stayed are
+ * SaveLegalCaseRequirements writes the third step: rows that stayed are
  * updated, rows that left are removed, rows that arrived are created. **The
  * posted id is a hint and never a key** — the form mints uuids with
  * `crypto.randomUUID()` and they are v4 just like the server's, so membership

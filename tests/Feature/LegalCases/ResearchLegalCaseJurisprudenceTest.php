@@ -19,7 +19,7 @@ use RuntimeException;
 use Tests\TestCase;
 
 /**
- * The research that fills step 7 — "Análise de Jurisprudência".
+ * The research that fills step 6 — "Análise de Jurisprudência".
  *
  * The twin of `ResearchLegalCaseForensicReviewTest`, and it pins the same two
  * things one step later: the result **is persisted**, and it is asked for

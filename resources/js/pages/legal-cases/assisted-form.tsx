@@ -29,7 +29,7 @@ import type { LegalCaseClassification, Option } from "@/types";
  * não relata por onde anda, então nenhuma delas afirma que uma etapa terminou.
  *
  * A pesquisa de teses **não está aqui**, e as frases dela saíram junto: ela
- * acontece ao abrir a etapa 6, sobre uma peça já gravada, com o diálogo próprio
+ * acontece ao abrir a etapa 5, sobre uma peça já gravada, com o diálogo próprio
  * de `ForensicReviewFields`. Prometê-la nesta tela era prometer uma espera que
  * não acontece mais aqui.
  */
@@ -84,7 +84,7 @@ interface Props {
  * A revisão forense não está nesta conta e já esteve. Ela era a quinta etapa,
  * a única que saía da máquina e a mais lenta de todas, e dominava esta espera
  * sozinha — sem nada para mostrar depois, porque uma peça não salva não tem
- * onde guardar teses. Hoje ela roda ao abrir a etapa 6, sobre a peça já
+ * onde guardar teses. Hoje ela roda ao abrir a etapa 5, sobre a peça já
  * gravada. Trocar esta requisição por uma fila continua sendo o próximo passo,
  * e agora por um motivo menor — ver `ClassifyLegalCase`.
  */
@@ -129,6 +129,10 @@ export default function LegalCaseAssistedForm({
                 // é a inferência que caiu, e a lista vazia é o relato que não
                 // pede nada. A etapa abre igual nos dois casos.
                 requirements: classification.requirements,
+                // A tutela é o terceiro elo do enquadramento, e o nulo é o
+                // mesmo das extrações: a etapa falhou, e a etapa 1 oferece o
+                // "Consultar IA" em vez de abrir com uma sugestão.
+                injunctive_relief: classification.injunctive_relief,
             });
 
             // Sem desligar o estado de espera: a navegação já está em curso, e
@@ -197,7 +201,7 @@ export default function LegalCaseAssistedForm({
                             />
                         </Field>
 
-                        {/* O mesmo placeholder da etapa de fatos: é o mesmo
+                        {/* O mesmo placeholder dos fatos da etapa 1: é o mesmo
                             pedido ao advogado, e duas redações para a mesma
                             coisa seriam dívida de cópia. */}
                         <Field

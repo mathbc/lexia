@@ -11,7 +11,7 @@ use Carbon\CarbonImmutable;
  * What one theme selection run found: the links, what it searched, and how
  * wide it looked.
  *
- * The sibling of LegalResearchData for the sixth step's second tab, and much
+ * The sibling of LegalResearchData for the fifth step's second tab, and much
  * smaller, because the run is: no portal is opened and no citation can fail a
  * guard — the answer is chosen from the retrieved candidates by `enum` — so
  * there is nothing to report beside the list but the questions of law the

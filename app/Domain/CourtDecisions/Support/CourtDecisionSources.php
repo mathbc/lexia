@@ -17,7 +17,7 @@ namespace App\Domain\CourtDecisions\Support;
  * whose record of an acórdão carries the ementa the court published and a URN
  * that names it canonically. Excellent for finding a ruling; not the place to
  * confirm that Súmula 393 still says what it said. Adding `lexml.gov.br` to
- * that list would have widened the thesis research of step six — silently, and
+ * that list would have widened the thesis research of step five — silently, and
  * without anybody asking for it.
  *
  * ## Why `/busca/` is nowhere near this agent
@@ -84,7 +84,7 @@ final class CourtDecisionSources
      *
      * The stricter half of the guard, and the reason it is not folded into
      * `covers()`: `https://www.lexml.gov.br/` passes the domain test and
-     * confirms nothing, exactly as a court's front page does in step six. A
+     * confirms nothing, exactly as a court's front page does in step five. A
      * decision is only cited from the record that carries its ementa.
      */
     public static function isRecord(?string $url): bool

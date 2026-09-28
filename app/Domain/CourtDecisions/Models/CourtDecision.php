@@ -21,7 +21,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 /**
  * One ruling the courts have already handed down in a case like this one.
  *
- * The seventh step's row — "Análise de Jurisprudência" — and the sibling of
+ * The sixth step's row — "Análise de Jurisprudência" — and the sibling of
  * LegalPrecedent, which is close enough that the difference has to be said out
  * loud. A precedent is what sustains a **thesis**: it hangs off one, carries an
  * adherence score and a sentence about what it does for these facts. A court
@@ -52,7 +52,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * ResearchLegalCaseJurisprudence, with what the LexML confirmed, and
  * FinalizeLegalCase, with what survived the lawyer's reading. There is no
  * per-row Action and no route binding one decision, which is why the policy
- * below has no `update` and no `delete`: unticking a ruling on the seventh step
+ * below has no `update` and no `delete`: unticking a ruling on the sixth step
  * is the list being posted without it.
  *
  * @property string $id

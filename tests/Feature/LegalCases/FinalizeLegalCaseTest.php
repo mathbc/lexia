@@ -30,7 +30,7 @@ use Tests\TestCase;
  * two lists and the flag are one transaction, and the drafting is deliberately
  * outside it, so a provider being down cannot undo minutes of research.
  *
- * The lists, since step 7 and the themes tab arrived, are the theses and the
+ * The lists, since step 6 and the themes tab arrived, are the theses and the
  * STJ themes of the forensic review and the rulings of the jurisprudence
  * analysis. All are already rows by the time this runs — the research runs
  * wrote them — so what the conclusion posts is the lawyer's reading, and every
@@ -63,7 +63,7 @@ final class FinalizeLegalCaseTest extends TestCase
         $this->assertSame('Da Prescrição Intercorrente', $case->theses()->sole()->name);
         $this->assertFalse($case->refresh()->is_draft);
         // A marca d'água chega na última etapa, e não na sexta: concluir é o
-        // gesto da etapa 7, e é a gravação da jurisprudência que a move.
+        // gesto da etapa 6, e é a gravação da jurisprudência que a move.
         $this->assertSame(LegalCaseStep::CourtDecisions, $case->refresh()->current_step);
 
         $pleading = $case->pleadings()->sole();
@@ -147,7 +147,7 @@ final class FinalizeLegalCaseTest extends TestCase
     }
 
     /**
-     * A etapa 7 no gesto que a fecha: o que foi desmarcado sai da peça.
+     * A etapa 6 no gesto que a fecha: o que foi desmarcado sai da peça.
      *
      * Os julgados já são linhas quando esta tela abre — a pesquisa os gravou —,
      * então desmarcar não é "não gravar", é **apagar**, e quem apaga é o diff de
@@ -173,7 +173,7 @@ final class FinalizeLegalCaseTest extends TestCase
     }
 
     /**
-     * A outra aba da etapa 6, no mesmo gesto: o tema desmarcado é desvinculado.
+     * A outra aba da etapa 5, no mesmo gesto: o tema desmarcado é desvinculado.
      *
      * O vínculo é duro, e não lógico — ver a migration de `legal_case_themes` —,
      * então o que se confere é a linha ter saído, e o tema continuar no
@@ -316,7 +316,7 @@ final class FinalizeLegalCaseTest extends TestCase
      *
      * `$decisions` is empty by default, which is what a pleading whose
      * jurisprudence run confirmed nothing posts — and what every test here that
-     * is not about step 7 wants. The one that is about it passes rows. The
+     * is not about step 6 wants. The one that is about it passes rows. The
      * same for `$themes`, the forensic review's second tab.
      *
      * @param  list<array<string, mixed>>  $decisions
@@ -347,9 +347,9 @@ final class FinalizeLegalCaseTest extends TestCase
                 'grounding' => 'Fundamenta a contagem do prazo.',
                 'adherence' => '90',
             ]],
-            // A outra aba da etapa 6: os temas que o advogado manteve.
+            // A outra aba da etapa 5: os temas que o advogado manteve.
             'themes' => $themes,
-            // A etapa 7 viaja junto: os julgados já são linhas, e o que a
+            // A etapa 6 viaja junto: os julgados já são linhas, e o que a
             // conclusão posta é a leitura do advogado — ver `$decisions`.
             'court_decisions' => $decisions,
         ]);

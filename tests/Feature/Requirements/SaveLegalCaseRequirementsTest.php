@@ -14,7 +14,7 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * The fourth step: the numbered list a pleading closes with, saved whole.
+ * The third step: the numbered list a pleading closes with, saved whole.
  *
  * The reconciliation is the part worth pinning down. The form mints its own
  * uuids for rows it has just opened, and they are v4 exactly like the server's

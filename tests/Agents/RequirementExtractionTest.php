@@ -89,13 +89,12 @@ final class RequirementExtractionTest extends TestCase
         // filmagens das câmeras de segurança, para não ter nenhum problema jurídico.
         // TXT;
         //
-        // 3. Urgência no relato: a tutela deveria aparecer, e antes dos pedidos de
-        //    mérito, porque a ordem da lista é a ordem da numeração na peça.
-        //    Era a resposta menos confiável do `qwen2.5:7b` — ele acertava
-        //    a baixa da negativação e o débito inexistente, e escrevia a tutela
-        //    uma vez a cada tantas. O `OLLAMA_TEXT_MODEL` mudou desde então
-        //    (`gpt-oss:20b`), então este é o caso a reconferir; é por isso que
-        //    nenhuma asserção desta função depende dela.
+        // 3. Urgência no relato: a tutela **não** deve aparecer. Ela tem campo e
+        //    agente próprios na etapa 1 (`InjunctiveReliefSuggestionAgent`), e a
+        //    minuta escreve o pedido dela a partir de lá; aqui ela viraria uma
+        //    segunda cópia. O que este relato deve render é a baixa da
+        //    negativação e a declaração de inexistência do débito — e o dump é
+        //    onde conferir que nenhum item fala em tutela.
         //
         // $facts = <<<'TXT'
         // Meu nome foi negativado pela operadora por uma linha que eu nunca contratei, no valor de

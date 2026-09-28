@@ -11,7 +11,8 @@ geram em `app/Ai/Agents` e `app/Ai/Tools`. O conhecimento que os agentes leem fi
 | `PracticeAreaClassificationAgent` | Lê a descrição dos fatos e devolve a área de atuação, com justificativa |
 | `ProceduralClassSelectionAgent` | Dentro da área já decidida, escolhe a classe processual do CNJ, com justificativa |
 | `DefendantExtractionAgent` | Lê a descrição dos fatos e devolve os dados do réu nos doze campos `defendant_*` de `legal_cases` |
-| `RequirementExtractionAgent` | Lê a descrição dos fatos e devolve a lista do que o cliente pede ao juízo, cada pedido com a frase e o valor |
+| `RequirementExtractionAgent` | Lê a descrição dos fatos e devolve a lista do que o cliente pede ao juízo, cada pedido com a frase e o valor — menos a tutela de urgência, que tem agente próprio |
+| `InjunctiveReliefSuggestionAgent` | Com a área e a classe já decididas, diz se a inicial deve pedir tutela de urgência — de que espécie, com que medida e fundamento, e por que os dois requisitos do art. 300 estão ou não presentes |
 | `FactsRefinementAgent` | Reescreve o relato do cliente como a narrativa de fatos de uma inicial: registro formal, terceira pessoa, ordem cronológica — e o peso que uma perda irreparável tem |
 | `LegalThesisResearchAgent` | Pesquisa nos portais oficiais as teses que a peça pode sustentar, com as normas e os julgados que as sustentam, e devolve uma ficha rotulada |
 | `ForensicReviewTranscriptionAgent` | Transcreve a ficha da pesquisa para a estrutura aninhada de teses e precedentes |
@@ -22,12 +23,18 @@ geram em `app/Ai/Agents` e `app/Ai/Tools`. O conhecimento que os agentes leem fi
 
 Um agente não é chamado direto da tela: quem o expõe é uma Action do domínio
 (`ClassifyPracticeArea`, `SelectProceduralClass`, `ExtractLegalCaseDefendant`,
-`ExtractLegalCaseRequirements`, `RefineLegalCaseFacts`), que carrega o contexto, resolve
-a resposta em modelo e é o ponto por onde o caso de uso entra. `ClassifyLegalCase` chama
-os quatro primeiros — encadeia os dois iniciais e acrescenta os outros dois, que é coisa
-diferente de encadear; a seção abaixo diz por quê. O quinto fica de fora dela de
+`ExtractLegalCaseRequirements`, `SuggestInjunctiveRelief`, `RefineLegalCaseFacts`), que
+carrega o contexto, resolve a resposta em modelo e é o ponto por onde o caso de uso entra.
+`ClassifyLegalCase` chama os cinco primeiros — encadeia área, classe e tutela, e acrescenta
+as duas extrações, que é coisa diferente de encadear; a seção abaixo diz por quê. A tutela
+é o terceiro elo porque precisa da classe: possessória de força nova, despejo, alimentos e
+mandado de segurança trazem liminar própria, com o seu artigo. Ela é também a única com
+rota própria, `POST /pecas/tutela-de-urgencia/sugerir`: é o "Consultar IA" e o "Gerar
+novamente" da etapa 1, que recebem o relato e o par CNJ da tela porque a peça pode ainda
+não existir. O conhecimento dela é o guia `app/Rag/knowledge/injunctive-relief.md`, tirado
+da leitura que os tribunais fazem do art. 300. O sexto fica de fora dela de
 propósito: ele reescreve um relato que já está na tela, e não lê um relato para preencher
-uma. Os dois seguintes são a aba de teses da etapa 6 e formam um par indivisível: quem os
+uma. Os dois seguintes são a aba de teses da etapa 5 e formam um par indivisível: quem os
 expõe é `ResearchLegalCaseTheses`, que chama os dois em série — a seção abaixo diz por que
 não podem ser um só. Os dois de temas são a outra aba, expostos por
 `ResearchLegalCaseThemes` — o formulador escreve as questões, a busca vetorial traz os
@@ -147,7 +154,7 @@ O que os trouxe para dentro de `ClassifyLegalCase` foi o chamador. O preenchimen
 inteligente é um gesto só: o advogado escreve o relato uma vez e espera uma vez. Pedir o
 réu e os pedidos em viagens separadas faria a mesma tela esperar três, pelo mesmo relato.
 As Actions continuam chamáveis sozinhas, e é assim que a tela que quiser só uma das
-sugestões — a etapa 2 ou a etapa 4 de uma peça já salva — deve chamá-las: uma inferência,
+sugestões — a etapa 2 ou a etapa 3 de uma peça já salva — deve chamá-las: uma inferência,
 e não quatro.
 
 Como a dependência não existe, a falha também não se propaga: um erro de qualquer dos
@@ -408,7 +415,7 @@ foram medidas terminando em degraus de 0,75 s — enfileiradas, com o `Concurren
 O texto **voltou** para a máquina do escritório com o `gpt-oss:20b`, e o preço de volta é
 o que a ida ao Gemini tinha comprado: latência — daí os `#[Timeout(360)]`.
 `POST /pecas/classificar` corre as quatro etapas num `Concurrency::run` e não espera mais
-nada: a pesquisa de teses saiu da rota e hoje roda ao abrir a etapa 6, por
+nada: a pesquisa de teses saiu da rota e hoje roda ao abrir a etapa 5, por
 `ResearchLegalCaseForensicReview`, sobre uma peça gravada. O navegador ainda espera as
 quatro — a dívida que o `asController()` da rota documenta e que uma fila resolve —, mas
 já não espera a rede. O que se compra de volta: quase nenhuma cota para pagar, e o relato

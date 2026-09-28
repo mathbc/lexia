@@ -102,7 +102,7 @@ export function LegalCaseModeDialog() {
                         href="/pecas/nova"
                         icon={ListChecks}
                         title="Preenchimento manual"
-                        description="Percorra as seis etapas do assistente: dados básicos, parte contrária, fatos, pedidos, documentos e revisão. Com o enquadramento definido por você, os agentes seguem na construção da minuta — refinando os fatos, localizando jurisprudência e redigindo os fundamentos."
+                        description="Percorra as seis etapas do assistente: dados básicos e fatos, parte contrária, pedidos, documentos, revisão forense e jurisprudência. Com o enquadramento definido por você, os agentes seguem na construção da minuta — refinando os fatos, localizando jurisprudência e redigindo os fundamentos."
                         onNavigate={() => setOpen(false)}
                     />
                 </div>

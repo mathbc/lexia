@@ -11,7 +11,7 @@ use App\Domain\CourtDecisions\Support\CourtDecisionSources;
  *
  * The sibling of RequirementListData, and it exists for the same reason: the
  * rulings are saved together and never one at a time — the research writes them
- * whole, the seventh step submits them whole — so the list, and not the row, is
+ * whole, the sixth step submits them whole — so the list, and not the row, is
  * the argument the saving Action takes.
  *
  * Two filters run on the way in, and neither is decoration.

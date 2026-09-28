@@ -68,7 +68,7 @@ interface Props {
 }
 
 /**
- * A sexta etapa, em duas abas: **Teses** — o que a peça argumenta e os julgados
+ * A quinta etapa, em duas abas: **Teses** — o que a peça argumenta e os julgados
  * que o sustentam — e **Temas** — os precedentes qualificados do STJ em que ela
  * se apoia.
  *
@@ -237,7 +237,7 @@ function Count({ value, total }: { value: number; total: number }) {
  * exatamente a mesma lista vazia.
  *
  * O que vive em estado local é só a **decisão** — o `keep` de cada tese —, que
- * vira gravação no "Concluir e gerar minuta", na etapa 7. Desmarcar e sair sem
+ * vira gravação no "Concluir e gerar minuta", na etapa 6. Desmarcar e sair sem
  * concluir não desmarca nada no banco, e o "Continuar" daqui atravessa a
  * decisão intacta porque a visita preserva o estado da página; ver `submit()`
  * em `pages/legal-cases/form`.

@@ -29,9 +29,9 @@ use App\Domain\LegalCases\Actions\SaveLegalCaseRequirements;
 use App\Domain\LegalCases\Actions\ShowAssistedLegalCaseForm;
 use App\Domain\LegalCases\Actions\ShowLegalCaseForm;
 use App\Domain\LegalCases\Actions\ShowLegalPleading;
+use App\Domain\LegalCases\Actions\SuggestInjunctiveRelief;
 use App\Domain\LegalCases\Actions\UpdateLegalCaseBasics;
 use App\Domain\LegalCases\Actions\UpdateLegalCaseDefendant;
-use App\Domain\LegalCases\Actions\UpdateLegalCaseFacts;
 use App\Domain\LegalPleadings\Actions\ExportLegalPleadingDocx;
 use App\Domain\LegalPleadings\Actions\ExportLegalPleadingPdf;
 use App\Domain\LegalPleadings\Actions\GenerateLegalPleading;
@@ -104,12 +104,19 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     // assistente acima, já preenchido.
     Route::get('/pecas/nova/inteligente', ShowAssistedLegalCaseForm::class)->name('legal-cases.create-assisted');
 
-    // A única rota de peça que não devolve tela: o enquadramento sai em JSON
+    // Uma rota de peça que não devolve tela: o enquadramento sai em JSON
     // porque quem o pede — o preenchimento inteligente — leva o resultado até
     // o assistente em vez de exibi-lo.
     Route::post('/pecas/classificar', ClassifyLegalCase::class)
         ->middleware('inference')
         ->name('legal-cases.classify');
+
+    // A outra rota em JSON, e pelo mesmo motivo: o "Consultar IA" da tutela
+    // aplica a sugestão ao formulário da etapa 1, que pode ser de uma peça que
+    // ainda não existe. Por isso ela recebe os fatos e o par CNJ, e não a peça.
+    Route::post('/pecas/tutela-de-urgencia/sugerir', SuggestInjunctiveRelief::class)
+        ->middleware('inference')
+        ->name('legal-cases.injunctive-relief.suggest');
 
     Route::post('/pecas', CreateLegalCase::class)->name('legal-cases.store');
 
@@ -119,7 +126,6 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::get('/editar', ShowLegalCaseForm::class)->name('legal-cases.edit');
         Route::put('/dados-basicos', UpdateLegalCaseBasics::class)->name('legal-cases.basics');
         Route::put('/reu', UpdateLegalCaseDefendant::class)->name('legal-cases.defendant');
-        Route::put('/fatos', UpdateLegalCaseFacts::class)->name('legal-cases.facts');
         Route::put('/pedidos', SaveLegalCaseRequirements::class)->name('legal-cases.requirements');
 
         // A revisão forense: teses e precedentes vão juntos porque o precedente
@@ -127,7 +133,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         // request. Ver SaveLegalCaseForensicReview.
         Route::put('/revisao-forense', SaveLegalCaseForensicReview::class)->name('legal-cases.forensic-review');
 
-        // A pesquisa que preenche a etapa 6, disparada ao abri-la e nunca de
+        // A pesquisa que preenche a etapa 5, disparada ao abri-la e nunca de
         // novo sozinha: `research_findings` é o marcador de que já rodou. Ela
         // grava o que acha, então responde com um redirect para a própria etapa
         // em vez de devolver o payload — ver ResearchLegalCaseForensicReview.
@@ -140,7 +146,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->middleware('inference')
             ->name('legal-cases.forensic-review.research');
 
-        // A etapa 7, e a segunda pesquisa do assistente. Mesmo arranjo da de
+        // A etapa 6, e a segunda pesquisa do assistente. Mesmo arranjo da de
         // cima e pelos mesmos motivos: dispara ao abrir a etapa, uma vez só —
         // `court_decision_findings` é o marcador —, grava o que confirma e
         // responde com um redirect para a própria etapa. `inference` outra vez,

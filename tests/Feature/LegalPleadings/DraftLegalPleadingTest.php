@@ -19,7 +19,7 @@ use RuntimeException;
 use Tests\TestCase;
 
 /**
- * The seventh step's rulings, from the table to the stored draft.
+ * The sixth step's rulings, from the table to the stored draft.
  *
  * The agents are faked: what is pinned is the Action around them — that the
  * rulings the lawyer kept reach the dossier under their markers, that each
@@ -41,7 +41,7 @@ final class DraftLegalPleadingTest extends TestCase
             'facts' => 'O credor penhorou bens do Município para garantir a execução da sentença.',
         ]);
 
-        // Desmarcado na etapa 7: o "Concluir" o apaga antes de redigir, e os
+        // Desmarcado na etapa 6: o "Concluir" o apaga antes de redigir, e os
         // marcadores numeram a lista que ficou — não a que a pesquisa trouxe.
         CourtDecision::factory()->forLegalCase($case)->nth(0)->create()->delete();
         $kept = CourtDecision::factory()->forLegalCase($case)->nth(1)->create();
@@ -92,6 +92,48 @@ final class DraftLegalPleadingTest extends TestCase
             mb_strpos($pleading->content, 'IV – DOS PEDIDOS'),
             mb_strpos($pleading->content, $kept->summary),
         );
+    }
+
+    /**
+     * A tutela que o advogado deixou na etapa 1 chega à redação na seção dela,
+     * e a seção DA TUTELA DE URGÊNCIA que o agente escreve depois do DO DIREITO
+     * fica fora do corpo que o reforço reescreve.
+     */
+    #[Test]
+    public function the_injunction_reaches_the_draft_in_its_own_section_and_stays_out_of_the_grounds(): void
+    {
+        [$case, $thesis] = $this->caseWithThesisAndRuling();
+        $case->update([
+            'injunctive_relief' => true,
+            'injunctive_relief_description' => 'Medida pretendida: que se determine a suspensão do redirecionamento, sob pena de multa diária de R$ 500,00.',
+        ]);
+
+        $draft = $this->draft($thesis, 'A matéria é de ordem pública.');
+        $draft['content'] = str_replace(
+            'III – DOS PEDIDOS E REQUERIMENTOS',
+            "III – DA TUTELA DE URGÊNCIA\n\nO perigo de dano é concreto.\n\nIV – DOS PEDIDOS E REQUERIMENTOS",
+            $draft['content'],
+        );
+
+        PleadingDraftingAgent::fake([$draft]);
+        PleadingGroundsReinforcementAgent::fake([[
+            'content' => implode("\n\n", [$thesis->name, 'O argumento reforçado.', 'Nesse sentido:', '[[JULGADO 1]]']),
+        ]]);
+
+        $pleading = DraftLegalPleading::run($case);
+
+        PleadingDraftingAgent::assertPrompted(static fn (AgentPrompt $prompt): bool => str_contains(
+            (string) $prompt->agent->instructions(),
+            '## A tutela de urgência'.PHP_EOL.PHP_EOL.'Medida pretendida: que se determine a suspensão do redirecionamento',
+        ));
+
+        // O reforço recebe só o DO DIREITO: nem a seção da tutela, nem a
+        // descrição dela no dossiê.
+        PleadingGroundsReinforcementAgent::assertPrompted(static fn (AgentPrompt $prompt): bool => ! str_contains($prompt->prompt, 'TUTELA')
+            && ! str_contains((string) $prompt->agent->instructions(), 'suspensão do redirecionamento'));
+
+        $this->assertStringContainsString('O argumento reforçado.', $this->between($pleading, 'II – DO DIREITO', 'III – DA TUTELA'));
+        $this->assertStringContainsString("III – DA TUTELA DE URGÊNCIA\n\nO perigo de dano é concreto.", $pleading->content);
     }
 
     /**
@@ -181,7 +223,7 @@ final class DraftLegalPleadingTest extends TestCase
      * Os trechos que o agente escolheu abreviam a citação na minuta — o
      * cabeçalho fica, cada corte vira `[...]` e a referência sai inteira —, e
      * só na minuta: o julgado gravado continua com a ementa completa, que é o
-     * que a etapa 7 mostra.
+     * que a etapa 6 mostra.
      */
     #[Test]
     public function the_chosen_passages_abridge_the_quotation_and_only_the_quotation(): void
@@ -218,7 +260,7 @@ final class DraftLegalPleadingTest extends TestCase
     }
 
     /**
-     * Uma peça com uma tese e um julgado mantido, como a etapa 7 a deixa.
+     * Uma peça com uma tese e um julgado mantido, como a etapa 6 a deixa.
      *
      * @return array{LegalCase, LegalThesis}
      */

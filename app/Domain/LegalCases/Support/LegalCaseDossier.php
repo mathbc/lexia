@@ -144,7 +144,7 @@ final class LegalCaseDossier
      * 1. **The parties are written in full.** `of()` sends the client's city
      *    because a narrative only needs to know how to name them; a pleading
      *    opens by qualifying them, so the seven address columns go.
-     * 2. **The theses go, and so do the seventh step's rulings.** Each ruling
+     * 2. **The theses go, and so do the sixth step's rulings.** Each ruling
      *    travels under the marker the agent writes where it is to be quoted —
      *    see `courtDecisions()` and PleadingJurisprudence. The precedents of the
      *    forensic review still do not: they are findings about a thesis, not
@@ -156,6 +156,11 @@ final class LegalCaseDossier
      *    because `section()` writes "Nada registrado" and `written()` discards
      *    empty lines. The day they persist, "DOS DOCUMENTOS QUE INSTRUEM A
      *    PEÇA" starts being written without this class or the agent changing.
+     * 4. **The injunction goes, in a section of its own.** It is the only
+     *    projection that carries it: the section DA TUTELA DE URGÊNCIA is
+     *    written from it, and "Nada registrado" under its heading is what tells
+     *    the agent the petição asks for none — no section, no request, and no
+     *    "COM PEDIDO DE TUTELA DE URGÊNCIA" in the name of the action.
      *
      * The facts stay out, as in both siblings: they are the prompt.
      */
@@ -166,6 +171,7 @@ final class LegalCaseDossier
             self::section('O autor — quem propõe a ação', self::plaintiffInFull($legalCase->customer)),
             self::section('O réu — contra quem a ação é proposta', self::defendantInFull($legalCase)),
             self::section('Os pedidos', self::requirements($legalCase)),
+            self::section('A tutela de urgência', self::injunctiveRelief($legalCase)),
             self::section('As teses da revisão forense', self::theses($legalCase)),
             self::section('Os julgados da análise de jurisprudência', self::courtDecisions($legalCase)),
             self::section('Os documentos que instruem a peça', self::documents($legalCase)),
@@ -213,11 +219,11 @@ final class LegalCaseDossier
             'Área de atuação' => $legalCase->practiceArea->label,
             'Classe processual' => self::filedAs($legalCase),
             'Endereçamento' => $legalCase->court_addressing,
-            // Só aparece quando foi pedida: a ausência da linha diz que não há
-            // urgência a sustentar, e é isso que o relato precisa saber.
-            'Tutela de urgência' => $legalCase->injunctive_relief
-                ? 'pedida — '.($legalCase->injunctive_relief_description ?? 'sem justificativa escrita ainda')
-                : null,
+            // A tutela de urgência não mora aqui, e já morou. Esta linha vai
+            // para todas as projeções — inclusive as da pesquisa, que saem da
+            // máquina —, e a descrição é texto livre do advogado, onde um nome
+            // cabe tão bem quanto um fato. Ela tem seção própria, e só no
+            // dossiê da redação: `injunctiveRelief()`.
         ]);
     }
 
@@ -276,6 +282,29 @@ final class LegalCaseDossier
                 .$requirement->description
                 .self::claimed($requirement->amount))
             ->all();
+    }
+
+    /**
+     * The injunction as the lawyer left it in the first step, or nothing when
+     * the petição asks for none.
+     *
+     * The description goes whole, in the labelled paragraphs the suggestion
+     * composed it in — "Medida pretendida:", "Perigo de dano:" — or in whatever
+     * form the lawyer rewrote it; the drafting agent is told to argue from it
+     * either way. A request with no text yet still goes, as a request: the
+     * section is written with brackets where the measure should be.
+     *
+     * @return list<string>
+     */
+    private static function injunctiveRelief(LegalCase $legalCase): array
+    {
+        if (! $legalCase->injunctive_relief) {
+            return [];
+        }
+
+        $description = trim((string) $legalCase->injunctive_relief_description);
+
+        return [$description === '' ? 'Pedida, sem descrição escrita ainda.' : $description];
     }
 
     private static function claimed(?string $amount): string
@@ -561,7 +590,7 @@ final class LegalCaseDossier
     }
 
     /**
-     * The rulings the lawyer kept on the seventh step, each under its marker.
+     * The rulings the lawyer kept on the sixth step, each under its marker.
      *
      * What the agent needs to *place* a ruling, and nothing more: the marker it
      * writes, the court it names in the sentence that introduces the quotation,

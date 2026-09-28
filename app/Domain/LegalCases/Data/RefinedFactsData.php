@@ -10,12 +10,13 @@ use App\Domain\Requirements\Data\RequirementData;
  * The narrative rewritten, the reason it was given weight, and the figures in
  * it that the client never wrote.
  *
- * Not a `FactsData`, though it looks close to one. That value is what the third
- * step of the form **saves** — the narrative plus the injunction and its
- * justification — and this is what an agent **suggests** about the narrative
- * alone. Whether to ask for an injunction is a decision the lawyer makes and
- * this agent is told not to touch, so folding the two would mean carrying a
- * flag nobody here is entitled to set.
+ * Not the narrative half of a `LegalCaseBasicsData`, though it looks close to
+ * one. That value is what the first step of the form **saves** — the narrative
+ * plus the injunction and its justification, beside the framing — and this is
+ * what an agent **suggests** about the narrative alone. Whether to ask for an
+ * injunction is the lawyer's decision — suggested by an agent of its own,
+ * InjunctiveReliefSuggestionAgent, and never by this one —, so folding the two
+ * would mean carrying a flag nobody here is entitled to set.
  *
  * `impactBasis` is the agent declaring itself. The emphasis it may add to a
  * narrative of irreparable loss is the one part of the answer a lawyer cannot

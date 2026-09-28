@@ -224,7 +224,6 @@ export interface ProceduralClassOption {
 export type LegalCaseStepValue =
     | "basics"
     | "defendant"
-    | "facts"
     | "requirements"
     | "documents"
     | "review"
@@ -260,21 +259,22 @@ export interface LegalCaseDraft {
     practice_area: string;
     procedural_class_id: string;
     court_addressing: string;
+    /** O relato e a tutela fecham a etapa 1, e por isso moram aqui em cima. */
+    facts: string;
+    injunctive_relief: boolean;
+    injunctive_relief_description: string;
+    /** O que a IA disse sobre a tutela, ou nulo quando ninguém perguntou. */
+    injunctive_relief_suggestion: InjunctiveReliefSuggestion | null;
     current_step: LegalCaseStepValue;
     is_draft: boolean;
     defendant: Record<string, string>;
-    facts: {
-        facts: string;
-        injunctive_relief: boolean;
-        injunctive_relief_description: string;
-    };
     /** Com os ids reais do servidor, e não os do crypto.randomUUID(). */
     requirements: { id: string; description: string; amount: string }[];
     /**
      * A revisão forense já gravada, achatada como a pesquisa a publica.
      *
      * As duas listas têm a mesma forma de `LegalResearch`, de propósito: a etapa
-     * 6 hidrata por `toThesisDrafts()` sem saber se as teses vieram do banco ou
+     * 5 hidrata por `toThesisDrafts()` sem saber se as teses vieram do banco ou
      * da pesquisa desta sessão. Vazias numa peça que ainda não concluiu a etapa.
      */
     theses: ResearchedThesis[];
@@ -283,14 +283,14 @@ export interface LegalCaseDraft {
      * O relato da pesquisa que produziu as teses acima, ou nulo se nunca se
      * pesquisou nesta peça.
      *
-     * O nulo é o gatilho: é ele que faz a etapa 6 chamar o agente ao abrir, uma
+     * O nulo é o gatilho: é ele que faz a etapa 5 chamar o agente ao abrir, uma
      * vez só. Conferir `theses.length` no lugar disto seria repesquisar para
      * sempre toda peça cuja pesquisa nada confirmou — e, pior, apagando o que o
      * advogado já tivesse curado, porque a gravação reconcilia por diff.
      */
     research: LegalResearchFindings | null;
     /**
-     * Os temas do STJ vinculados à peça — a segunda aba da etapa 6.
+     * Os temas do STJ vinculados à peça — a segunda aba da etapa 5.
      *
      * Vazia numa peça cuja seleção nunca rodou e vazia também numa em que ela
      * rodou e nenhum tema se aplicava: quem distingue as duas é o campo abaixo.
@@ -306,9 +306,9 @@ export interface LegalCaseDraft {
      */
     theme_research: LegalThemeFindings | null;
     /**
-     * A jurisprudência já gravada — a sétima etapa, com os ids reais.
+     * A jurisprudência já gravada — a sexta etapa, com os ids reais.
      *
-     * Vazia numa peça que ainda não chegou à etapa 7, e vazia também numa em
+     * Vazia numa peça que ainda não chegou à etapa 6, e vazia também numa em
      * que a pesquisa rodou e nada confirmou: quem distingue as duas é o campo
      * abaixo, e não o tamanho desta lista.
      */
@@ -413,6 +413,30 @@ export interface ExtractedRequirement {
 }
 
 /**
+ * A sugestão de tutela de urgência, como `InjunctiveReliefSuggestionData::toArray()`
+ * a publica — na resposta do enquadramento, na do "Consultar IA" e na peça salva.
+ *
+ * É o **envelope** da resposta, e volta inteiro ao salvar a etapa 1: é ele que
+ * mantém o selo "Sugestão da IA" depois de um reload. `recommended` falso é
+ * resposta, e não falha — a IA leu o relato e não viu urgência; a falha é o nulo.
+ *
+ * `description` é o texto já composto em parágrafos rotulados ("Medida
+ * pretendida:", "Perigo de dano:"), o mesmo que cai na caixa da descrição. É a
+ * comparação com ele que diz à tela se o advogado editou a sugestão.
+ */
+export interface InjunctiveReliefSuggestion {
+    recommended: boolean;
+    kind: "anticipatory" | "precautionary" | null;
+    kind_label: string | null;
+    description: string | null;
+    justification: string;
+    evidence: string[];
+    /** Cifras que o texto cita e o relato não escreve, em decimal ("1000.00"). */
+    unsupported_amounts: string[];
+    suggested_at: string;
+}
+
+/**
  * Uma das autoridades em que uma tese se apoia, como `LegalBasisData::toArray()`
  * a publica.
  *
@@ -490,7 +514,7 @@ export interface ResearchedPrecedent {
  * recusou o que ela achou — e as duas produzem exatamente a mesma lista vazia.
  *
  * O objeto inteiro ser nulo é a terceira coisa, e a mais importante para a
- * tela: significa que **nunca se pesquisou**, e é o que faz a etapa 6 disparar
+ * tela: significa que **nunca se pesquisou**, e é o que faz a etapa 5 disparar
  * a pesquisa ao abrir. Um objeto presente com tudo vazio é uma pesquisa que
  * rodou e nada confirmou, e essa não se repete sozinha.
  */
@@ -637,7 +661,7 @@ export interface LegalResearch extends LegalResearchFindings {
  * réu identificado: esse chega como doze campos nulos dentro do objeto. Os
  * pedidos carregam a mesma distinção, com a lista vazia no lugar dos nulos.
  *
- * A revisão forense não vem daqui. Ela roda ao abrir a etapa 6, sobre uma peça
+ * A revisão forense não vem daqui. Ela roda ao abrir a etapa 5, sobre uma peça
  * já gravada, e chega ao assistente por `LegalCaseDraft` — do banco, e não do
  * `sessionStorage`.
  */
@@ -648,6 +672,7 @@ export interface LegalCaseClassification {
     procedural_class_justification: string | null;
     defendant: DefendantSuggestion | null;
     requirements: ExtractedRequirement[] | null;
+    injunctive_relief: InjunctiveReliefSuggestion | null;
 }
 
 /** Mirrors LegalCasePageProps::abilities(). */

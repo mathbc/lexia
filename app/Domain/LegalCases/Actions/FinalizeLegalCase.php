@@ -22,7 +22,7 @@ use Throwable;
  * **The first Action in this project that finishes anything.** `is_draft` has
  * had a column, an index, a filter, a badge and a factory state since the
  * beginning, and nothing ever wrote `false` to it — LegalCasePolicy says as
- * much. This is the gesture the sixth step was missing: until now the forensic
+ * much. This is the gesture the fifth step was missing: until now the forensic
  * review was a screen with no button, and the theses the research had found
  * lived in `sessionStorage` until the tab was closed.
  *
@@ -47,7 +47,7 @@ use Throwable;
  * it rather than reimplementing the map of posted ids to persisted ones that
  * makes it work.
  *
- * ## The seventh step travels with it
+ * ## The sixth step travels with it
  *
  * Since "Análise de Jurisprudência" arrived, the button that finishes a pleading
  * sits on *that* step rather than on the forensic review, and it carries three
@@ -85,11 +85,11 @@ final class FinalizeLegalCase
             // uma tese que ainda não tinha chave.
             SaveLegalCaseForensicReview::run($legalCase, $data);
 
-            // A outra aba da etapa 6: os temas que o advogado manteve. O que ele
+            // A outra aba da etapa 5: os temas que o advogado manteve. O que ele
             // desmarcou é desvinculado aqui, pelo `sync()` da Action irmã.
             SaveLegalCaseThemes::run($legalCase, $themes);
 
-            // E a da etapa 7, pelo mesmo motivo: o diff que apaga o que o
+            // E a da etapa 6, pelo mesmo motivo: o diff que apaga o que o
             // advogado desmarcou mora lá, com a marca d'água que ele move.
             SaveLegalCaseCourtDecisions::run($legalCase, $decisions);
 
@@ -113,8 +113,8 @@ final class FinalizeLegalCase
     }
 
     /**
-     * The sixth and seventh steps' payloads — both tabs of the sixth, and the
-     * seventh — unchanged.
+     * The fifth and sixth steps' payloads — both tabs of the fifth, and the
+     * sixth — unchanged.
      *
      * Delegated to the Actions that save them rather than restated, so the
      * routes cannot drift into disagreeing about what a thesis or a ruling looks

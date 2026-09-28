@@ -28,17 +28,16 @@ final class LegalCaseStepTest extends TestCase
     public function the_positions_follow_the_order_the_form_is_filled_in(): void
     {
         $this->assertSame(0, LegalCaseStep::Basics->position());
-        $this->assertSame(5, LegalCaseStep::Review->position());
-
-        $this->assertTrue(
-            LegalCaseStep::Facts->position() < LegalCaseStep::Requirements->position(),
-        );
+        $this->assertSame(4, LegalCaseStep::Review->position());
+        $this->assertCount(6, LegalCaseStep::cases());
     }
 
     #[Test]
     public function each_step_is_followed_by_the_next_one(): void
     {
         $this->assertSame(LegalCaseStep::Defendant, LegalCaseStep::Basics->next());
+        // Os fatos deixaram de ser uma etapa entre as duas: fecham a primeira.
+        $this->assertSame(LegalCaseStep::Requirements, LegalCaseStep::Defendant->next());
         $this->assertSame(LegalCaseStep::Documents, LegalCaseStep::Requirements->next());
     }
 
@@ -75,7 +74,7 @@ final class LegalCaseStepTest extends TestCase
 
         $this->assertCount(count(LegalCaseStep::cases()), $options);
         $this->assertSame(
-            ['value' => 'basics', 'label' => 'Dados básicos'],
+            ['value' => 'basics', 'label' => 'Dados básicos e fatos'],
             $options[0],
         );
     }

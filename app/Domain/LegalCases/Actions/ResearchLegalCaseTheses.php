@@ -21,7 +21,7 @@ use RuntimeException;
 /**
  * Researches the theses a pleading can argue, in the official portals.
  *
- * The entry point for the second half of the forensic review — the sixth step.
+ * The entry point for the second half of the forensic review — the fifth step.
  * Two inferences in series, and the order is imposed rather than chosen:
  * LegalThesisResearchAgent searches and writes a labelled sheet,
  * ForensicReviewTranscriptionAgent copies that sheet into the nested structure.
@@ -64,7 +64,7 @@ use RuntimeException;
  * ## Who calls it, and what that costs
  *
  * No `asController()` of its own, and there will not be one: nothing routes
- * *here*. What reaches it is ResearchLegalCaseForensicReview, when step 6
+ * *here*. What reaches it is ResearchLegalCaseForensicReview, when step 5
  * opens, as one of two tasks of a `Concurrency::run` — the other is the STJ
  * theme selection, ResearchLegalCaseThemes, which reads the same pleading and
  * answers a different question. The browser waits on the longer of the two,

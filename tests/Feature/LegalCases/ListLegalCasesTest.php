@@ -185,16 +185,16 @@ final class ListLegalCasesTest extends TestCase
     public function a_card_carries_the_step_it_stopped_on_and_whether_it_is_a_draft(): void
     {
         [$account, $owner] = $this->accountWithOwner();
-        LegalCase::factory()->forAccount($account)->draft(LegalCaseStep::Facts)->create();
+        LegalCase::factory()->forAccount($account)->draft(LegalCaseStep::Requirements)->create();
 
         $this->actingAs($owner)
             ->get('/pecas')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
-                ->where('legalCases.data.0.current_step', 'facts')
+                ->where('legalCases.data.0.current_step', 'requirements')
                 // O rótulo vem resolvido do enum: o React não repete o
                 // português.
-                ->where('legalCases.data.0.current_step_label', 'Fatos e tutela')
+                ->where('legalCases.data.0.current_step_label', 'Pedidos e requerimentos')
                 ->where('legalCases.data.0.is_draft', true));
     }
 
@@ -249,7 +249,7 @@ final class ListLegalCasesTest extends TestCase
                 ->component('legal-cases/form')
                 ->where('legalCase.court_addressing', 'Ao Juízo da 1ª Vara Cível')
                 ->where('legalCase.defendant.defendant_name', 'Construtora Atlântico Ltda.')
-                ->where('legalCase.facts.facts', 'O imóvel foi ocupado em março.')
+                ->where('legalCase.facts', 'O imóvel foi ocupado em março.')
                 // O slug, e não o uuid: é a moeda do seletor de área.
                 ->where('legalCase.practice_area', $legalCase->practiceArea->slug));
     }

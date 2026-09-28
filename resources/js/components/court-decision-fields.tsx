@@ -53,12 +53,12 @@ interface Props {
 }
 
 /**
- * A sétima etapa: o que os tribunais já decidiram em casos como este.
+ * A sexta etapa: o que os tribunais já decidiram em casos como este.
  *
  * A irmã de `ForensicReviewFields`, um passo adiante, e desenhada na mesma
  * forma de propósito: a etapa abre **preenchida por uma pesquisa** e não por um
  * relato, todo achado chega marcado, e a decisão que a tela pede é **tirar**.
- * Um advogado que aprendeu a etapa 6 não precisa aprender esta.
+ * Um advogado que aprendeu a etapa 5 não precisa aprender esta.
  *
  * O disparo é **uma vez por peça**, e quem decide é `research` ser nulo, nunca a
  * lista de julgados estar vazia: uma rodada que nada confirma é uma resposta
@@ -67,7 +67,7 @@ interface Props {
  * segunda rodada é o botão "Pesquisar novamente".
  *
  * O que ela **não** repete é o conteúdo, e a diferença é a que separa as duas
- * tabelas. A etapa 6 pesquisa **teses** — o que a peça argumenta, com a súmula
+ * tabelas. A etapa 5 pesquisa **teses** — o que a peça argumenta, com a súmula
  * ou o tema que a fundamenta — e cada precedente vem com uma aderência e uma
  * frase sobre o que ele faz por este caso. Aqui não há nem uma coisa nem outra:
  * um julgado é o **documento**, transcrito do registro do LexML, e o que ele
@@ -75,7 +75,7 @@ interface Props {
  * ementa — recolhida, com o "Ver mais" que a abre — e o link para a página de
  * onde ela foi lida, e nenhum número ao lado.
  *
- * Três blocos fecham a tela, como na etapa 6 e pelos mesmos motivos. **As
+ * Três blocos fecham a tela, como na etapa 5 e pelos mesmos motivos. **As
  * fontes** dizem quais registros foram de fato abertos. **O pendente** é o que
  * ficou em aberto. **As citações sem registro** são as que a guarda removeu, e
  * existem porque uma etapa vazia tem duas causas opostas — não se achou nada,
@@ -457,7 +457,7 @@ function Findings({ research }: { research: CourtDecisionFindings }) {
                         <p className="text-xs font-medium">
                             Registros consultados
                         </p>
-                        {/* O endereço inteiro, e não o domínio como na etapa 6:
+                        {/* O endereço inteiro, e não o domínio como na etapa 5:
                             aqui todas as fontes são o mesmo portal, e
                             "lexml.gov.br" repetido cinco vezes não distinguiria
                             um registro do outro. O que distingue é a URN, que

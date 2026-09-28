@@ -17,7 +17,7 @@ use Tests\TestCase;
 
 /**
  * The N-N between a pleading and the STJ themes it leans on: written by
- * `sync()`, read back by the sixth step's second tab.
+ * `sync()`, read back by the fifth step's second tab.
  *
  * No route points at the Action, so it is called directly; the route that
  * carries its payload — the "Concluir" — is pinned in FinalizeLegalCaseTest.

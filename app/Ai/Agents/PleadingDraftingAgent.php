@@ -99,6 +99,20 @@ use Laravel\Ai\Promptable;
  * `PleadingDraftData` runs the same guard on the way back — reporting rather
  * than erasing, because a sentence cannot be left half-blank.
  *
+ * ## The one request it adds
+ *
+ * DOS PEDIDOS is one item per request of the dossier, and nothing else — with
+ * one exception. The *tutela de urgência* is not a request row: it is the first
+ * step's decision and text, which the dossier carries in a section of its own,
+ * and the petição argues it in a section of its own right after DO DIREITO.
+ * That section is outside DO DIREITO on purpose, and not only for the judge:
+ * PleadingSections cuts DO DIREITO at the next roman-numbered heading, so the
+ * reinforcement agent never sees the injunction and cannot fold it into a
+ * thesis. The request that goes with it is the one item this agent writes
+ * without a row behind it, and the name of the action says "COM PEDIDO DE
+ * TUTELA DE URGÊNCIA". "Nada registrado" under the dossier's heading turns all
+ * three off; the agent is told never to add urgency of its own.
+ *
  * `Temperature(0.3)` matches the facts agent and for the same reason: this one
  * is asked to write. Lowering it buys stiffness, not fidelity — an invented
  * marital status at 0.1 is just as invented, in worse Portuguese.
@@ -253,8 +267,10 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
            profissão, o documento, o endereço, e então "por intermédio de seu advogado
            infra-assinado, vem, respeitosamente, à presença de Vossa Excelência, propor
            a presente" — o nome da ação em CAIXA ALTA, derivado da classe processual do
-           dossiê — "em face de" e o réu qualificado do mesmo modo, fechando com
-           "pelos fatos e fundamentos a seguir expostos."
+           dossiê, acrescido de "COM PEDIDO DE TUTELA DE URGÊNCIA" quando a seção "A
+           tutela de urgência" do dossiê trouxer um pedido — "em face de" e o réu
+           qualificado do mesmo modo, fechando com "pelos fatos e fundamentos a seguir
+           expostos."
         4. **As seções numeradas**, com algarismo romano, travessão e título em CAIXA
            ALTA:
            - `I – PRELIMINARMENTE: ...` — só quando houver pedido que a justifique, como
@@ -262,18 +278,22 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
            - `DOS FATOS` — a narrativa, em terceira pessoa, em ordem cronológica.
            - `DO DIREITO` — os fundamentos, conforme as seções "As teses" e "A
              jurisprudência", abaixo.
+           - `DA TUTELA DE URGÊNCIA` — **só quando a seção "A tutela de urgência" do
+             dossiê trouxer um pedido**, conforme a seção de mesmo nome, abaixo. Sem
+             pedido, não existe esta seção.
            - `DOS DOCUMENTOS QUE INSTRUEM A PEÇA` — a lista numerada, **só quando o
              dossiê trouxer documentos**. Não havendo, não existe esta seção e você não
              inventa uma lista de anexos.
            - `DOS PEDIDOS E REQUERIMENTOS` — "Ante o exposto, requer:" e a lista
              numerada, **um item por pedido do dossiê**, na ordem em que estão lá, com a
              redação deles. Não acrescente pedido que não esteja no dossiê e não remova
-             nenhum.
+             nenhum — a única exceção é o pedido de tutela de urgência, abaixo.
         5. **O fecho**: o protesto por provas, o valor da causa e "Nestes termos, pede
            deferimento."
 
         Os algarismos romanos são sequenciais sobre as seções que de fato existirem. Uma
-        peça sem preliminar começa em `I – DOS FATOS`.
+        peça sem preliminar começa em `I – DOS FATOS`; com preliminar e com tutela, a
+        tutela é a `IV – DA TUTELA DE URGÊNCIA`, e sem preliminar, a `III`.
 
         Pare em "Nestes termos, pede deferimento." Não escreva cidade, não escreva data,
         não escreva o nome do advogado e não escreva a OAB: isso é acrescentado depois,
@@ -357,6 +377,91 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
         especial, número de processo, súmula ou tema que não esteja nos "Fundamentos a
         citar" das teses ou nos julgados do dossiê. **Não havendo julgado nenhum no
         dossiê, a peça não cita julgado nenhum.**
+
+        # A tutela de urgência
+
+        A seção "A tutela de urgência" do dossiê diz se a peça pede tutela de urgência.
+        "Nada registrado" quer dizer que **não pede**: não há seção de tutela, não há
+        pedido de tutela e o nome da ação não leva "COM PEDIDO DE TUTELA DE URGÊNCIA".
+        Pedir urgência é decisão do advogado — nunca a acrescente por conta própria, nem
+        quando o relato parecer urgente.
+
+        Quando a seção trouxer um pedido, ele é argumentado **numa seção só, a sua**, logo
+        depois de `DO DIREITO` — nunca dentro dela, e nunca como subseção de uma tese. O
+        texto do dossiê é o material, e costuma vir em parágrafos rotulados: "Medida
+        pretendida:", "Espécie:", "Fundamento legal:", "Probabilidade do direito:",
+        "Perigo de dano:", "Reversibilidade:". O advogado pode tê-lo reescrito em outra
+        forma, e vale o mesmo. Você não copia os rótulos: desenvolve o argumento em
+        português jurídico, nesta ordem.
+
+        1. O fundamento: o dispositivo que o dossiê traz — em regra o art. 300 do CPC — e
+           os dois requisitos que ele exige, a probabilidade do direito e o perigo de dano
+           ou o risco ao resultado útil do processo.
+        2. A probabilidade do direito, amarrada aos fatos já narrados em `DOS FATOS`.
+        3. O perigo de dano: o que acontece se a medida só vier na sentença.
+        4. A reversibilidade dos efeitos, só quando o dossiê a trouxer. Na tutela cautelar
+           ela não se discute.
+        5. O requerimento de concessão, com a medida pedida.
+
+        Se o dossiê pede a gratuidade da justiça, requeira também a dispensa da caução, nos
+        termos do art. 300, §1º, do CPC. Os colchetes do texto — `[prazo]`, `[valor da
+        multa diária]` — são lacunas e continuam colchetes. Não acrescente fato, prova,
+        documento, prazo ou valor que o dossiê não traga, e não cite julgado, súmula ou
+        tema nesta seção: a regra da jurisprudência vale aqui também.
+
+        Um pedido sem descrição — "Pedida, sem descrição escrita ainda." — ainda vira
+        seção e pedido, com `[medida pretendida]` onde a medida deveria estar.
+
+        ## O pedido da tutela
+
+        Em `DOS PEDIDOS`, o pedido de tutela é o **único** que você acrescenta ao que o
+        dossiê traz. Ele entra logo depois dos pedidos preliminares, como a gratuidade, e
+        antes de todos os outros: "A concessão da TUTELA DE URGÊNCIA, nos termos do art.
+        300 do CPC, para determinar que [a medida];" — com o artigo que o dossiê trouxer.
+        O pedido principal de mérito passa a terminar pedindo que a tutela seja
+        confirmada: "..., confirmando-se a tutela de urgência concedida;".
+
+        Se um pedido do dossiê já pedir a tutela de urgência, é ele o item da tutela: use-o
+        nessa posição e não escreva outro. A tutela aparece uma vez só na lista.
+
+        ## Exemplo da seção
+
+        Dossiê sem preliminar, com a seção "A tutela de urgência" trazendo "Medida
+        pretendida: que se determine à Ré a exclusão do nome do Autor dos cadastros de
+        proteção ao crédito, no prazo de [prazo], sob pena de multa diária de [valor da
+        multa diária]." e os parágrafos de probabilidade, perigo e reversibilidade:
+
+        III – DA TUTELA DE URGÊNCIA
+
+        O art. 300 do Código de Processo Civil autoriza a concessão da tutela de urgência
+        quando houver elementos que evidenciem a probabilidade do direito e o perigo de
+        dano ou o risco ao resultado útil do processo, requisitos presentes no caso.
+
+        A probabilidade do direito [...]
+
+        O perigo de dano é concreto: [...]
+
+        A medida é plenamente reversível: [...]
+
+        Requer-se, assim, a concessão da tutela de urgência para que se determine à Ré a
+        exclusão do nome do Autor dos cadastros de proteção ao crédito, no prazo de
+        [prazo], sob pena de multa diária de [valor da multa diária].
+
+        IV – DOS PEDIDOS E REQUERIMENTOS
+
+        Ante o exposto, requer:
+
+        1. A concessão da TUTELA DE URGÊNCIA, nos termos do art. 300 do CPC, para
+        determinar que a Ré exclua o nome do Autor dos cadastros de proteção ao crédito,
+        no prazo de [prazo], sob pena de multa diária de [valor da multa diária];
+        2. A declaração de inexistência do débito, confirmando-se a tutela de urgência
+        concedida;
+        [...]
+
+        Repare: a seção veio depois de `DO DIREITO` e antes dos pedidos, com o próximo
+        algarismo; os rótulos do dossiê viraram parágrafos de argumento; os colchetes
+        continuaram colchetes; e o pedido de tutela é o primeiro da lista, porque não há
+        preliminar antes dele.
 
         # O valor da causa
 

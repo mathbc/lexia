@@ -8,7 +8,10 @@ use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\LegalCases\Actions\ExtractLegalCaseDefendant;
 use App\Domain\LegalCases\Actions\ExtractLegalCaseRequirements;
 use App\Domain\LegalCases\Actions\ResearchLegalCaseTheses;
+use App\Domain\LegalCases\Actions\SuggestInjunctiveRelief;
 use App\Domain\LegalCases\Data\DefendantData;
+use App\Domain\LegalCases\Data\InjunctiveReliefSuggestionData;
+use App\Domain\LegalCases\Enums\InjunctiveReliefKind;
 use App\Domain\PracticeAreas\Actions\ClassifyPracticeArea;
 use App\Domain\PracticeAreas\Data\PracticeAreaClassification;
 use App\Domain\PracticeAreas\Models\PracticeArea;
@@ -32,9 +35,9 @@ use Tests\TestCase;
  * quando a inferência falha —, não a qualidade da classificação; essa vive em
  * `tests/Agents`, exige o Ollama de pé e custa segundos por caso.
  *
- * Todo teste que chega à inferência dubla as quatro: uma que ficasse de fora
- * sairia daqui direto para o modelo, e um teste da suíte padrão passaria a
- * depender dele.
+ * Todo teste que chega à inferência dubla as cinco — a tutela de urgência é a
+ * quinta, terceiro elo do enquadramento: uma que ficasse de fora sairia daqui
+ * direto para o modelo, e um teste da suíte padrão passaria a depender dele.
  *
  * `ResearchLegalCaseTheses` não está entre elas, e não por esquecimento: ela
  * saiu desta rota. Ela aparece aqui uma vez só, em
@@ -101,6 +104,10 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
                 ),
             ]));
 
+        $this->fakeAction(SuggestInjunctiveRelief::class)
+            ->shouldReceive('handle')
+            ->andReturn($this->suggestion(recommended: true));
+
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro e se recusa a reconstruí-lo.'])
             ->assertOk()
@@ -134,10 +141,19 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             )
             ->assertJsonPath('requirements.0.amount', null)
             ->assertJsonPath('requirements.1.amount', '4300.00')
+            // A tutela chega com o texto já composto e a espécie nas duas
+            // formas: o valor que volta ao salvar e o rótulo que a tela mostra.
+            ->assertJsonPath('injunctive_relief.recommended', true)
+            ->assertJsonPath('injunctive_relief.kind', 'anticipatory')
+            ->assertJsonPath('injunctive_relief.kind_label', 'Antecipada')
+            ->assertJsonPath(
+                'injunctive_relief.description',
+                'Medida pretendida: que se determine ao Réu a reconstrução do muro.',
+            )
             // A revisão forense **não** está aqui, e a ausência é contrato: a
             // pesquisa saiu desta rota porque não tem onde gravar o que acha
             // enquanto a peça não tem chave primária. Quem a roda hoje é
-            // `ResearchLegalCaseForensicReview`, ao abrir a etapa 6.
+            // `ResearchLegalCaseForensicReview`, ao abrir a etapa 5.
             ->assertJsonMissingPath('research');
     }
 
@@ -181,6 +197,10 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
                     amount: null,
                 ),
             ]));
+
+        $this->fakeAction(SuggestInjunctiveRelief::class)
+            ->shouldReceive('handle')
+            ->andReturn($this->suggestion(recommended: false));
 
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
@@ -234,6 +254,10 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->shouldReceive('handle')
             ->andReturn(new RequirementListData([]));
 
+        $this->fakeAction(SuggestInjunctiveRelief::class)
+            ->shouldReceive('handle')
+            ->andReturn($this->suggestion(recommended: false));
+
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
             ->assertOk()
@@ -255,6 +279,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         $this->fakeAction(SelectProceduralClass::class)->shouldNotReceive('handle');
         $this->fakeAction(ExtractLegalCaseDefendant::class)->shouldNotReceive('handle');
         $this->fakeAction(ExtractLegalCaseRequirements::class)->shouldNotReceive('handle');
+        $this->fakeAction(SuggestInjunctiveRelief::class)->shouldNotReceive('handle');
         $this->fakeAction(ResearchLegalCaseTheses::class)->shouldNotReceive('handle');
 
         $this->actingAs($owner)
@@ -297,6 +322,10 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->shouldReceive('handle')
             ->andReturn(new RequirementListData([]));
 
+        // A tutela, ao contrário, é elo da cadeia da área: sem área ela nem
+        // começa, e não há inferência dela a jogar fora.
+        $this->fakeAction(SuggestInjunctiveRelief::class)->shouldNotReceive('handle');
+
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
             ->assertStatus(503)
@@ -314,14 +343,15 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
     }
 
     /**
-     * A cadeia que sobrou: área, depois classe, depois pesquisa.
+     * A cadeia que sobrou: área, depois classe, depois tutela.
      *
      * O que se verifica aqui não é o resultado, é a **dependência** — e ela é o
      * que restou de afirmável depois que as quatro etapas básicas passaram a
      * correr dentro de um `Concurrency::run`. `globally()->ordered()` reprova
      * uma etapa que rode antes da anterior ter voltado, e as três que o
      * carregam são as três que não podem se reordenar: as classes candidatas
-     * são as da área, e a pesquisa lê a peça que as outras descreveram.
+     * são as da área, e a tutela lê a classe para saber se ela tem liminar
+     * própria.
      *
      * As duas extrações entram com `once()` e **sem** `ordered()`, e a ausência
      * é a afirmação: a posição delas deixou de ser contrato. Elas são pares da
@@ -361,6 +391,19 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
                 proceduralClass: ProceduralClass::query()->where('code', 7)->sole(),
                 justification: 'O pedido é indenizatório.',
             ));
+
+        // A tutela lê a classe para saber se ela traz liminar própria, então
+        // é o terceiro elo da cadeia, e recebe a área e a classe que as duas
+        // primeiras decidiram — não as que ela mesma deduzisse do relato.
+        $this->fakeAction(SuggestInjunctiveRelief::class)
+            ->shouldReceive('handle')
+            ->once()
+            ->globally()
+            ->ordered()
+            ->withArgs(static fn (PracticeArea $given, ?ProceduralClass $class, string $facts): bool => $given->is($area)
+                && $class?->code === 7
+                && $facts === 'O vizinho derrubou o muro.')
+            ->andReturn($this->suggestion(recommended: false));
 
         // Sem `ordered()`: pares da área, e a posição delas não é contrato.
         $this->fakeAction(ExtractLegalCaseDefendant::class)
@@ -402,6 +445,14 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->shouldReceive('handle')
             ->andThrow(new RuntimeException('Connection refused'));
 
+        // A tutela roda mesmo sem classe: a área e os fatos bastam para uma
+        // resposta, só sem o fundamento de um rito próprio.
+        $this->fakeAction(SuggestInjunctiveRelief::class)
+            ->shouldReceive('handle')
+            ->once()
+            ->withArgs(static fn (PracticeArea $area, ?ProceduralClass $class): bool => $class === null)
+            ->andReturn($this->suggestion(recommended: false));
+
         $this->fakeAction(ExtractLegalCaseDefendant::class)
             ->shouldReceive('handle')
             ->once()
@@ -442,6 +493,53 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
     }
 
     /**
+     * A tutela é a terceira da fila, e a queda dela não custa nada do resto.
+     *
+     * É a única etapa que julga em vez de ler, e a única que a tela sabe pedir
+     * de novo sozinha: o nulo abre a etapa 1 com a caixa desmarcada e o
+     * "Consultar IA" à mão, que é exatamente o que um advogado sem sugestão
+     * nenhuma veria.
+     */
+    #[Test]
+    public function an_injunction_that_could_not_be_weighed_does_not_cost_the_framing(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+
+        $this->fakeAction(ClassifyPracticeArea::class)
+            ->shouldReceive('handle')
+            ->andReturn(new PracticeAreaClassification(
+                practiceArea: PracticeArea::query()->where('slug', 'civil')->sole(),
+                justification: 'O réu é um particular.',
+            ));
+
+        $this->fakeAction(SelectProceduralClass::class)
+            ->shouldReceive('handle')
+            ->andReturn(new ProceduralClassSelection(
+                proceduralClass: ProceduralClass::query()->where('code', 7)->sole(),
+                justification: 'O pedido é indenizatório.',
+            ));
+
+        $this->fakeAction(SuggestInjunctiveRelief::class)
+            ->shouldReceive('handle')
+            ->andThrow(new RuntimeException('Connection refused'));
+
+        $this->fakeAction(ExtractLegalCaseDefendant::class)
+            ->shouldReceive('handle')
+            ->andReturn($this->defendant());
+
+        $this->fakeAction(ExtractLegalCaseRequirements::class)
+            ->shouldReceive('handle')
+            ->andReturn(new RequirementListData([]));
+
+        $this->actingAs($owner)
+            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
+            ->assertOk()
+            ->assertJsonPath('procedural_class.code', 7)
+            ->assertJsonPath('defendant.defendant_name', 'Joaquim Vizinho')
+            ->assertJsonPath('injunctive_relief', null);
+    }
+
+    /**
      * A pesquisa saiu desta rota, e a ausência é o contrato que este teste fixa.
      *
      * Ela já foi a quinta etapa daqui, e duas coisas a tiraram. A primeira é que
@@ -452,7 +550,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
      * tem onde guardar o que a pesquisa acha — as teses voltavam no JSON,
      * atravessavam o `sessionStorage` e morriam com a aba.
      *
-     * Hoje quem a roda é `ResearchLegalCaseForensicReview`, ao abrir a etapa 6,
+     * Hoje quem a roda é `ResearchLegalCaseForensicReview`, ao abrir a etapa 5,
      * sobre uma peça que já tem chave primária para receber o resultado.
      * Religá-la aqui traria os dois problemas de volta de uma vez, e sem barulho
      * nenhum: a suíte padrão passaria a gastar cota do Gemini e a abrir o STJ de
@@ -489,6 +587,10 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         // é o teste que fica vermelho, e não uma fatura do Gemini.
         $this->fakeAction(ResearchLegalCaseTheses::class)->shouldNotReceive('handle');
 
+        $this->fakeAction(SuggestInjunctiveRelief::class)
+            ->shouldReceive('handle')
+            ->andReturn($this->suggestion(recommended: false));
+
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
             ->assertOk()
@@ -517,6 +619,27 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             city: null,
             state: null,
             notes: null,
+        );
+    }
+
+    /**
+     * Uma sugestão de tutela como `SuggestInjunctiveRelief` a devolve.
+     *
+     * A recusa é a resposta mais frequente de verdade, e é a que os testes que
+     * não falam de tutela recebem: ela não muda nada do resto do payload.
+     */
+    private function suggestion(bool $recommended): InjunctiveReliefSuggestionData
+    {
+        return new InjunctiveReliefSuggestionData(
+            recommended: $recommended,
+            kind: $recommended ? InjunctiveReliefKind::Anticipatory : null,
+            description: $recommended ? 'Medida pretendida: que se determine ao Réu a reconstrução do muro.' : null,
+            justification: $recommended
+                ? 'O muro derrubado deixa a casa aberta, e a espera pela sentença é o risco.'
+                : 'O dano já se consumou e o relato não mostra nada que a demora agrave.',
+            evidence: [],
+            unsupportedAmounts: [],
+            suggestedAt: '2026-09-27T12:00:00-03:00',
         );
     }
 

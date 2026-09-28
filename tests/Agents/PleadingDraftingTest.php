@@ -104,6 +104,78 @@ final class PleadingDraftingTest extends TestCase
         $this->assertNoInventedQualification($draft);
         $this->assertNoCaseLaw($draft);
         $this->assertNoSignature($draft);
+
+        // O relato é urgente o bastante para tentar um modelo, mas a peça não
+        // pede tutela: pedir é decisão do advogado, e o dossiê diz que não.
+        $this->assertStringNotContainsStringIgnoringCase('tutela de urgência', $draft->content);
+    }
+
+    /**
+     * A tutela que o advogado pediu na etapa 1 vira seção própria, logo depois
+     * do DO DIREITO, e o pedido dela entra em DOS PEDIDOS uma vez só.
+     *
+     * O que se pina é estrutura e cópia: a seção existe e está no lugar, o nome
+     * da ação diz "COM PEDIDO DE TUTELA DE URGÊNCIA", o pedido aparece uma vez e
+     * antes do de mérito, e os colchetes da descrição — o prazo e a multa que
+     * ninguém fixou — continuam colchetes. Como o argumento é escrito, é juízo, e
+     * fica para quem lê o `show()`.
+     */
+    #[Test]
+    public function it_argues_the_injunction_in_its_own_section_after_the_grounds(): void
+    {
+        $facts = <<<'TXT'
+        Meu nome foi negativado pela operadora por uma linha que eu nunca contratei, no valor de
+        R$ 1.340,00. Já liguei quatro vezes e eles só dizem que vão apurar. Na semana que vem tenho a
+        assinatura do financiamento do apartamento e o banco já avisou que com o nome sujo não sai.
+        TXT;
+
+        $draft = $this->draft(
+            $facts,
+            [
+                new Requirement(['description' => 'A declaração de inexistência do débito de R$ 1.340,00;', 'amount' => '1340.00']),
+                new Requirement(['description' => 'A condenação da Ré ao pagamento de indenização por danos morais;', 'amount' => null]),
+            ],
+            injunctiveRelief: implode(PHP_EOL.PHP_EOL, [
+                'Medida pretendida: que se determine à Ré a exclusão do nome do Autor dos cadastros de proteção ao crédito, no prazo de [prazo], sob pena de multa diária de [valor da multa diária].',
+                'Espécie: tutela de urgência antecipada.',
+                'Fundamento legal: art. 300 do CPC.',
+                'Probabilidade do direito: O Autor nunca contratou a linha que originou a cobrança e contestou o débito quatro vezes junto à Ré.',
+                'Perigo de dano: O financiamento do imóvel será assinado na semana que vem, e o banco não o libera com o nome negativado.',
+                'Reversibilidade: A inscrição pode ser refeita a qualquer tempo se o débito for reconhecido.',
+            ]),
+        );
+
+        $this->show($facts, $draft);
+
+        $content = $draft->content;
+
+        $this->assertMatchesRegularExpression('/COM PEDIDO DE TUTELA DE URGÊNCIA/u', $content);
+
+        $grounds = mb_strpos($content, 'DO DIREITO');
+        $relief = mb_strpos($content, 'DA TUTELA DE URGÊNCIA');
+        $requests = mb_strpos($content, 'DOS PEDIDOS');
+
+        $this->assertNotFalse($grounds);
+        $this->assertNotFalse($relief);
+        $this->assertNotFalse($requests);
+        $this->assertLessThan($relief, $grounds);
+        $this->assertLessThan($requests, $relief);
+
+        // Um cabeçalho de seção, e não uma subseção do DO DIREITO.
+        $this->assertMatchesRegularExpression('/^[IVX]+ – DA TUTELA DE URGÊNCIA$/mu', $content);
+
+        // O pedido de tutela, uma vez só, e antes do pedido de mérito.
+        $list = mb_substr($content, $requests);
+        $this->assertSame(1, preg_match_all('/CONCESSÃO DA TUTELA DE URGÊNCIA/iu', $list));
+        $this->assertLessThan(
+            mb_stripos($list, 'inexistência do débito'),
+            mb_stripos($list, 'tutela de urgência'),
+        );
+
+        // O prazo e a multa que ninguém fixou continuam lacunas.
+        $this->assertContains('[valor da multa diária]', $draft->placeholders);
+        $this->assertSame([], $draft->unsupportedAmounts);
+        $this->assertNoCaseLaw($draft);
     }
 
     /**
@@ -313,8 +385,18 @@ final class PleadingDraftingTest extends TestCase
         ?array $requirements = null,
         ?LegalThesis $thesis = null,
         ?Collection $decisions = null,
+        ?string $injunctiveRelief = null,
     ): PleadingDraftData {
         $legalCase = $this->pleading($facts, $requirements, $thesis, $decisions);
+
+        // A tutela como a etapa 1 a grava: a caixa marcada e o texto que o
+        // advogado aceitou — aqui, o que a sugestão compõe.
+        if ($injunctiveRelief !== null) {
+            $legalCase->fill([
+                'injunctive_relief' => true,
+                'injunctive_relief_description' => $injunctiveRelief,
+            ]);
+        }
 
         $response = (new PleadingDraftingAgent(
             dossier: LegalCaseDossier::forDrafting($legalCase),
@@ -328,7 +410,10 @@ final class PleadingDraftingTest extends TestCase
             ->map(static fn (CourtDecision $decision): string => PleadingJurisprudence::ementa($decision->summary))
             ->implode(' ');
 
-        return PleadingDraftData::fromAgent($response->toArray(), $facts.' R$ 24000.00 R$ 6200.00 R$ 18400.00 '.$quoted);
+        return PleadingDraftData::fromAgent(
+            $response->toArray(),
+            $facts.' R$ 24000.00 R$ 6200.00 R$ 18400.00 R$ 1340.00 '.$quoted.' '.$injunctiveRelief,
+        );
     }
 
     /**
