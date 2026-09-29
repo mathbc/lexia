@@ -7,12 +7,14 @@ namespace Tests\Feature\LegalCases;
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Accounts\Models\Account;
 use App\Domain\Customers\Models\Customer;
+use App\Domain\JudicialSystems\Models\JudicialSystem;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\PracticeAreas\Models\PracticeArea;
 use App\Domain\Shared\Tenancy\TenantContext;
 use App\Domain\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -94,6 +96,68 @@ final class SaveLegalCaseStepsTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $this->assertNull(LegalCase::query()->sole()->court_addressing);
+    }
+
+    #[Test]
+    public function the_first_step_records_the_judicial_system(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $esaj = JudicialSystem::query()->where('slug', 'esaj')->sole();
+
+        $this->actingAs($owner)
+            ->post('/pecas', [...$this->basics($account, addressing: null), 'judicial_system_id' => $esaj->id])
+            ->assertSessionHasNoErrors();
+
+        $legalCase = LegalCase::query()->sole();
+
+        $this->assertSame($esaj->id, $legalCase->judicial_system_id);
+        $this->assertSame('e-SAJ', $legalCase->judicialSystem?->name);
+    }
+
+    #[Test]
+    public function the_judicial_system_is_optional(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        // O payload padrão não traz o campo, como uma peça montada antes dele.
+        $this->actingAs($owner)
+            ->post('/pecas', $this->basics($account, addressing: null))
+            ->assertSessionHasNoErrors();
+
+        $this->assertNull(LegalCase::query()->sole()->judicial_system_id);
+    }
+
+    #[Test]
+    public function a_judicial_system_outside_the_catalogue_is_refused(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        $this->actingAs($owner)
+            ->post('/pecas', [...$this->basics($account, addressing: null), 'judicial_system_id' => (string) Str::uuid()])
+            ->assertSessionHasErrors('judicial_system_id');
+
+        $this->assertSame(0, LegalCase::query()->count());
+    }
+
+    #[Test]
+    public function re_saving_the_first_step_changes_and_clears_the_judicial_system(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $legalCase = $this->openPleading($account);
+        $pje = JudicialSystem::query()->where('slug', 'pje')->sole();
+
+        $this->actingAs($owner)
+            ->put("/pecas/{$legalCase->id}/dados-basicos", [...$this->basics($account, addressing: null), 'judicial_system_id' => $pje->id])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame($pje->id, $legalCase->refresh()->judicial_system_id);
+
+        // O select limpo volta como string vazia, e a coluna volta a ser null.
+        $this->actingAs($owner)
+            ->put("/pecas/{$legalCase->id}/dados-basicos", [...$this->basics($account, addressing: null), 'judicial_system_id' => ''])
+            ->assertSessionHasNoErrors();
+
+        $this->assertNull($legalCase->refresh()->judicial_system_id);
     }
 
     /**

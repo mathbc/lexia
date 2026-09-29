@@ -1045,6 +1045,27 @@ marcador não dispara sozinho de novo: é o "Pesquisar novamente" da aba que as 
 Os temas mantidos **ainda não entram na minuta**: o "Concluir" grava o vínculo (desmarcar
 desvincula, pelo `sync()`), mas `forDrafting()` não os carrega.
 
+## Os sistemas judiciais
+
+`JudicialSystem` (`app/Domain/JudicialSystems`) é o sistema eletrônico por onde a peça é
+protocolada — eproc, PJe, e-SAJ, Projudi, Tucujuris —, e `JudicialSystemCourt` é cada
+tribunal de justiça que o usa, com a sigla e a situação (`AdoptionStatus`: em uso, em
+transição, em implantação, em coexistência). São duas tabelas porque um sistema serve
+vários tribunais e quatro tribunais usam dois. Catálogo global como o processual, carregado
+por **migration** a partir de `database/data/judicial-systems.json` — ver o README de lá,
+que tem a origem e o protocolo de atualização.
+
+A peça aponta para o sistema por `legal_cases.judicial_system_id`, escolhido na etapa 1 ao
+lado do cliente, com `restrictOnDelete()` como a área e a classe. É **opcional**: nullable
+na coluna e fora do `complete` na tela, porque o advogado pode não saber ainda, uma peça da
+Justiça Federal ou do Trabalho está fora dos tribunais que o mapa cobre, e as peças
+anteriores ficaram com null. Viaja pelo uuid, e não por slug como a área, porque nunca
+entra em URL. O hint do select lista os tribunais do sistema escolhido, composto em PHP por
+`JudicialSystem::servedCourts()`.
+
+**Nenhum agente o lê**: o sistema não está no `LegalCaseDossier` nem no preenchimento
+inteligente, e o endereçamento continua texto livre.
+
 ## Ainda não implementado
 
 Os temas do STJ na minuta: a etapa 5 já grava os que o advogado manteve, falta

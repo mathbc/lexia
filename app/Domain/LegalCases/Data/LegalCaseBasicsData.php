@@ -9,9 +9,10 @@ namespace App\Domain\LegalCases\Data;
  * addressed — and whether it can wait.
  *
  * The first step of the form: the client, the narrative, the CNJ pair, the line
- * the document opens with, and the decision to ask for an injunction with the
- * text that justifies it. The client and the pair are chosen; the addressing,
- * the narrative and the justification are written.
+ * the document opens with, the system it will be filed through, and the
+ * decision to ask for an injunction with the text that justifies it. The
+ * client, the pair and the system are chosen; the addressing, the narrative
+ * and the justification are written.
  *
  * The practice area arrives as a **slug** and leaves as a uuid, which is why
  * `fromArray` takes it as a second argument instead of reading it out of the
@@ -39,6 +40,7 @@ final readonly class LegalCaseBasicsData
         public string $customerId,
         public string $practiceAreaId,
         public string $proceduralClassId,
+        public ?string $judicialSystemId,
         public ?string $courtAddressing,
         public ?string $facts,
         public bool $injunctiveRelief,
@@ -57,6 +59,7 @@ final readonly class LegalCaseBasicsData
             customerId: (string) $validated['customer_id'],
             practiceAreaId: $practiceAreaId,
             proceduralClassId: (string) $validated['procedural_class_id'],
+            judicialSystemId: self::nullify($validated['judicial_system_id'] ?? null),
             // Already null rather than '' by the time it gets here —
             // ConvertEmptyStringsToNull is in the global stack — but trimmed
             // again because a space is not an addressing, nor a narrative.
@@ -83,6 +86,7 @@ final readonly class LegalCaseBasicsData
             'customer_id' => $this->customerId,
             'practice_area_id' => $this->practiceAreaId,
             'procedural_class_id' => $this->proceduralClassId,
+            'judicial_system_id' => $this->judicialSystemId,
             'court_addressing' => $this->courtAddressing,
             'facts' => $this->facts,
             'injunctive_relief' => $this->injunctiveRelief,

@@ -6,6 +6,7 @@ namespace Tests\Feature\LegalCases;
 
 use App\Domain\Customers\Actions\CreateCustomer;
 use App\Domain\Customers\Models\Customer;
+use App\Domain\JudicialSystems\Models\JudicialSystem;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\PracticeAreas\Models\PracticeArea;
@@ -236,8 +237,11 @@ final class ListLegalCasesTest extends TestCase
     {
         [$account, $owner] = $this->accountWithOwner();
 
+        $system = JudicialSystem::query()->where('slug', 'eproc')->sole();
+
         $legalCase = LegalCase::factory()->forAccount($account)->create([
             'court_addressing' => 'Ao Juízo da 1ª Vara Cível',
+            'judicial_system_id' => $system->id,
             'defendant_name' => 'Construtora Atlântico Ltda.',
             'facts' => 'O imóvel foi ocupado em março.',
         ]);
@@ -248,6 +252,8 @@ final class ListLegalCasesTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->component('legal-cases/form')
                 ->where('legalCase.court_addressing', 'Ao Juízo da 1ª Vara Cível')
+                ->where('legalCase.judicial_system_id', $system->id)
+                ->has('judicialSystems', 5)
                 ->where('legalCase.defendant.defendant_name', 'Construtora Atlântico Ltda.')
                 ->where('legalCase.facts', 'O imóvel foi ocupado em março.')
                 // O slug, e não o uuid: é a moeda do seletor de área.

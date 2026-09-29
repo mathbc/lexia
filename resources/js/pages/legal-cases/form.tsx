@@ -51,6 +51,7 @@ import {
 import type {
     DefendantSuggestion,
     ForensicReviewTab,
+    JudicialSystemOption,
     LegalCaseDraft,
     LegalCaseStepValue,
     Option,
@@ -210,6 +211,8 @@ interface Props {
     proceduralClasses: ProceduralClassOption[];
     /** A área da query string: é o servidor que guarda essa escolha. */
     selectedArea: string;
+    /** `LegalCaseOptions::judicialSystems()`, com os tribunais de cada um. */
+    judicialSystems: JudicialSystemOption[];
     branches: Option[];
     degrees: Option[];
     /** `LegalThesisType::options()` e `LegalPrecedentType::options()`: o
@@ -280,6 +283,7 @@ export default function LegalCaseForm({
     practiceAreas,
     proceduralClasses,
     selectedArea,
+    judicialSystems,
     branches,
     degrees,
     thesisTypes,
@@ -325,6 +329,7 @@ export default function LegalCaseForm({
             legalCase?.procedural_class_id ??
             handoff?.procedural_class_id ??
             "",
+        judicial_system_id: legalCase?.judicial_system_id ?? "",
         court_addressing: legalCase?.court_addressing ?? "",
         facts: legalCase?.facts ?? handoff?.facts ?? "",
         injunctive_relief:
@@ -505,6 +510,11 @@ export default function LegalCaseForm({
         basics.data.customer_id !== "" &&
         selectedArea !== "" &&
         basics.data.procedural_class_id !== "";
+
+    // O sistema fica fora do `complete`: é opcional, como o endereçamento.
+    const selectedSystem = judicialSystems.find(
+        (system) => system.value === basics.data.judicial_system_id,
+    );
 
     /**
      * Até onde a trilha abre: a marca d'água que o servidor guardou. Numa peça
@@ -865,6 +875,35 @@ export default function LegalCaseForm({
                                     </Field>
 
                                     <Field
+                                        label="Sistema judicial"
+                                        error={basics.errors.judicial_system_id}
+                                        hint={
+                                            selectedSystem
+                                                ? `Adotado por ${selectedSystem.courts}.`
+                                                : "Por onde a peça será protocolada. Pode ficar em branco por ora."
+                                        }
+                                    >
+                                        <Select
+                                            value={
+                                                basics.data.judicial_system_id
+                                            }
+                                            onValueChange={(value) =>
+                                                basics.setData(
+                                                    "judicial_system_id",
+                                                    value,
+                                                )
+                                            }
+                                            options={judicialSystems}
+                                            placeholder="Selecione o sistema"
+                                            clearable
+                                        />
+                                    </Field>
+
+                                    {/* Uma linha inteira: é uma frase, e
+                                        espremida ao lado de um select ela
+                                        quebraria antes da comarca. */}
+                                    <Field
+                                        className="sm:col-span-2"
                                         label="Endereçamento"
                                         error={basics.errors.court_addressing}
                                         hint="A quem a peça é dirigida. Pode ficar em branco por ora."

@@ -10,6 +10,7 @@ use App\Domain\CourtDecisions\Models\CourtDecision;
 use App\Domain\Customers\Enums\CustomerType;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\Documents\Models\Document;
+use App\Domain\JudicialSystems\Models\JudicialSystem;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Policies\LegalCasePolicy;
 use App\Domain\LegalPleadings\Models\LegalPleading;
@@ -76,6 +77,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * table of courts, because no such table exists here and the wording varies
  * with the branch and the local habit.
  *
+ * The electronic system it will be filed through is the opposite case: eproc,
+ * PJe, e-SAJ are a short closed list, so `judicial_system_id` is a key into
+ * the catalogue and not text. Nullable, because the form lets it wait and the
+ * rows written before it existed were left without one.
+ *
  * `current_step` and `is_draft` are what make an unfinished pleading a first
  * class thing rather than an accident. The form saves one step at a time, so
  * the row exists long before it is complete: the step is a high-water mark —
@@ -90,6 +96,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string $customer_id
  * @property string $practice_area_id
  * @property string $procedural_class_id
+ * @property string|null $judicial_system_id
  * @property string|null $defendant_name
  * @property string|null $defendant_document
  * @property string|null $defendant_email
@@ -120,6 +127,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property-read Customer $customer
  * @property-read PracticeArea $practiceArea
  * @property-read ProceduralClass $proceduralClass
+ * @property-read JudicialSystem|null $judicialSystem
  * @property-read Collection<int, Document> $documents
  * @property-read Collection<int, Requirement> $requirements
  * @property-read Collection<int, LegalThesis> $theses
@@ -192,6 +200,14 @@ class LegalCase extends Model
     public function proceduralClass(): BelongsTo
     {
         return $this->belongsTo(ProceduralClass::class);
+    }
+
+    /**
+     * @return BelongsTo<JudicialSystem, $this>
+     */
+    public function judicialSystem(): BelongsTo
+    {
+        return $this->belongsTo(JudicialSystem::class);
     }
 
     /**

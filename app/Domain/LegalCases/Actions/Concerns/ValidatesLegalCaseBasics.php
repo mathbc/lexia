@@ -69,6 +69,9 @@ trait ValidatesLegalCaseBasics
                     ->where('practice_area_id', $this->area($areaSlug)?->id),
             ],
 
+            // Catálogo global, como a área: nada a filtrar por conta.
+            'judicial_system_id' => ['nullable', 'uuid', Rule::exists('judicial_systems', 'id')],
+
             'court_addressing' => ['nullable', 'string', 'max:255'],
 
             'facts' => ['nullable', 'string'],
@@ -100,6 +103,7 @@ trait ValidatesLegalCaseBasics
             'customer_id' => 'cliente',
             'practice_area' => 'área de atuação',
             'procedural_class_id' => 'classe processual',
+            'judicial_system_id' => 'sistema judicial',
             'court_addressing' => 'endereçamento',
             'facts' => 'fatos',
             'injunctive_relief' => 'tutela de urgência',

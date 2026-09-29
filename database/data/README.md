@@ -8,6 +8,7 @@ peça pode ser montada sem ele.
 |---|---|
 | `practice-areas.json` | 24 áreas de atuação e os 1.756 vínculos com as classes |
 | `procedural-classes.json` | 615 classes processuais ativas |
+| `judicial-systems.json` | 5 sistemas judiciais e os 31 vínculos com os 27 tribunais de justiça — ver [Sistemas judiciais](#sistemas-judiciais) |
 
 ## Origem
 
@@ -130,3 +131,35 @@ a qual as descrições foram escritas e revisadas.
 `legal_bases`, rode `php artisan lexia:embed-procedural-classes`**: os vetores descrevem
 o texto anterior, e a migration de recarga zera os hashes justamente para que a próxima
 passada os refaça.
+
+## Sistemas judiciais
+
+`judicial-systems.json` é carregado pela mesma via, por
+`2026_09_29_120001_seed_judicial_systems.php`, e pelo mesmo motivo: a etapa 1 da peça
+oferece o sistema, e produção precisa dele tanto quanto uma máquina de desenvolvimento.
+
+Não é dado do CNJ. É um **levantamento de 29/09/2026** de qual sistema eletrônico cada
+tribunal de justiça estadual usa, transcrito sem acréscimos. Duas chaves:
+
+- **`systems`** — eproc, PJe, e-SAJ, Projudi e Tucujuris. O `slug` é a chave natural,
+  como o das áreas, e `position` é o alcance: o que mais tribunais usam vem primeiro no
+  select.
+- **`courts`** — um objeto por UF, na ordem do levantamento, com a sigla do tribunal e
+  os sistemas que ele usa. A sigla é gravada e não derivada da UF porque não se deriva:
+  o do DF é o TJDFT. Quatro tribunais usam dois sistemas (AP, RN, RR, SP).
+
+O `status` de cada vínculo é o `AdoptionStatus`:
+
+| Valor | No levantamento |
+|---|---|
+| `active` | o sistema sozinho, ou os dois de "e-SAJ / eproc" |
+| `transition` | "eproc / transição" |
+| `implementation` | "eproc / implantação", "eproc em implantação" |
+| `coexistence` | "eproc / coexistência com sistemas anteriores" |
+
+Este mapa envelhece mais depressa que a TPU: o eproc está em expansão, e 8 dos 31
+vínculos descrevem um tribunal mudando de sistema. Atualizar é editar o JSON e
+acrescentar uma migration que roda a mesma rotina, que é idempotente — upsert dos
+sistemas por `slug`, e os vínculos refeitos inteiros, porque um tribunal que deixa um
+sistema some do arquivo e um upsert deixaria o vínculo velho no lugar.
+`JudicialSystemCatalogTest` fixa as contagens e muda junto.

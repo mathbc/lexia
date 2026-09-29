@@ -1,0 +1,38 @@
+{
+    "systems": [
+        { "slug": "eproc", "name": "eproc", "position": 1 },
+        { "slug": "pje", "name": "PJe", "position": 2 },
+        { "slug": "esaj", "name": "e-SAJ", "position": 3 },
+        { "slug": "projudi", "name": "Projudi", "position": 4 },
+        { "slug": "tucujuris", "name": "Tucujuris", "position": 5 }
+    ],
+    "courts": [
+        { "state": "AC", "court": "TJAC", "systems": [{ "system": "eproc", "status": "active" }] },
+        { "state": "AL", "court": "TJAL", "systems": [{ "system": "eproc", "status": "active" }] },
+        { "state": "AP", "court": "TJAP", "systems": [{ "system": "tucujuris", "status": "active" }, { "system": "eproc", "status": "implementation" }] },
+        { "state": "AM", "court": "TJAM", "systems": [{ "system": "esaj", "status": "active" }] },
+        { "state": "BA", "court": "TJBA", "systems": [{ "system": "eproc", "status": "transition" }] },
+        { "state": "CE", "court": "TJCE", "systems": [{ "system": "pje", "status": "active" }] },
+        { "state": "DF", "court": "TJDFT", "systems": [{ "system": "pje", "status": "active" }] },
+        { "state": "ES", "court": "TJES", "systems": [{ "system": "eproc", "status": "transition" }] },
+        { "state": "GO", "court": "TJGO", "systems": [{ "system": "projudi", "status": "active" }] },
+        { "state": "MA", "court": "TJMA", "systems": [{ "system": "pje", "status": "active" }] },
+        { "state": "MT", "court": "TJMT", "systems": [{ "system": "pje", "status": "active" }] },
+        { "state": "MS", "court": "TJMS", "systems": [{ "system": "eproc", "status": "transition" }] },
+        { "state": "MG", "court": "TJMG", "systems": [{ "system": "eproc", "status": "transition" }] },
+        { "state": "PA", "court": "TJPA", "systems": [{ "system": "pje", "status": "active" }] },
+        { "state": "PB", "court": "TJPB", "systems": [{ "system": "pje", "status": "active" }] },
+        { "state": "PR", "court": "TJPR", "systems": [{ "system": "eproc", "status": "implementation" }] },
+        { "state": "PE", "court": "TJPE", "systems": [{ "system": "pje", "status": "active" }] },
+        { "state": "PI", "court": "TJPI", "systems": [{ "system": "pje", "status": "active" }] },
+        { "state": "RJ", "court": "TJRJ", "systems": [{ "system": "eproc", "status": "coexistence" }] },
+        { "state": "RN", "court": "TJRN", "systems": [{ "system": "pje", "status": "active" }, { "system": "esaj", "status": "active" }] },
+        { "state": "RS", "court": "TJRS", "systems": [{ "system": "eproc", "status": "active" }] },
+        { "state": "RO", "court": "TJRO", "systems": [{ "system": "pje", "status": "active" }] },
+        { "state": "RR", "court": "TJRR", "systems": [{ "system": "pje", "status": "active" }, { "system": "projudi", "status": "active" }] },
+        { "state": "SC", "court": "TJSC", "systems": [{ "system": "eproc", "status": "active" }] },
+        { "state": "SP", "court": "TJSP", "systems": [{ "system": "esaj", "status": "active" }, { "system": "eproc", "status": "active" }] },
+        { "state": "SE", "court": "TJSE", "systems": [{ "system": "eproc", "status": "transition" }] },
+        { "state": "TO", "court": "TJTO", "systems": [{ "system": "eproc", "status": "active" }] }
+    ]
+}

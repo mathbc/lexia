@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace App\Domain\LegalCases\Support;
 
 use App\Domain\Customers\Models\Customer;
+use App\Domain\JudicialSystems\Models\JudicialSystem;
 use App\Domain\PracticeAreas\Models\PracticeArea;
 
 /**
- * The select lists both pleading screens need: the account's clients and the
- * practice areas.
+ * The select lists the pleading screens need: the account's clients, the
+ * practice areas and the judicial systems.
  *
  * Shared so the filter panel and the form cannot drift on how a client is
  * named or how the areas are ordered.
@@ -53,6 +54,32 @@ final class LegalCaseOptions
                 // differs between databases.
                 'value' => $area->slug,
                 'label' => $area->label,
+            ])
+            ->all();
+    }
+
+    /**
+     * Ordered by `position`, which is reach: the systems most courts use come
+     * first.
+     *
+     * The uuid travels as the value, unlike the area's slug: a system only
+     * ever goes from the select to the form's payload and back, never into a
+     * URL or a fixture. `courts` is the hint under the select — which state
+     * courts file through it — composed here so the Portuguese stays on this
+     * side.
+     *
+     * @return list<array{value: string, label: string, courts: string}>
+     */
+    public static function judicialSystems(): array
+    {
+        return JudicialSystem::query()
+            ->with('courts')
+            ->orderBy('position')
+            ->get()
+            ->map(static fn (JudicialSystem $system): array => [
+                'value' => $system->id,
+                'label' => $system->name,
+                'courts' => $system->servedCourts(),
             ])
             ->all();
     }

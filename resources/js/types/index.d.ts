@@ -184,6 +184,7 @@ export interface LegalCase {
     customer_id: string;
     practice_area_id: string;
     procedural_class_id: string;
+    judicial_system_id: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -218,6 +219,15 @@ export interface JurisdictionTag {
     short_label: string;
     branch: string;
     degree: string;
+}
+
+/**
+ * A judicial system as LegalCaseOptions::judicialSystems() publishes it:
+ * the uuid as the value, and the state courts that file through it already
+ * written out for the hint under the select.
+ */
+export interface JudicialSystemOption extends Option {
+    courts: string;
 }
 
 /** A procedural class as ProceduralClassOptionsQuery projects it. */
@@ -282,6 +292,8 @@ export interface LegalCaseDraft {
     /** O slug, nunca o uuid — ver LegalCaseOptions::practiceAreas(). */
     practice_area: string;
     procedural_class_id: string;
+    /** O uuid, ou vazio quando o advogado ainda não escolheu. */
+    judicial_system_id: string;
     court_addressing: string;
     /** O relato e a tutela fecham a etapa 1, e por isso moram aqui em cima. */
     facts: string;

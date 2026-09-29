@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\LegalCases;
 
 use App\Domain\Customers\Models\Customer;
+use App\Domain\JudicialSystems\Models\JudicialSystem;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\PracticeAreas\Models\PracticeArea;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
@@ -113,6 +114,21 @@ final class ManageLegalCasesTest extends TestCase
         $this->expectException(QueryException::class);
 
         DB::table('practice_areas')->where('id', $case->practice_area_id)->delete();
+    }
+
+    #[Test]
+    public function a_judicial_system_still_cited_by_a_pleading_cannot_be_deleted(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $this->actingAsUser($owner);
+
+        $system = JudicialSystem::query()->where('slug', 'pje')->sole();
+        LegalCase::factory()->forAccount($account)->create(['judicial_system_id' => $system->id]);
+
+        // Restrict, like the area: the system is catalogue too.
+        $this->expectException(QueryException::class);
+
+        DB::table('judicial_systems')->where('id', $system->id)->delete();
     }
 
     #[Test]

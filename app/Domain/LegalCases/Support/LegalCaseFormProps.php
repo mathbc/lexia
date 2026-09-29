@@ -44,6 +44,7 @@ final class LegalCaseFormProps
             'customer_id' => $legalCase->customer_id,
             'practice_area' => $legalCase->practiceArea->slug,
             'procedural_class_id' => $legalCase->procedural_class_id,
+            'judicial_system_id' => self::text($legalCase->judicial_system_id),
             'court_addressing' => self::text($legalCase->court_addressing),
             'facts' => self::text($legalCase->facts),
             'injunctive_relief' => $legalCase->injunctive_relief,

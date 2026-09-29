@@ -85,6 +85,7 @@ final class ShowLegalCaseForm
             'practiceAreas' => LegalCaseOptions::practiceAreas(),
             'proceduralClasses' => $this->classes->forArea($area),
             'selectedArea' => $area,
+            'judicialSystems' => LegalCaseOptions::judicialSystems(),
             'branches' => JusticeBranch::options(),
             'degrees' => JurisdictionDegree::options(),
             // A revisão forense recebe teses e precedentes com o `type` no valor
