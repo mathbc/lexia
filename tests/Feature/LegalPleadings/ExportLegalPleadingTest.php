@@ -53,6 +53,57 @@ final class ExportLegalPleadingTest extends TestCase
         $this->assertStringNotContainsString('/Subtype /Image', (string) $response->getContent());
     }
 
+    /**
+     * The select on the Minuta tab opens older versions, and the export prints
+     * the one on screen — a file of another version would be a document nobody
+     * was reading.
+     */
+    #[Test]
+    public function the_pdf_prints_the_version_the_url_names(): void
+    {
+        [, $owner, $case] = $this->pleading();
+
+        LegalPleading::factory()->forLegalCase($case)->version(1)->withContent('Antiga.')->create();
+        LegalPleading::factory()->forLegalCase($case)->version(2)->withContent('Atual.')->create();
+
+        $response = $this->actingAs($owner)
+            ->get(route('legal-cases.pleading.pdf', ['legalCase' => $case, 'versao' => 1]))
+            ->assertOk();
+
+        $this->assertStringContainsString('-v1.pdf', (string) $response->headers->get('Content-Disposition'));
+    }
+
+    #[Test]
+    public function the_docx_prints_the_version_the_url_names(): void
+    {
+        [, $owner, $case] = $this->pleading();
+
+        LegalPleading::factory()->forLegalCase($case)->version(1)->withContent('Texto antigo.')->create();
+        LegalPleading::factory()->forLegalCase($case)->version(2)->withContent('Texto atual.')->create();
+
+        $response = $this->actingAs($owner)
+            ->get(route('legal-cases.pleading.docx', ['legalCase' => $case, 'versao' => 1]))
+            ->assertOk();
+
+        $this->assertStringContainsString('-v1.docx', (string) $response->headers->get('Content-Disposition'));
+
+        [$body] = $this->docxParts((string) $response->getContent());
+
+        $this->assertStringContainsString('Texto antigo.', $body);
+        $this->assertStringNotContainsString('Texto atual.', $body);
+    }
+
+    #[Test]
+    public function exporting_a_version_that_does_not_exist_is_not_found(): void
+    {
+        [, $owner, $case] = $this->pleading();
+        LegalPleading::factory()->forLegalCase($case)->version(1)->create();
+
+        $this->actingAs($owner)
+            ->get(route('legal-cases.pleading.pdf', ['legalCase' => $case, 'versao' => 9]))
+            ->assertNotFound();
+    }
+
     #[Test]
     public function the_pdf_prints_the_pleading_logo_in_the_letterhead(): void
     {

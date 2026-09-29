@@ -19,11 +19,18 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * rule the account's two tabs follow, and for the same reason: a lawyer reading
  * a draft can reload, link to it and come back to it.
  *
- * Only the latest version is sent. The table keeps every one of them, which is
- * what makes editing safe, but the screen edits the current text and nothing
- * else; a history is a screen nobody has asked for yet, and shipping the whole
- * of it on every page load would mean sending several pages of prose per version
- * to draw one.
+ * One version's text is sent: the latest, or the one `?versao` names — the
+ * select at the top of the card is a link, for the reason the tab itself is.
+ * The others travel as `versions`, number and date only, which is all the
+ * select draws: shipping every version's prose on every page load would mean
+ * sending several pages per version to show one. Newest first, so the first
+ * entry is the current text.
+ *
+ * An older version is **read, not edited**. A save is always about the current
+ * text (see SaveLegalPleadingContent), and editing version 2 to store version 4
+ * would be a branch; the screen hides the editing controls instead of offering
+ * a save that means something else. What it keeps is the export, which prints
+ * the version on screen.
  *
  * `pleading` is null when the drafting failed — see FinalizeLegalCase, which
  * lets that happen rather than losing the forensic review with it. The screen
@@ -47,7 +54,7 @@ final class ShowLegalPleading
     {
         $legalCase->loadMissing(['account', 'customer', 'proceduralClass']);
 
-        $pleading = $legalCase->pleadings()->first();
+        $pleading = $legalCase->pleadingVersion($request->integer('versao') ?: null);
 
         return Inertia::render('legal-cases/pleading', [
             'legalCase' => [
@@ -66,6 +73,13 @@ final class ShowLegalPleading
                     'placeholders' => $pleading->placeholders(),
                 ]
                 : null,
+            'versions' => $legalCase->pleadings()
+                ->get(['version', 'created_at'])
+                ->map(fn (LegalPleading $version): array => [
+                    'version' => $version->version,
+                    'created_at' => $version->created_at?->toIso8601String(),
+                ])
+                ->all(),
             'letterhead' => PleadingLetterhead::for($legalCase->account, $request->user()),
             'can' => [
                 'update' => $request->user()->can('update', $legalCase),

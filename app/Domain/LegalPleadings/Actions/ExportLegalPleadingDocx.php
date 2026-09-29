@@ -20,7 +20,8 @@ use PhpOffice\PhpWord\SimpleType\Jc;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * The latest version of the draft as a Word document, letterhead included.
+ * The latest version of the draft as a Word document, letterhead included — or the
+ * version `?versao` names, which is the one the Minuta tab has on screen.
  *
  * The one export meant to be **edited further**: a lawyer who files through a
  * firm template or finishes the document in Word gets real paragraphs and not a
@@ -104,7 +105,7 @@ final class ExportLegalPleadingDocx
 
     public function asController(LegalCase $legalCase, ActionRequest $request): Response
     {
-        $pleading = $legalCase->pleadings()->firstOrFail();
+        $pleading = $legalCase->pleadingVersion($request->integer('versao') ?: null) ?? abort(404);
         $file = PleadingFile::for($legalCase, $pleading, $request->user());
 
         return response($this->handle($legalCase, $pleading, $request->user()), 200, [

@@ -380,6 +380,15 @@ export interface LegalPleading {
     placeholders: string[];
 }
 
+/**
+ * Uma entrada do seletor de versões da minuta: o número e a data, sem o texto —
+ * só a versão exibida viaja com o conteúdo.
+ */
+export interface LegalPleadingVersion {
+    version: number;
+    created_at: string | null;
+}
+
 /** O endereço do escritório, cru como as colunas o guardam. */
 export interface LetterheadAddress {
     postal_code: string | null;

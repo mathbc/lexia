@@ -829,8 +829,15 @@ inferência; regerar é um gesto separado e explícito.
 
 A aba exporta **PDF** (`ExportLegalPleadingPdf`, dompdf) e **DOCX**
 (`ExportLegalPleadingDocx`, PhpWord), ambos com o timbre e a régua ABNT da tela, e
-ambos da **última versão salva** — a tela desliga o botão com alteração pendente, para
-que o arquivo seja sempre uma versão que o histórico conhece. O timbre é recomposto na
+ambos da **versão exibida** — a tela desliga o botão com alteração pendente, para
+que o arquivo seja sempre uma versão que o histórico conhece.
+
+O select no canto superior esquerdo do cartão escolhe a versão pela URL
+(`?versao=N`, e a atual sem parâmetro), e a tela e as duas exportações a resolvem por
+`LegalCase::pleadingVersion()`: versão inexistente é 404, nunca o texto atual. Só a
+versão exibida viaja com o texto; as outras chegam em `versions`, número e data. A
+anterior é **só leitura** — somem editar, salvar e "Gerar novamente" —, porque salvar
+parte sempre do texto atual e editar a versão 2 para gravar a 4 seria uma ramificação. O timbre é recomposto na
 exportação por `PleadingLetterhead::lines()`, que é o único lugar em PHP com as máscaras
 de telefone e CEP; no DOCX ele vai para o cabeçalho da seção, onde o Word o repete e a
 edição do corpo não o alcança. Qual parágrafo é citação é decidido por

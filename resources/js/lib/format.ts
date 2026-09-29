@@ -166,6 +166,26 @@ export const formatDate = (value: string | null): string => {
     return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('pt-BR')
 }
 
+/**
+ * "29/09/2026 às 14:32" — a data com a hora, para o que acontece mais de uma vez
+ * no mesmo dia, como duas versões da minuta.
+ */
+export const formatDateTime = (value: string | null): string => {
+    if (!value) {
+        return '—'
+    }
+
+    const date = new Date(value)
+
+    if (Number.isNaN(date.getTime())) {
+        return '—'
+    }
+
+    const time = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+
+    return `${date.toLocaleDateString('pt-BR')} às ${time}`
+}
+
 /** A count with the Brazilian thousands separator: 1.284, not 1,284. */
 export const formatNumber = (value: number): string => new Intl.NumberFormat('pt-BR').format(value)
 

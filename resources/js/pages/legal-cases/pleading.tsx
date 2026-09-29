@@ -25,10 +25,11 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { SelectInput } from '@/components/ui/select'
 import { AppLayout } from '@/layouts/app-layout'
-import { formatDate, formatPhone, formatPostalCode } from '@/lib/format'
+import { formatDateTime, formatPhone, formatPostalCode } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import type { LegalPleading, PleadingLetterhead } from '@/types'
+import type { LegalPleading, LegalPleadingVersion, PleadingLetterhead } from '@/types'
 
 /**
  * As etapas que o agente redator percorre, para a espera não ser uma tela parada.
@@ -52,8 +53,10 @@ interface Props {
         is_draft: boolean
         current_step: string
     }
-    /** A última versão, ou nulo quando a geração falhou. */
+    /** A versão exibida — a última, ou a do `?versao` —, ou nulo quando a geração falhou. */
     pleading: LegalPleading | null
+    /** Todas as versões, da mais nova para a mais antiga: a primeira é a atual. */
+    versions: LegalPleadingVersion[]
     letterhead: PleadingLetterhead
     can: { update: boolean; generate: boolean; export: boolean }
 }
@@ -102,8 +105,23 @@ interface Props {
  * "Gerar novamente" chama o agente redator sobre a peça como ela está agora e
  * grava a versão seguinte. Nada é sobrescrito, mas a correção do advogado sai
  * da tela, e é isso que a confirmação pergunta.
+ *
+ * ## As versões anteriores
+ *
+ * O select no canto do cartão troca a versão pela URL (`?versao=N`), como as
+ * abas: uma versão aberta sobrevive a um reload e pode ser enviada a um colega.
+ * A anterior é **só leitura** — salvar parte sempre do texto atual, e editar a
+ * versão 2 para gravar a 4 seria uma ramificação que o histórico não sabe
+ * contar. Some a edição, some o "Gerar novamente", e fica a exportação, que
+ * imprime a versão da tela.
  */
-export default function LegalCasePleading({ legalCase, pleading, letterhead, can }: Props) {
+export default function LegalCasePleading({
+    legalCase,
+    pleading,
+    versions,
+    letterhead,
+    can,
+}: Props) {
     const form = useForm({ content: pleading?.content ?? '' })
     const [generating, setGenerating] = useState(false)
     const [editing, setEditing] = useState(false)
@@ -118,6 +136,18 @@ export default function LegalCasePleading({ legalCase, pleading, letterhead, can
 
     const changed = form.data.content !== (pleading?.content ?? '')
     const gaps = pleading?.placeholders.length ?? 0
+    const current = pleading !== null && pleading.version === versions[0]?.version
+    const editable = can.update && current
+
+    // A atual não leva `?versao`: a URL limpa é sempre a última, inclusive
+    // depois que uma versão nova chegar. `replace`, como num filtro, para que
+    // passear pelas versões não encha o histórico do navegador.
+    const showVersion = (version: number) =>
+        router.get(
+            `/pecas/${legalCase.id}/minuta`,
+            version === versions[0]?.version ? {} : { versao: version },
+            { preserveState: true, preserveScroll: true, replace: true },
+        )
 
     const generate = () => {
         setGenerating(true)
@@ -132,11 +162,16 @@ export default function LegalCasePleading({ legalCase, pleading, letterhead, can
     // Exportar e salvar aparecem duas vezes, acima do timbre e no rodapé: a
     // minuta tem páginas, e nenhum dos dois gestos deveria custar rolar até o
     // fim dela — nem de volta ao topo depois de corrigir o último parágrafo.
-    const exportMenu = can.export && (
-        <ExportMenu legalCaseId={legalCase.id} changed={changed} disabled={form.processing} />
+    const exportMenu = can.export && pleading !== null && (
+        <ExportMenu
+            legalCaseId={legalCase.id}
+            version={pleading.version}
+            changed={changed}
+            disabled={form.processing}
+        />
     )
 
-    const saveButton = can.update && (
+    const saveButton = editable && (
         <Button
             type="button"
             disabled={!changed || form.processing}
@@ -204,19 +239,56 @@ export default function LegalCasePleading({ legalCase, pleading, letterhead, can
                     )}
 
                     <Card className="gap-0 overflow-hidden py-0">
-                        {(exportMenu || saveButton) && (
-                            <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-6 py-3">
-                                <p className="text-xs text-muted-foreground">
-                                    Versão {pleading.version}
-                                    {changed && ' · alterações não salvas'}
-                                </p>
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-6 py-3">
+                            <div className="flex flex-wrap items-center gap-3">
+                                {/* Trocar de versão com texto não salvo o jogaria
+                                    fora sem aviso: o select espera o "Salvar". */}
+                                <span
+                                    title={
+                                        changed
+                                            ? 'Salve as alterações antes de trocar de versão'
+                                            : undefined
+                                    }
+                                >
+                                    <SelectInput
+                                        aria-label="Versão da minuta"
+                                        value={String(pleading.version)}
+                                        onValueChange={(value) => showVersion(Number(value))}
+                                        options={versions.map((entry, index) => ({
+                                            value: String(entry.version),
+                                            label: [
+                                                `Versão ${entry.version}`,
+                                                formatDateTime(entry.created_at),
+                                                index === 0 && 'atual',
+                                            ]
+                                                .filter(Boolean)
+                                                .join(' · '),
+                                        }))}
+                                        disabled={changed || form.processing || generating}
+                                        className="w-auto bg-background"
+                                    />
+                                </span>
 
+                                {changed && (
+                                    <p className="text-xs text-muted-foreground">
+                                        Alterações não salvas
+                                    </p>
+                                )}
+
+                                {!current && (
+                                    <p className="text-xs text-muted-foreground">
+                                        Versão anterior, somente leitura
+                                    </p>
+                                )}
+                            </div>
+
+                            {(exportMenu || saveButton) && (
                                 <div className="flex flex-wrap items-center gap-2">
                                     {exportMenu}
                                     {saveButton}
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
 
                         {/* O timbre: moldura, não conteúdo. Fica parado enquanto o
                             documento rola, como o papel timbrado fica. Tudo
@@ -298,8 +370,9 @@ export default function LegalCasePleading({ legalCase, pleading, letterhead, can
                             <div className="space-y-0.5">
                                 <p className="text-xs text-muted-foreground">
                                     Versão {pleading.version} · gerada em{' '}
-                                    {formatDate(pleading.created_at)}
+                                    {formatDateTime(pleading.created_at)}
                                     {changed && ' · alterações não salvas'}
+                                    {!current && ' · somente leitura'}
                                 </p>
 
                                 {editing && (
@@ -314,7 +387,7 @@ export default function LegalCasePleading({ legalCase, pleading, letterhead, can
                             <div className="flex flex-wrap items-center gap-2">
                                 {exportMenu}
 
-                                {can.generate && (
+                                {can.generate && current && (
                                     <RegeneratePleadingDialog
                                         version={pleading.version}
                                         unsaved={changed}
@@ -323,7 +396,7 @@ export default function LegalCasePleading({ legalCase, pleading, letterhead, can
                                     />
                                 )}
 
-                                {can.update && (
+                                {editable && (
                                     <Button
                                         type="button"
                                         variant="outline"
@@ -354,13 +427,15 @@ export default function LegalCasePleading({ legalCase, pleading, letterhead, can
 
 interface ExportMenuProps {
     legalCaseId: string
+    /** A versão exibida, que é a que o arquivo imprime. */
+    version: number
     /** Há texto não salvo: o arquivo sairia de uma versão que o histórico não conhece. */
     changed: boolean
     disabled: boolean
 }
 
-/** O PDF e o DOCX da última versão salva, com o timbre. */
-function ExportMenu({ legalCaseId, changed, disabled }: ExportMenuProps) {
+/** O PDF e o DOCX da versão exibida, com o timbre. */
+function ExportMenu({ legalCaseId, version, changed, disabled }: ExportMenuProps) {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -380,13 +455,13 @@ function ExportMenu({ legalCaseId, changed, disabled }: ExportMenuProps) {
                 {/* `<a>` de verdade e não visita do Inertia:
                     a resposta é um arquivo, não uma página. */}
                 <DropdownMenuItem asChild>
-                    <a href={`/pecas/${legalCaseId}/minuta/pdf`} download>
+                    <a href={`/pecas/${legalCaseId}/minuta/pdf?versao=${version}`} download>
                         <FileText />
                         PDF
                     </a>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                    <a href={`/pecas/${legalCaseId}/minuta/docx`} download>
+                    <a href={`/pecas/${legalCaseId}/minuta/docx?versao=${version}`} download>
                         <FileType />
                         Word (DOCX)
                     </a>

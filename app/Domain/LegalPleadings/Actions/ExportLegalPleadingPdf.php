@@ -15,7 +15,8 @@ use Lorisleiva\Actions\Concerns\AsAction;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * The latest version of the draft as a PDF, letterhead included.
+ * The latest version of the draft as a PDF, letterhead included — or the
+ * version `?versao` names, which is the one the Minuta tab has on screen.
  *
  * The page is the one the screen draws: A4, ABNT margins of 3 x 2 cm, Times
  * 12pt at 1.5 line spacing and the long citation recued by 4 cm. The letterhead
@@ -50,7 +51,7 @@ final class ExportLegalPleadingPdf
 
     public function asController(LegalCase $legalCase, ActionRequest $request): Response
     {
-        $pleading = $legalCase->pleadings()->firstOrFail();
+        $pleading = $legalCase->pleadingVersion($request->integer('versao') ?: null) ?? abort(404);
         $file = PleadingFile::for($legalCase, $pleading, $request->user());
 
         return response($this->handle($legalCase, $pleading, $request->user()), 200, [

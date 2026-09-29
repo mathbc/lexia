@@ -141,6 +141,62 @@ final class SaveLegalPleadingTest extends TestCase
                 ->where('can.export', true));
     }
 
+    /**
+     * The select at the top of the card: every version, newest first, with no
+     * text — only the one on screen carries its prose.
+     */
+    #[Test]
+    public function the_screen_lists_every_version_newest_first(): void
+    {
+        [, $owner, $case] = $this->pleading();
+
+        foreach ([1, 2, 3] as $version) {
+            LegalPleading::factory()->forLegalCase($case)->version($version)->create();
+        }
+
+        $this->actingAs($owner)
+            ->get(route('legal-cases.pleading', $case))
+            ->assertInertia(fn ($page) => $page
+                ->where('pleading.version', 3)
+                ->has('versions', 3)
+                ->where('versions.0.version', 3)
+                ->where('versions.2.version', 1)
+                ->missing('versions.0.content'));
+    }
+
+    #[Test]
+    public function the_screen_opens_the_version_the_url_names(): void
+    {
+        [, $owner, $case] = $this->pleading();
+
+        LegalPleading::factory()->forLegalCase($case)->version(1)->withContent('Antiga, [CIDADE/UF].')->create();
+        LegalPleading::factory()->forLegalCase($case)->version(2)->withContent('Atual.')->create();
+
+        $this->actingAs($owner)
+            ->get(route('legal-cases.pleading', ['legalCase' => $case, 'versao' => 1]))
+            ->assertInertia(fn ($page) => $page
+                ->where('pleading.version', 1)
+                ->where('pleading.content', 'Antiga, [CIDADE/UF].')
+                ->where('pleading.placeholders', ['[CIDADE/UF]'])
+                ->where('versions.0.version', 2)
+                ->where('can.export', true));
+    }
+
+    /**
+     * Versions are never deleted, so a missing one is a mistyped URL — and
+     * answering it with the current text would show a document nobody asked for.
+     */
+    #[Test]
+    public function a_version_that_does_not_exist_is_not_found(): void
+    {
+        [, $owner, $case] = $this->pleading();
+        LegalPleading::factory()->forLegalCase($case)->version(1)->create();
+
+        $this->actingAs($owner)
+            ->get(route('legal-cases.pleading', ['legalCase' => $case, 'versao' => 9]))
+            ->assertNotFound();
+    }
+
     #[Test]
     public function the_letterhead_draws_the_pleading_logo(): void
     {

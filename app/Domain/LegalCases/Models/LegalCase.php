@@ -315,15 +315,34 @@ class LegalCase extends Model
      *
      * The one relation here that is not `->oldest()`, and the exception is the
      * point: the requests and the theses are read as a list in the order they
-     * were written, while of the drafts only the last one is ever shown. Editing
-     * never overwrites — a save writes the next version — so "newest first" is
-     * what the screen asks for and `pleadings->first()` is the current text.
+     * were written, while of the drafts the last one is what the tab opens on.
+     * Editing never overwrites — a save writes the next version — so "newest
+     * first" is what the screen asks for and `pleadings->first()` is the current
+     * text.
      *
      * @return HasMany<LegalPleading, $this>
      */
     public function pleadings(): HasMany
     {
         return $this->hasMany(LegalPleading::class)->orderByDesc('version');
+    }
+
+    /**
+     * The version a URL names, or the current one when it names none.
+     *
+     * The Minuta tab and both of its exports read through here, so the file a
+     * lawyer downloads is always the version on screen. A named version that
+     * does not exist is a 404 rather than the current text: versions are never
+     * deleted, so a missing one is a mistyped URL, and answering it with another
+     * version would print a document nobody asked for.
+     */
+    public function pleadingVersion(?int $version = null): ?LegalPleading
+    {
+        if ($version === null) {
+            return $this->pleadings()->first();
+        }
+
+        return $this->pleadings()->where('version', $version)->firstOrFail();
     }
 
     /**
