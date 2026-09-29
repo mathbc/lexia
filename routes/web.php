@@ -18,6 +18,7 @@ use App\Domain\Customers\Actions\ListCustomers;
 use App\Domain\Customers\Actions\ShowCustomer;
 use App\Domain\Customers\Actions\ShowCustomerForm;
 use App\Domain\Customers\Actions\UpdateCustomer;
+use App\Domain\Dashboard\Actions\ShowDashboard;
 use App\Domain\LegalCases\Actions\AdvanceLegalCaseStep;
 use App\Domain\LegalCases\Actions\ClassifyLegalCase;
 use App\Domain\LegalCases\Actions\CreateLegalCase;
@@ -63,7 +64,7 @@ Route::middleware('guest')->group(function (): void {
 });
 
 Route::middleware(['auth', 'verified'])->group(function (): void {
-    Route::get('/painel', fn () => Inertia::render('dashboard'))->name('dashboard');
+    Route::get('/painel', ShowDashboard::class)->name('dashboard');
 
     // O cadastro de contas. As rotas literais vêm antes de /contas/{account}
     // para que "nova" não seja lida como o id de uma conta.

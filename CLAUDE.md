@@ -166,6 +166,21 @@ URL, e não a do ator, é a que vale — daí `UserIndexQuery` filtrar por
 alheia e um usuário que não pertence à conta da URL; ele só funciona se o
 `asController()` tipar `Account`, que é o que dispara o binding.
 
+### Os indicadores
+
+O `/painel` é `ShowDashboard` (`app/Domain/Dashboard`): cards de peças finalizadas,
+rascunhos e usuários, o card de contas só para quem passa em `AccountPolicy::viewAny`,
+e o gráfico mensal de peças por `created_at`, empilhado pela situação **de hoje** — não
+existe data de finalização. A fronteira da tela é `DashboardScope`, e não o
+`AccountScope`, que para a equipe LexIA está aberto: o cliente fica na própria conta
+qualquer que seja o `?account=`, o usuário precisa ser da conta em vista e o ano precisa
+ter peça. Sem conta escolhida, a equipe vê a soma das **contas de clientes** — a conta da
+plataforma fica fora das somas e do filtro, e com ela as peças que a equipe abre nela.
+
+O filtro por usuário lê `legal_cases.user_id`, que `CreateLegalCase` grava desde que a
+coluna existe. As peças anteriores ficaram com null de propósito — atribuí-las seria
+palpite —, entram em "Todos os usuários" e nunca sob um nome.
+
 ### A logo da conta
 
 Três por conta — uma por tema da interface (`AccountLogo::Light` e `::Dark`) e a da

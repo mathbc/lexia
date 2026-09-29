@@ -9,6 +9,7 @@ use App\Domain\Customers\Models\Customer;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\PracticeAreas\Models\PracticeArea;
+use App\Domain\Users\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -51,6 +52,18 @@ class LegalCaseFactory extends Factory
         return $this->state(fn (): array => [
             'account_id' => $account->id,
             'customer_id' => Customer::factory()->forAccount($account),
+        ]);
+    }
+
+    /**
+     * Opened by a given user: their account, and a client inside it.
+     */
+    public function by(User $user): static
+    {
+        return $this->state(fn (): array => [
+            'account_id' => $user->account_id,
+            'user_id' => $user->id,
+            'customer_id' => Customer::factory()->state(['account_id' => $user->account_id]),
         ]);
     }
 

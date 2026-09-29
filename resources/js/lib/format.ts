@@ -166,6 +166,9 @@ export const formatDate = (value: string | null): string => {
     return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('pt-BR')
 }
 
+/** A count with the Brazilian thousands separator: 1.284, not 1,284. */
+export const formatNumber = (value: number): string => new Intl.NumberFormat('pt-BR').format(value)
+
 /**
  * O tamanho de um arquivo como um humano lê.
  *

@@ -21,6 +21,7 @@ use App\Domain\PracticeAreas\Models\PracticeArea;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
 use App\Domain\Requirements\Models\Requirement;
 use App\Domain\Shared\Concerns\BelongsToAccount;
+use App\Domain\Users\Models\User;
 use Carbon\CarbonImmutable;
 use Database\Factories\LegalCaseFactory;
 use Illuminate\Database\Eloquent\Attributes\UseFactory;
@@ -85,6 +86,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  *
  * @property string $id
  * @property string $account_id
+ * @property string|null $user_id
  * @property string $customer_id
  * @property string $practice_area_id
  * @property string $procedural_class_id
@@ -114,6 +116,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property CarbonImmutable|null $updated_at
  * @property CarbonImmutable|null $deleted_at
  * @property-read Account $account
+ * @property-read User|null $user
  * @property-read Customer $customer
  * @property-read PracticeArea $practiceArea
  * @property-read ProceduralClass $proceduralClass
@@ -154,6 +157,17 @@ class LegalCase extends Model
             'court_decision_findings' => 'array',
             'theme_findings' => 'array',
         ];
+    }
+
+    /**
+     * Who opened the pleading. Null for the rows that predate the column —
+     * see the migration that added it.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 
     /**

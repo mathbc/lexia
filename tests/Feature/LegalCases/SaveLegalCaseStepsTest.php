@@ -60,6 +60,8 @@ final class SaveLegalCaseStepsTest extends TestCase
             'Ao Juízo da 3ª Vara Cível da Comarca de Florianópolis/SC',
             $legalCase->court_addressing,
         );
+        // Quem abriu a peça: é por ela que o painel filtra por usuário.
+        $this->assertSame($owner->id, $legalCase->user_id);
     }
 
     #[Test]

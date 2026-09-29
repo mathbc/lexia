@@ -35,13 +35,16 @@ final class CreateLegalCase
     use AsAction;
     use ValidatesLegalCaseBasics;
 
-    public function handle(string $accountId, LegalCaseBasicsData $data): LegalCase
+    public function handle(string $accountId, string $userId, LegalCaseBasicsData $data): LegalCase
     {
         $legalCase = new LegalCase($data->toArray());
 
         // Explicit rather than left to BelongsToAccount: the account is an
-        // argument of this use case, so it is set where it can be seen.
+        // argument of this use case, so it is set where it can be seen. The
+        // user is the same kind of fact — who opened it, which the dashboard
+        // counts by — and is set the same way.
         $legalCase->account_id = $accountId;
+        $legalCase->user_id = $userId;
 
         // The first step is done, so the pleading now stands on the second.
         $legalCase->current_step = LegalCaseStep::Basics->next();
@@ -79,6 +82,7 @@ final class CreateLegalCase
     {
         $legalCase = $this->handle(
             $request->user()->account_id,
+            $request->user()->id,
             $this->basicsData($request->validated()),
         );
 
