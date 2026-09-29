@@ -15,15 +15,19 @@ import type { AccountLogos } from '@/types'
 export interface AccountLogoValues {
     logo: File | null
     logo_dark: File | null
+    logo_pleading: File | null
     remove_logo: boolean
     remove_logo_dark: boolean
+    remove_logo_pleading: boolean
 }
 
 export const NO_LOGO_CHANGES: AccountLogoValues = {
     logo: null,
     logo_dark: null,
+    logo_pleading: null,
     remove_logo: false,
     remove_logo_dark: false,
+    remove_logo_pleading: false,
 }
 
 /** As regras de `logoRules()`, repetidas só para o aviso imediato. */
@@ -42,7 +46,11 @@ interface Props {
 }
 
 /**
- * As duas logos da conta, uma por tema da interface.
+ * As logos da conta: uma por tema da interface, e a da minuta.
+ *
+ * O par da interface divide uma linha; a da minuta ocupa a largura do cartão,
+ * porque é a que pode ser larga — a marca com o nome do escritório ao lado —,
+ * e uma moldura estreita a mostraria menor do que o timbre vai desenhá-la.
  *
  * Nada é enviado na escolha: o arquivo fica no formulário e só viaja no
  * "Salvar" — ou no "Criar conta" —, junto do resto do cadastro.
@@ -53,8 +61,9 @@ export function AccountLogoFields({ values, errors, set, stored, disabled = fals
             <CardHeader>
                 <CardTitle>Identidade visual</CardTitle>
                 <CardDescription>
-                    Aparece no menu lateral, no lugar do ícone, num quadrado de 32 px: prefira o símbolo
-                    da marca em imagem quadrada, com fundo transparente. PNG ou JPG, até 2 MB e 4000 × 4000 px.
+                    As duas primeiras aparecem no menu lateral, no lugar do ícone, num quadrado de 32 px:
+                    prefira o símbolo da marca em imagem quadrada. A da minuta vai no timbre da peça e pode
+                    ser mais larga. Fundo transparente, PNG ou JPG, até 2 MB e 4000 × 4000 px.
                 </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
@@ -88,6 +97,24 @@ export function AccountLogoFields({ values, errors, set, stored, disabled = fals
                         onPick={(file) => set({ logo_dark: file, remove_logo_dark: false })}
                         onRemove={() => set({ logo_dark: null, remove_logo_dark: stored?.dark != null })}
                         onRestore={() => set({ remove_logo_dark: false })}
+                        disabled={disabled}
+                    />
+                </Field>
+
+                <Field
+                    className="sm:col-span-2"
+                    label="Logo da minuta"
+                    hint="Vai no timbre, centralizada acima do nome do escritório, na tela e nos arquivos PDF e DOCX. É impressa sobre papel branco; sem ela, o timbre sai só com o texto."
+                    error={errors.logo_pleading ?? errors.remove_logo_pleading}
+                >
+                    <LogoPicker
+                        surface="light"
+                        file={values.logo_pleading}
+                        stored={stored?.pleading ?? null}
+                        removed={values.remove_logo_pleading}
+                        onPick={(file) => set({ logo_pleading: file, remove_logo_pleading: false })}
+                        onRemove={() => set({ logo_pleading: null, remove_logo_pleading: stored?.pleading != null })}
+                        onRestore={() => set({ remove_logo_pleading: false })}
                         disabled={disabled}
                     />
                 </Field>

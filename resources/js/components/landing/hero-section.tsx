@@ -2,6 +2,7 @@ import { Link } from '@inertiajs/react'
 import { ChevronDown } from 'lucide-react'
 import { DotOrbitField } from '@/components/dot-orbit-field'
 import { Button } from '@/components/ui/button'
+import { BrandLogo } from './brand-logo'
 
 /**
  * A entrada do site: a única seção animada.
@@ -25,11 +26,11 @@ export function HeroSection() {
             <DotOrbitField className="absolute inset-0 -z-10" />
 
             <div className="flex w-full max-w-2xl flex-col items-center text-center">
-                <h1 className="text-5xl font-semibold text-foreground sm:text-6xl">
-                    LexIA
+                <h1 className="text-5xl text-foreground sm:text-7xl">
+                    <BrandLogo />
                 </h1>
 
-                <p className="mt-4 max-w-md text-muted-foreground">
+                <p className="mt-6 max-w-md text-muted-foreground">
                     Inteligência aplicada à prática jurídica.
                 </p>
                 <div className="mt-8 flex gap-3">

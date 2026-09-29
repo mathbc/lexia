@@ -6,6 +6,7 @@ namespace App\Domain\Customers\Actions;
 
 use App\Domain\Customers\Models\Customer;
 use Illuminate\Http\RedirectResponse;
+use Inertia\Inertia;
 use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 
@@ -34,7 +35,8 @@ final class DeleteCustomer
     {
         $this->handle($customer);
 
-        return to_route('customers.index')
-            ->with('success', "Cliente {$customer->displayName()} excluído.");
+        Inertia::flash('success', "Cliente {$customer->displayName()} excluído.");
+
+        return to_route('customers.index');
     }
 }

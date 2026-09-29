@@ -8,6 +8,7 @@ use App\Domain\Customers\Actions\Concerns\ValidatesCustomer;
 use App\Domain\Customers\Data\CustomerData;
 use App\Domain\Customers\Models\Customer;
 use Illuminate\Http\RedirectResponse;
+use Inertia\Inertia;
 use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 
@@ -55,7 +56,8 @@ final class UpdateCustomer
     {
         $this->handle($customer, CustomerData::fromArray($request->validated()));
 
-        return to_route('customers.show', $customer)
-            ->with('success', 'Cliente atualizado com sucesso.');
+        Inertia::flash('success', 'Cliente atualizado com sucesso.');
+
+        return to_route('customers.show', $customer);
     }
 }

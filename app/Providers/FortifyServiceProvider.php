@@ -17,6 +17,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use Inertia\Response;
 use Laravel\Fortify\Actions\RedirectIfTwoFactorAuthenticatable;
 use Laravel\Fortify\Fortify;
 
@@ -65,27 +66,36 @@ class FortifyServiceProvider extends ServiceProvider
 
     /**
      * Fortify owns the routes; the screens behind them are ours.
+     *
+     * Fortify reports a success as `session('status')`, and here it becomes the
+     * toast every other success is — see HandleInertiaRequests::share().
      */
     private function registerViews(): void
     {
-        Fortify::loginView(fn () => Inertia::render('auth/login', [
-            'status' => session('status'),
-        ]));
+        Fortify::loginView(fn () => $this->withStatus(Inertia::render('auth/login'), session('status')));
 
-        Fortify::requestPasswordResetLinkView(fn () => Inertia::render('auth/forgot-password', [
-            'status' => session('status'),
-        ]));
+        Fortify::requestPasswordResetLinkView(fn () => $this->withStatus(
+            Inertia::render('auth/forgot-password'),
+            session('status'),
+        ));
 
         Fortify::resetPasswordView(fn (Request $request) => Inertia::render('auth/reset-password', [
             'email' => $request->input('email'),
             'token' => $request->route('token'),
         ]));
 
-        Fortify::verifyEmailView(fn () => Inertia::render('auth/verify-email', [
-            'status' => session('status'),
-        ]));
+        // Here the status is a code, not a sentence.
+        Fortify::verifyEmailView(fn () => $this->withStatus(
+            Inertia::render('auth/verify-email'),
+            session('status') === Fortify::VERIFICATION_LINK_SENT ? 'Um novo link foi enviado.' : null,
+        ));
 
         Fortify::confirmPasswordView(fn () => Inertia::render('auth/confirm-password'));
+    }
+
+    private function withStatus(Response $page, mixed $status): Response
+    {
+        return is_string($status) && $status !== '' ? $page->flash('success', $status) : $page;
     }
 
     /**

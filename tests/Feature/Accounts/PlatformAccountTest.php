@@ -108,7 +108,8 @@ final class PlatformAccountTest extends TestCase
 
         $this->actingAs($staff)
             ->put("/contas/{$account->id}", $this->accountPayload($account))
-            ->assertRedirect();
+            ->assertRedirect()
+            ->assertInertiaFlash('success', 'Dados da conta atualizados com sucesso.');
 
         $this->actingAs($staff)
             ->patch("/contas/{$account->id}/status")

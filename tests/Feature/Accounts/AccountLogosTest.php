@@ -18,8 +18,9 @@ use Symfony\Component\HttpFoundation\Response;
 use Tests\TestCase;
 
 /**
- * The account's two logos: stored as files in the account's own folder on the
- * private disk, and served back through the AccountPolicy.
+ * The account's logos — the interface's two and the pleading's: stored as files
+ * in the account's own folder on the private disk, and served back through the
+ * AccountPolicy.
  */
 final class AccountLogosTest extends TestCase
 {
@@ -33,7 +34,7 @@ final class AccountLogosTest extends TestCase
     }
 
     #[Test]
-    public function staff_create_an_account_with_both_logos_in_its_own_folder(): void
+    public function staff_create_an_account_with_every_logo_in_its_own_folder(): void
     {
         Notification::fake();
         $staff = User::factory()->platformAdmin()->create();
@@ -43,6 +44,7 @@ final class AccountLogosTest extends TestCase
                 ...$this->newAccountPayload(),
                 'logo' => UploadedFile::fake()->image('marca.png', 600, 200),
                 'logo_dark' => UploadedFile::fake()->image('marca-branca.jpg', 600, 200),
+                'logo_pleading' => UploadedFile::fake()->image('timbre.png', 1600, 300),
             ])
             ->assertSessionHasNoErrors()
             ->assertRedirect();
@@ -149,8 +151,10 @@ final class AccountLogosTest extends TestCase
                 ->component('accounts/show')
                 ->missing('account.logo_path')
                 ->missing('account.logo_dark_path')
+                ->missing('account.logo_pleading_path')
                 ->where('logos.light', $account->logoUrl(AccountLogo::Light))
-                ->where('logos.dark', null));
+                ->where('logos.dark', null)
+                ->where('logos.pleading', null));
 
         $this->assertStringStartsWith("/contas/{$account->id}/logo?tema=claro&v=", (string) $account->logoUrl(AccountLogo::Light));
     }
@@ -166,7 +170,10 @@ final class AccountLogosTest extends TestCase
                 ->where('auth.user.account.logos.light', null)
                 ->where('auth.user.account.logos.dark', null));
 
-        $this->update($owner, $account, ['logo' => UploadedFile::fake()->image('marca.png')]);
+        $this->update($owner, $account, [
+            'logo' => UploadedFile::fake()->image('marca.png'),
+            'logo_pleading' => UploadedFile::fake()->image('timbre.png', 1600, 300),
+        ]);
         $account->refresh();
 
         // fresh(): the instance above kept the account it loaded on the first
@@ -174,7 +181,55 @@ final class AccountLogosTest extends TestCase
         $this->actingAs($lawyer->fresh())->get('/painel')
             ->assertInertia(fn ($page) => $page
                 ->where('auth.user.account.logos.light', $account->logoUrl(AccountLogo::Light))
-                ->where('auth.user.account.logos.dark', null));
+                ->where('auth.user.account.logos.dark', null)
+                // The Minuta tab draws it; every other request would carry it
+                // for nothing.
+                ->missing('auth.user.account.logos.pleading'));
+    }
+
+    #[Test]
+    public function the_pleading_logo_is_stored_and_served_on_its_own(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $lawyer = User::factory()->forAccount($account)->create();
+
+        $this->update($owner, $account, [
+            'logo_pleading' => UploadedFile::fake()->image('timbre.jpg', 1600, 300),
+        ])->assertSessionHasNoErrors();
+        $account->refresh();
+
+        $path = (string) $account->logoPath(AccountLogo::Pleading);
+        $this->assertStringStartsWith("accounts/{$account->id}/logo-pleading-", $path);
+        Storage::disk(Account::FILES_DISK)->assertExists($path);
+
+        // The interface's two are untouched by it, and do not borrow it.
+        $this->assertNull($account->logoPath(AccountLogo::Light));
+        $this->assertNull($account->logoPath(AccountLogo::Dark));
+
+        $url = (string) $account->logoUrl(AccountLogo::Pleading);
+        $this->assertStringStartsWith("/contas/{$account->id}/logo?tema=minuta&v=", $url);
+
+        $response = $this->actingAs($lawyer)->get($url)->assertOk();
+        $this->assertSame('image/jpeg', $response->headers->get('Content-Type'));
+    }
+
+    #[Test]
+    public function the_pleading_logo_follows_the_same_rules_as_the_others(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        $this->update($owner, $account, ['logo_pleading' => UploadedFile::fake()->image('timbre.webp')])
+            ->assertSessionHasErrors(['logo_pleading' => 'O campo logo da minuta deve ser um arquivo do tipo: png, jpg, jpeg.']);
+        $this->update($owner, $account, ['logo_pleading' => UploadedFile::fake()->image('timbre.png', 4200, 300)])
+            ->assertSessionHasErrors('logo_pleading');
+
+        $this->update($owner, $account, ['logo_pleading' => UploadedFile::fake()->image('timbre.png', 1600, 300)]);
+        $path = (string) $account->refresh()->logoPath(AccountLogo::Pleading);
+
+        $this->update($owner, $account, ['remove_logo_pleading' => '1']);
+
+        $this->assertNull($account->refresh()->logoPath(AccountLogo::Pleading));
+        Storage::disk(Account::FILES_DISK)->assertMissing($path);
     }
 
     #[Test]

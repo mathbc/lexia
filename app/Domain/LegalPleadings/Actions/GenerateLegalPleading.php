@@ -7,6 +7,7 @@ namespace App\Domain\LegalPleadings\Actions;
 use App\Domain\LegalCases\Actions\DraftLegalPleading;
 use App\Domain\LegalCases\Models\LegalCase;
 use Illuminate\Http\RedirectResponse;
+use Inertia\Inertia;
 use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 use Throwable;
@@ -59,6 +60,8 @@ final class GenerateLegalPleading
             );
         }
 
-        return $destination->with('success', $existed ? 'Nova versão da minuta gerada.' : 'Minuta gerada.');
+        Inertia::flash('success', $existed ? 'Nova versão da minuta gerada.' : 'Minuta gerada.');
+
+        return $destination;
     }
 }

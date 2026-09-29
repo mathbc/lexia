@@ -116,6 +116,14 @@ em vez de alargar a tabela. Quem não pode executar não vê o item, e a lista j
 chega filtrada pelo `can` que a Action publicou — a Policy segue sendo a defesa
 de verdade.
 
+**Sucesso é toast, erro é alerta.** O `Toaster` (`ui/sonner.tsx`) é montado uma vez
+em `app.tsx`, fora das layouts, e a mensagem sai de `Inertia::flash('success', …)`,
+não de `->with('success', …)` — que hoje **não desenha nada**, sem erro nenhum. O flash
+do Inertia não entra no histórico: voltar uma página não repete o toast, e a mesma frase
+duas vezes seguidas dispara duas vezes. O `status` do Fortify vira o mesmo flash em
+`FortifyServiceProvider::withStatus()`. O erro segue em `->with('error', …)`, como
+alerta fixo no `AppLayout`: é o que precisa ser lido, e um toast some sozinho.
+
 As abas de um **registro** continuam sendo links, não o primitivo do Radix:
 quem guarda o estado é a URL (ver abaixo) — `LinkTabs`, em
 `resources/js/components/ui/link-tabs.tsx`. A exceção são os **painéis dentro
@@ -124,6 +132,13 @@ local de propósito, porque o que a etapa decide (o `keep` de cada linha) já vi
 em estado local até o "Concluir" e trocar de aba não tem o que pedir ao
 servidor. Esses usam o `Tabs` do Radix em `ui/tabs.tsx`, o nome que o
 `npx shadcn add tabs` espera.
+
+A **marca da LexIA** — o "L" em blocos com o traço inclinado — é SVG, não PNG:
+`BrandMark` e `BrandLogo` em `resources/js/components/landing/brand-logo.tsx`,
+pintados por `currentColor`, com "Lex" em negrito e "IA" em traço leve na
+mesma IBM Plex Sans. Hoje a usam a landing e as telas de acesso, pelo
+`AuthLayout` (login, recuperação e confirmação de senha); o painel e o
+`favicon.ico` seguem com a balança do lucide (`Scale`), por decisão explícita.
 
 ## O painel
 
@@ -153,12 +168,13 @@ alheia e um usuário que não pertence à conta da URL; ele só funciona se o
 
 ### A logo da conta
 
-Duas por conta, uma por tema (`AccountLogo::Light` e `::Dark`), no card "Identidade
-visual" de `/contas/nova` e da aba Dados gerais; o cadastro público não as oferece. São
+Três por conta — uma por tema da interface (`AccountLogo::Light` e `::Dark`) e a da
+minuta (`::Pleading`) —, no card "Identidade visual" de `/contas/nova` e da aba Dados
+gerais; o cadastro público não as oferece. São
 **arquivos, não Base64**: a conta é carregada em toda requisição e vai inteira nas props
 compartilhadas, e Base64 na linha pesaria em todas elas sem cache nenhum. Ficam no disco
 `local` (privado) em `accounts/{id}/`, com nome novo a cada envio — é o que muda o `v` da
-URL e deixa `ShowAccountLogo` (`GET /contas/{id}/logo?tema=claro|escuro`) responder
+URL e deixa `ShowAccountLogo` (`GET /contas/{id}/logo?tema=claro|escuro|minuta`) responder
 `immutable`. A rota passa pela `AccountPolicy::view`, porque URL pública pularia a
 fronteira. Só PNG e JPEG: SVG executa script servido da nossa origem, e WebP o PhpWord
 não embute.
@@ -168,6 +184,21 @@ escuro cai para a principal quando não tem a própria; o claro não cai para a 
 que costuma ser clara. A moldura de pré-visualização usa `.light`/`.dark` numa subárvore
 — `.light` é o par de `.dark` em `app.css` — para mostrar cada logo no fundo a que se
 destina, qualquer que seja o tema da tela.
+
+A da minuta é um terceiro arquivo, e não a principal reaproveitada: o menu corta a logo
+num quadrado de 32 px, onde só o símbolo sobrevive, e o timbre tem espaço para a marca
+larga com o nome ao lado — por isso o campo ocupa a largura do card. Ela **não** vai nas
+props compartilhadas (`auth.user.account.logos` continua só com as duas da interface):
+a aba Minuta a recebe por `PleadingLetterhead::for()`, e as exportações leem os bytes por
+`PleadingLogo`, porque nem o dompdf (acesso remoto desligado) nem o PhpWord buscam URL.
+Sem ela, o timbre sai só com o texto, e **nunca cai para a do menu**. Com ela, tudo
+centrado e a logo acima das três linhas, na tela, no PDF e no DOCX. Empilhada, ela não
+cabe nos 2 cm que o timbre tem dentro da margem de 3 cm, então **a margem superior cresce
+exatamente a altura da logo mais o respiro abaixo dela** (`PleadingFile::topMargin()`, no
+máximo 1,5 + 0,2 cm): o texto, o fio e a distância do fio ao corpo ficam onde o timbre só
+de texto os põe, e sem logo a página continua na régua da norma. A caixa do timbre no PDF
+tem `min-height`, e não `height`, para que um endereço longo que quebre em duas linhas
+desça o fio em vez de ser cortado por ele.
 
 Com arquivo, o formulário de edição posta `POST` com `_method=put` (o PHP só lê multipart
 em POST), e o Inertia 3 promove o enviado a padrão depois do sucesso: por isso o
@@ -763,8 +794,9 @@ porque ela sai da aba mesmo sem sair do banco.
 
 A peça passa a ter **duas abas**, URLs de verdade como as da conta: `/pecas/{id}/editar`
 e `/pecas/{id}/minuta`. A segunda é um cabeçalho fixo com o timbre do escritório e um
-textarea embaixo. **O timbre é moldura, não conteúdo**: nome, OAB, endereço e telefone
-vêm da conta e do usuário logado por `PleadingLetterhead` e nunca passam por modelo —
+textarea embaixo. **O timbre é moldura, não conteúdo**: logo, nome, OAB, endereço e
+telefone vêm da conta e do usuário logado por `PleadingLetterhead` e nunca passam por
+modelo — a logo é a da minuta, ver "A logo da conta" —
 um número de OAB inventado num documento protocolado não tem contrapartida. Pelo mesmo
 motivo a assinatura é composta em PHP (`PleadingSignature`, com tabela de meses própria
 em vez de `locale()`), e o agente para em "Nestes termos, pede deferimento."

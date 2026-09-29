@@ -20,6 +20,28 @@ final class LoginTest extends TestCase
         $this->get('/login')->assertOk()->assertInertia(fn ($page) => $page->component('auth/login'));
     }
 
+    /**
+     * Fortify reports a success as `session('status')`; the screen shows it as
+     * the toast every other success is, and so it travels as Inertia's flash.
+     */
+    #[Test]
+    public function a_fortify_status_arrives_as_the_success_toast(): void
+    {
+        $this->withSession(['status' => 'Sua senha foi redefinida.'])
+            ->get('/login')
+            ->assertInertia(fn ($page) => $page
+                ->component('auth/login')
+                ->hasFlash('success', 'Sua senha foi redefinida.')
+                ->missing('status'));
+
+        $this->actingAs(User::factory()->unverified()->create())
+            ->withSession(['status' => 'verification-link-sent'])
+            ->get('/email/verify')
+            ->assertInertia(fn ($page) => $page
+                ->component('auth/verify-email')
+                ->hasFlash('success', 'Um novo link foi enviado.'));
+    }
+
     #[Test]
     public function a_valid_user_can_sign_in(): void
     {

@@ -45,6 +45,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property bool $enabled
  * @property string|null $logo_path
  * @property string|null $logo_dark_path
+ * @property string|null $logo_pleading_path
  * @property CarbonImmutable|null $deleted_at
  * @property-read Collection<int, User> $users
  */
@@ -81,7 +82,7 @@ class Account extends Model
      *
      * @var list<string>
      */
-    protected $hidden = ['logo_path', 'logo_dark_path'];
+    protected $hidden = ['logo_path', 'logo_dark_path', 'logo_pleading_path'];
 
     /**
      * @return array<string, string>

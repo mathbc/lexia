@@ -10,6 +10,7 @@ use App\Domain\Accounts\Data\AccountLogosData;
 use App\Domain\Accounts\Models\Account;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 
@@ -69,7 +70,8 @@ final class UpdateAccount
 
         $this->handle($account, AccountData::fromArray($validated), AccountLogosData::fromArray($validated));
 
-        return to_route('accounts.show', $account)
-            ->with('success', 'Dados da conta atualizados com sucesso.');
+        Inertia::flash('success', 'Dados da conta atualizados com sucesso.');
+
+        return to_route('accounts.show', $account);
     }
 }

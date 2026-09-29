@@ -15,6 +15,7 @@ use App\Domain\Users\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 
@@ -100,7 +101,8 @@ final class CreateAccount
         // CreateUser for why the `Registered` event is not fired here.
         SendUserInvitation::run($owner);
 
-        return to_route('accounts.show', $owner->account_id)
-            ->with('success', "Conta criada. Convite enviado para {$owner->email}.");
+        Inertia::flash('success', "Conta criada. Convite enviado para {$owner->email}.");
+
+        return to_route('accounts.show', $owner->account_id);
     }
 }

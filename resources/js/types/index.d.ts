@@ -14,8 +14,11 @@ export interface AuthUser {
         type: string;
         type_label: string;
         is_operational: boolean;
-        /** Drawn in the sidebar in place of the LexIA mark. */
-        logos: AccountLogos;
+        /**
+         * Drawn in the sidebar in place of the LexIA mark. Only the interface's
+         * two: the pleading's stays out of the props every request carries.
+         */
+        logos: Pick<AccountLogos, 'light' | 'dark'>;
     };
 }
 
@@ -28,9 +31,17 @@ export interface Option {
     label: string;
 }
 
+/** Inertia's flash, as opposed to a prop: see HandleInertiaRequests::share(). */
+declare module '@inertiajs/core' {
+    export interface InertiaConfig {
+        flashDataType: { success?: string };
+    }
+}
+
 export interface PageProps {
     auth: { user: AuthUser | null };
-    flash: { success: string | null; error: string | null };
+    /** Only the error: a success is a toast, sent through Inertia's flash. */
+    flash: { error: string | null };
     errors: Record<string, string>;
     [key: string]: unknown;
 }
@@ -87,6 +98,8 @@ export interface Account {
 export interface AccountLogos {
     light: string | null;
     dark: string | null;
+    /** Printed in the pleading's letterhead, never in the interface. */
+    pleading: string | null;
 }
 
 export interface AccountRow extends Account {
@@ -375,6 +388,12 @@ export interface LetterheadAddress {
  * onde elas já existem.
  */
 export interface PleadingLetterhead {
+    /**
+     * A logo da minuta, pela URL de `ShowAccountLogo`. Nunca a do menu lateral,
+     * que é cortada para um quadrado de 32 px: sem esta, o timbre sai só com o
+     * texto.
+     */
+    logo: string | null;
     firm: string | null;
     lawyer: string | null;
     oab: string | null;

@@ -7,6 +7,7 @@ namespace App\Domain\LegalPleadings\Actions;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalPleadings\Models\LegalPleading;
 use App\Domain\LegalPleadings\Support\PleadingFile;
+use App\Domain\LegalPleadings\Support\PleadingLogo;
 use App\Domain\Users\Models\User;
 use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
@@ -27,7 +28,11 @@ use Symfony\Component\HttpFoundation\Response;
  * 3 x 2 cm margins, Times New Roman 12pt at 1.5, a line of space between
  * paragraphs and the long citation as a 4 cm left indent — and the letterhead
  * goes into the section header, where Word repeats it on every page and where
- * editing the body cannot reach it.
+ * editing the body cannot reach it. Everything in it is centred, and the
+ * account's pleading logo, when there is one, is a paragraph of its own above
+ * the three lines — the layout the PDF draws, with the same top margin
+ * (PleadingFile::topMargin()): stacked, the logo would outgrow the ABNT 3 cm,
+ * so the body starts lower by exactly its height.
  *
  * Two settings are not optional, and both produce a file Word calls corrupt when
  * missing: output escaping (PhpWord writes `&` raw by default, and "Fatos &
@@ -55,7 +60,7 @@ final class ExportLegalPleadingDocx
         $section = $word->addSection([
             'pageSizeW' => self::twips(21),
             'pageSizeH' => self::twips(29.7),
-            'marginTop' => self::twips(3),
+            'marginTop' => self::twips($file->topMargin()),
             'marginLeft' => self::twips(3),
             'marginRight' => self::twips(2),
             'marginBottom' => self::twips(2),
@@ -116,18 +121,22 @@ final class ExportLegalPleadingDocx
 
     private function letterhead(Header $header, PleadingFile $file): void
     {
-        $centered = ['alignment' => Jc::CENTER, 'spaceAfter' => 0];
+        if ($file->logo !== null) {
+            $this->logo($header, $file->logo);
+        }
+
+        $paragraph = ['alignment' => Jc::CENTER, 'spaceAfter' => 0];
 
         if ($file->letterhead['firm'] !== null) {
-            $header->addText($file->letterhead['firm'], ['bold' => true, 'size' => 13], $centered);
+            $header->addText($file->letterhead['firm'], ['bold' => true, 'size' => 13], $paragraph);
         }
 
         if ($file->letterhead['signer'] !== null) {
-            $header->addText($file->letterhead['signer'], ['size' => 10], $centered);
+            $header->addText($file->letterhead['signer'], ['size' => 10], $paragraph);
         }
 
         if ($file->letterhead['contact'] !== null) {
-            $header->addText($file->letterhead['contact'], ['size' => 8, 'color' => '666666'], $centered);
+            $header->addText($file->letterhead['contact'], ['size' => 8, 'color' => '666666'], $paragraph);
         }
 
         // O fio que separa o timbre do corpo, como a borda do cabeçalho na tela.
@@ -135,6 +144,23 @@ final class ExportLegalPleadingDocx
             'spaceAfter' => 0,
             'borderBottomSize' => 6,
             'borderBottomColor' => 'BBBBBB',
+        ]);
+    }
+
+    /**
+     * The logo inline in a centred paragraph of its own, above the firm's name
+     * and apart from it by the gap the PDF leaves.
+     */
+    private function logo(Header $header, PleadingLogo $logo): void
+    {
+        $size = $logo->size();
+
+        $header->addTextRun([
+            'alignment' => Jc::CENTER,
+            'spaceAfter' => self::twips(PleadingLogo::GAP_CM),
+        ])->addImage($logo->contents, [
+            'width' => Converter::cmToPoint($size['width']),
+            'height' => Converter::cmToPoint($size['height']),
         ]);
     }
 }

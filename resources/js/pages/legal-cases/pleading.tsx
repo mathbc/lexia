@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { AppLayout } from '@/layouts/app-layout'
 import { formatDate, formatPhone, formatPostalCode } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import type { LegalPleading, PleadingLetterhead } from '@/types'
 
 /**
@@ -218,33 +219,57 @@ export default function LegalCasePleading({ legalCase, pleading, letterhead, can
                         )}
 
                         {/* O timbre: moldura, não conteúdo. Fica parado enquanto o
-                            documento rola, como o papel timbrado fica. */}
-                        <header className="sticky top-0 z-10 space-y-1 border-b bg-card px-6 py-5 text-center">
-                            <Scale className="mx-auto text-muted-foreground" />
-
-                            {letterhead.firm && (
-                                <p className="text-lg font-semibold tracking-tight text-foreground uppercase">
-                                    {letterhead.firm}
-                                </p>
+                            documento rola, como o papel timbrado fica. Tudo
+                            centrado, com a logo da minuta acima do texto — o
+                            arranjo do PDF e do DOCX. Sem ela, a balança. */}
+                        <header
+                            className={cn(
+                                'sticky top-0 z-10 flex flex-col items-center gap-1 border-b bg-card px-6 py-5 text-center',
+                                letterhead.logo && 'gap-3',
+                            )}
+                        >
+                            {letterhead.logo ? (
+                                /* A logo é desenhada para papel branco. `.light`
+                                   devolve o cartão claro a esta moldura, de modo
+                                   que no tema escuro ela aparece como o papel em
+                                   que vai ser impressa, e no claro a moldura some
+                                   no cartão. */
+                                <span className="light flex shrink-0 rounded-md bg-card p-1.5">
+                                    <img
+                                        src={letterhead.logo}
+                                        alt=""
+                                        className="max-h-14 max-w-56 object-contain"
+                                    />
+                                </span>
+                            ) : (
+                                <Scale className="text-muted-foreground" />
                             )}
 
-                            {(letterhead.lawyer || letterhead.oab) && (
-                                <p className="text-sm text-foreground">
-                                    {[letterhead.lawyer, letterhead.oab]
+                            <div className="space-y-1">
+                                {letterhead.firm && (
+                                    <p className="text-lg font-semibold tracking-tight text-foreground uppercase">
+                                        {letterhead.firm}
+                                    </p>
+                                )}
+
+                                {(letterhead.lawyer || letterhead.oab) && (
+                                    <p className="text-sm text-foreground">
+                                        {[letterhead.lawyer, letterhead.oab]
+                                            .filter(Boolean)
+                                            .join(' · ')}
+                                    </p>
+                                )}
+
+                                <p className="text-xs text-muted-foreground">
+                                    {[
+                                        addressLine(letterhead.address),
+                                        letterhead.phone && formatPhone(letterhead.phone),
+                                        letterhead.email,
+                                    ]
                                         .filter(Boolean)
                                         .join(' · ')}
                                 </p>
-                            )}
-
-                            <p className="text-xs text-muted-foreground">
-                                {[
-                                    addressLine(letterhead.address),
-                                    letterhead.phone && formatPhone(letterhead.phone),
-                                    letterhead.email,
-                                ]
-                                    .filter(Boolean)
-                                    .join(' · ')}
-                            </p>
+                            </div>
                         </header>
 
                         {/* O campo não é o `Textarea` do shadcn: ele traz borda,

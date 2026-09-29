@@ -44,7 +44,7 @@ import {
 import { useAppearance, type Appearance } from '@/hooks/use-appearance'
 import { initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import type { AccountLogos, AuthUser } from '@/types'
+import type { AuthUser } from '@/types'
 
 interface NavItem {
     label: string
@@ -104,7 +104,7 @@ function registrationsFor(user: AuthUser): NavItem[] {
  * `useAppearance`, que responde qual é o tema — o "sistema" pediria resolver a
  * media query aqui, e a classe já chega aplicada antes da primeira pintura.
  */
-function AccountMark({ logos }: { logos: AccountLogos }) {
+function AccountMark({ logos }: { logos: AuthUser['account']['logos'] }) {
     const dark = logos.dark ?? logos.light
 
     if (dark === logos.light) {

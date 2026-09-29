@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
+use Inertia\Inertia;
 use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 
@@ -98,7 +99,8 @@ final class RegisterAccountWithOwner
         event(new Registered($owner));
         Auth::login($owner);
 
-        return to_route('dashboard')
-            ->with('success', 'Conta criada. Confirme seu e-mail para liberar todos os recursos.');
+        Inertia::flash('success', 'Conta criada. Confirme seu e-mail para liberar todos os recursos.');
+
+        return to_route('dashboard');
     }
 }

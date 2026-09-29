@@ -8,6 +8,7 @@ use App\Domain\Customers\Actions\Concerns\ValidatesCustomer;
 use App\Domain\Customers\Data\CustomerData;
 use App\Domain\Customers\Models\Customer;
 use Illuminate\Http\RedirectResponse;
+use Inertia\Inertia;
 use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 
@@ -82,7 +83,8 @@ final class CreateCustomer
             ]);
         }
 
-        return to_route('customers.show', $customer)
-            ->with('success', 'Cliente cadastrado com sucesso.');
+        Inertia::flash('success', 'Cliente cadastrado com sucesso.');
+
+        return to_route('customers.show', $customer);
     }
 }

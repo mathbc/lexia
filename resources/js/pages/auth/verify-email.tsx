@@ -1,10 +1,9 @@
 import { Head, Link, useForm } from '@inertiajs/react'
 import type { FormEvent } from 'react'
 import { AuthLayout } from '@/layouts/auth-layout'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 
-export default function VerifyEmail({ status }: { status?: string }) {
+export default function VerifyEmail() {
     const form = useForm({})
 
     const resend = (event: FormEvent) => {
@@ -18,12 +17,6 @@ export default function VerifyEmail({ status }: { status?: string }) {
             description="Enviamos um link de confirmação para o seu e-mail. Clique nele para liberar o acesso."
         >
             <Head title="Confirme seu e-mail" />
-
-            {status === 'verification-link-sent' && (
-                <Alert variant="success" role="status" className="mb-4">
-                    <AlertDescription>Um novo link foi enviado.</AlertDescription>
-                </Alert>
-            )}
 
             <form onSubmit={resend} className="grid gap-3">
                 <Button type="submit" disabled={form.processing} className="w-full">

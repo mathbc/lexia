@@ -1,13 +1,12 @@
 import { Head, Link, useForm } from '@inertiajs/react'
 import type { FormEvent } from 'react'
 import { AuthLayout } from '@/layouts/auth-layout'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field, Input } from '@/components/ui/field'
 import { Label } from '@/components/ui/label'
 
-export default function Login({ status }: { status?: string }) {
+export default function Login() {
     const form = useForm({ email: '', password: '', remember: false })
 
     const submit = (event: FormEvent) => {
@@ -29,12 +28,6 @@ export default function Login({ status }: { status?: string }) {
             }
         >
             <Head title="Entrar" />
-
-            {status && (
-                <Alert variant="success" role="status" className="mb-4">
-                    <AlertDescription>{status}</AlertDescription>
-                </Alert>
-            )}
 
             <form onSubmit={submit} className="grid gap-4">
                 <Field label="E-mail" error={form.errors.email} required>

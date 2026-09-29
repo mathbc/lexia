@@ -21,6 +21,12 @@ class HandleInertiaRequests extends Middleware
     /**
      * Props available to every page.
      *
+     * Only the error rides here, as an alert that stays until the next visit. A
+     * success is a toast, and goes through `Inertia::flash('success', …)`
+     * instead: Inertia's flash never enters the history state, so going back
+     * does not replay it, and the same message twice in a row still fires twice
+     * — a prop would do neither.
+     *
      * @return array<string, mixed>
      */
     public function share(Request $request): array
@@ -31,7 +37,6 @@ class HandleInertiaRequests extends Middleware
                 'user' => fn (): ?array => $this->currentUser($request),
             ],
             'flash' => [
-                'success' => fn (): ?string => $request->session()->get('success'),
                 'error' => fn (): ?string => $request->session()->get('error'),
             ],
         ];
@@ -72,6 +77,8 @@ class HandleInertiaRequests extends Middleware
                 'is_operational' => $user->account->isOperational(),
                 // The sidebar draws the logo in place of the LexIA mark, so it
                 // is needed on every page — as URLs, never as the image itself.
+                // Only the interface's two: the pleading's is drawn by the
+                // Minuta tab alone, which gets it from PleadingLetterhead.
                 'logos' => [
                     'light' => $user->account->logoUrl(AccountLogo::Light),
                     'dark' => $user->account->logoUrl(AccountLogo::Dark),

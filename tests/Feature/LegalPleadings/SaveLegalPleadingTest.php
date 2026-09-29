@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\LegalPleadings;
 
+use App\Domain\Accounts\Enums\AccountLogo;
 use App\Domain\Accounts\Models\Account;
 use App\Domain\LegalCases\Actions\DraftLegalPleading;
 use App\Domain\LegalCases\Models\LegalCase;
@@ -135,8 +136,43 @@ final class SaveLegalPleadingTest extends TestCase
                 ->where('pleading.placeholders', ['[estado civil]'])
                 ->where('letterhead.firm', $account->displayName())
                 ->where('letterhead.lawyer', $owner->name)
+                ->where('letterhead.logo', null)
                 ->where('can.generate', true)
                 ->where('can.export', true));
+    }
+
+    #[Test]
+    public function the_letterhead_draws_the_pleading_logo(): void
+    {
+        [$account, $owner, $case] = $this->pleading();
+        $account->update([
+            'logo_path' => "accounts/{$account->id}/logo-light-aaaaaaaaaaaa.png",
+            'logo_pleading_path' => "accounts/{$account->id}/logo-pleading-bbbbbbbbbbbb.png",
+        ]);
+        LegalPleading::factory()->forLegalCase($case)->create();
+
+        $this->actingAs($owner)
+            ->get(route('legal-cases.pleading', $case))
+            ->assertInertia(fn ($page) => $page
+                ->where('letterhead.logo', $account->logoUrl(AccountLogo::Pleading))
+                ->missing('letterhead.logo_pleading_path'));
+    }
+
+    /**
+     * The sidebar's logo is cut for a 32 px square, and a letterhead that
+     * borrowed it would print a thumbnail: without the pleading's, the text
+     * alone.
+     */
+    #[Test]
+    public function the_letterhead_never_borrows_the_sidebar_logo(): void
+    {
+        [$account, $owner, $case] = $this->pleading();
+        $account->update(['logo_path' => "accounts/{$account->id}/logo-light-aaaaaaaaaaaa.png"]);
+        LegalPleading::factory()->forLegalCase($case)->create();
+
+        $this->actingAs($owner)
+            ->get(route('legal-cases.pleading', $case))
+            ->assertInertia(fn ($page) => $page->where('letterhead.logo', null));
     }
 
     /**
@@ -182,7 +218,7 @@ final class SaveLegalPleadingTest extends TestCase
         $this->actingAs($owner)
             ->post(route('legal-cases.pleading.generate', $case))
             ->assertRedirect(route('legal-cases.pleading', $case))
-            ->assertSessionHas('success', 'Nova versão da minuta gerada.');
+            ->assertInertiaFlash('success', 'Nova versão da minuta gerada.');
 
         $this->assertSame(2, $case->pleadings()->count());
         $this->assertSame('A redação nova do agente.', $case->pleadings()->first()->content);

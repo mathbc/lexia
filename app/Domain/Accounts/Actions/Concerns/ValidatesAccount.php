@@ -74,7 +74,12 @@ trait ValidatesAccount
      * and the one that runs script when opened from our own origin; WebP is
      * what PhpWord cannot embed in the DOCX export. The dimension cap is not
      * about looks: a small PNG can decompress to a bitmap that exhausts memory
-     * wherever it is read back.
+     * wherever it is read back — and the pleading's is read back by dompdf
+     * and PhpWord on every export.
+     *
+     * No aspect ratio is imposed on any of them: the square the sidebar wants
+     * and the wide mark the letterhead has room for are advice on the screen,
+     * and both boxes contain whatever arrives without distorting it.
      *
      * @return array<string, mixed>
      */

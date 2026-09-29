@@ -39,6 +39,7 @@ final class ShowAccount
             'logos' => [
                 'light' => $account->logoUrl(AccountLogo::Light),
                 'dark' => $account->logoUrl(AccountLogo::Dark),
+                'pleading' => $account->logoUrl(AccountLogo::Pleading),
             ],
         ]);
     }

@@ -11,6 +11,7 @@ use App\Domain\Users\Data\UserData;
 use App\Domain\Users\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 
@@ -69,7 +70,8 @@ final class UpdateUser
         // UserData leaves the role untouched for everyone else.
         $this->handle($user, UserData::fromArray($request->validated()));
 
-        return to_route('users.index', $account)
-            ->with('success', 'Usuário atualizado com sucesso.');
+        Inertia::flash('success', 'Usuário atualizado com sucesso.');
+
+        return to_route('users.index', $account);
     }
 }

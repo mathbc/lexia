@@ -1,11 +1,10 @@
 import { Head, Link, useForm } from '@inertiajs/react'
 import type { FormEvent } from 'react'
 import { AuthLayout } from '@/layouts/auth-layout'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Field, Input } from '@/components/ui/field'
 
-export default function ForgotPassword({ status }: { status?: string }) {
+export default function ForgotPassword() {
     const form = useForm({ email: '' })
 
     const submit = (event: FormEvent) => {
@@ -24,12 +23,6 @@ export default function ForgotPassword({ status }: { status?: string }) {
             }
         >
             <Head title="Recuperar senha" />
-
-            {status && (
-                <Alert variant="success" role="status" className="mb-4">
-                    <AlertDescription>{status}</AlertDescription>
-                </Alert>
-            )}
 
             <form onSubmit={submit} className="grid gap-4">
                 <Field label="E-mail" error={form.errors.email} required>

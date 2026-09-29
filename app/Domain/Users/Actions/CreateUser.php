@@ -11,6 +11,7 @@ use App\Domain\Users\Data\UserData;
 use App\Domain\Users\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 
@@ -88,7 +89,8 @@ final class CreateUser
         // proof of inbox ownership — accepting it verifies the address.
         SendUserInvitation::run($user);
 
-        return to_route('users.index', $account)
-            ->with('success', "Convite enviado para {$user->email}.");
+        Inertia::flash('success', "Convite enviado para {$user->email}.");
+
+        return to_route('users.index', $account);
     }
 }

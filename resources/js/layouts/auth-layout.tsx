@@ -1,5 +1,5 @@
-import { Scale } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { BrandLogo } from '@/components/landing/brand-logo'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 /**
@@ -22,12 +22,7 @@ export function AuthLayout({
 }) {
     return (
         <div className="flex min-h-svh flex-col items-center justify-center gap-6 px-6 py-12">
-            <div className="flex flex-col items-center gap-2">
-                <div className="flex size-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                    <Scale className="size-5" />
-                </div>
-                <span className="text-2xl font-semibold text-foreground">LexIA</span>
-            </div>
+            <BrandLogo className="text-3xl text-foreground" />
 
             <Card className="w-full max-w-sm">
                 <CardHeader className="text-center">

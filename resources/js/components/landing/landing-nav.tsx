@@ -1,5 +1,5 @@
 import { Link, usePage } from '@inertiajs/react'
-import { LayoutDashboard, Menu, Scale } from 'lucide-react'
+import { LayoutDashboard, Menu } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,13 +12,14 @@ import {
 } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import type { AuthUser, PageProps } from '@/types'
+import { BrandLogo } from './brand-logo'
 import { LANDING_LINKS } from './navigation'
 
 /**
  * A barra do topo da landing.
  *
  * É fixa e começa transparente sobre a entrada animada — só ganha fundo e
- * borda depois do primeiro rolar, para não cortar a balança ao meio. Abaixo de
+ * borda depois do primeiro rolar, para não cortar o anel ao meio. Abaixo de
  * `md` os links vão para uma gaveta (`Sheet`), a mesma do menu lateral do
  * painel.
  *
@@ -51,11 +52,8 @@ export function LandingNav() {
                 aria-label="Principal"
                 className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-6"
             >
-                <a href="#home" className="flex items-center gap-2 text-foreground">
-                    <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                        <Scale className="size-4" />
-                    </span>
-                    <span className="text-lg font-semibold">LexIA</span>
+                <a href="#home" className="text-foreground">
+                    <BrandLogo className="text-xl" />
                 </a>
 
                 <ul className="hidden items-center gap-1 md:flex">

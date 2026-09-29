@@ -86,11 +86,7 @@ export function AppLayout({ title, subtitle, actions, tabs, filters, activeFilte
 
                 <div className="flex min-h-0 flex-1 overflow-hidden">
                     <div className="min-w-0 flex-1 overflow-y-auto px-4 py-6 lg:px-6">
-                        {flash.success && (
-                            <Alert variant="success" role="status" className="mb-5">
-                                <AlertDescription>{flash.success}</AlertDescription>
-                            </Alert>
-                        )}
+                        {/* Um sucesso é toast (ver app.tsx); o erro fica, até a próxima visita. */}
                         {flash.error && (
                             <Alert variant="destructive" className="mb-5">
                                 <AlertDescription>{flash.error}</AlertDescription>

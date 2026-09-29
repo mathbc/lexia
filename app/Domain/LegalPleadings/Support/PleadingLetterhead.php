@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\LegalPleadings\Support;
 
+use App\Domain\Accounts\Enums\AccountLogo;
 use App\Domain\Accounts\Models\Account;
 use App\Domain\Users\Models\User;
 
@@ -28,6 +29,11 @@ use App\Domain\Users\Models\User;
  * the account relation can be absent and because `oab` genuinely has no value
  * for a lawyer who has not filled theirs in. The screen draws nothing for a
  * missing part rather than drawing a gap.
+ *
+ * `logo` is the account's **pleading** logo, as the URL ShowAccountLogo serves
+ * it — never the sidebar's, which is cut for a 32 px square: an account without
+ * one gets the text-only letterhead. The exporters read the same file through
+ * PleadingLogo, since neither renderer may fetch a URL.
  */
 final class PleadingLetterhead
 {
@@ -37,6 +43,7 @@ final class PleadingLetterhead
     public static function for(?Account $account, ?User $author): array
     {
         return [
+            'logo' => $account?->logoUrl(AccountLogo::Pleading),
             'firm' => $account?->displayName(),
             'lawyer' => $author?->name,
             // O advogado que assina vem antes da conta: numa conta `individual`
