@@ -37,16 +37,15 @@ final class DashboardIndicatorsQuery
     }
 
     /**
-     * The customer accounts, with the pleadings and users inside them. The
-     * caller decides who may see this; the query only knows the platform
-     * account is not a customer.
+     * Every account, the LexIA one included, with the pleadings and users
+     * inside them. The caller decides who may see this.
      *
      * @return array{accounts: int, legal_cases: int, users: int}
      */
     public function platform(): array
     {
         return [
-            'accounts' => self::customerAccounts()->count(),
+            'accounts' => self::accounts()->count(),
             'legal_cases' => $this->withinAccount(LegalCase::acrossAllAccounts(), null)->count(),
             'users' => $this->withinAccount(User::acrossAllAccounts(), null)->count(),
         ];

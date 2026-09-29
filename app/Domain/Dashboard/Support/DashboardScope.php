@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Domain\Dashboard\Support;
 
-use App\Domain\Accounts\Enums\AccountType;
 use App\Domain\Accounts\Models\Account;
 use App\Domain\Dashboard\Queries\LegalCaseActivityQuery;
 use App\Domain\Users\Models\User;
@@ -19,7 +18,7 @@ use Illuminate\Support\Str;
  * actor may see:
  *
  * - the account is fixed for a customer, whatever `?account=` says; staff may
- *   pick any customer account, and none means all of them;
+ *   pick any account, the LexIA one included, and none means all of them;
  * - the user must belong to the account in view, so a user id from another
  *   tenant filters nothing;
  * - the year must be one that has pleadings, and falls back to the newest.
@@ -58,7 +57,7 @@ final readonly class DashboardScope
      */
     public static function acrossAccounts(array $filters, LegalCaseActivityQuery $activity): self
     {
-        $accountId = self::customerAccount($filters['account'] ?? null);
+        $accountId = self::account($filters['account'] ?? null);
 
         return self::make($accountId, array_filter(['account' => $accountId]), $filters, $activity);
     }
@@ -93,18 +92,17 @@ final readonly class DashboardScope
         );
     }
 
-    private static function customerAccount(mixed $requested): ?string
+    /**
+     * An account that exists and has not been deleted — the same set the
+     * filter offers and the sums add up.
+     */
+    private static function account(mixed $requested): ?string
     {
         if (! self::isUuid($requested)) {
             return null;
         }
 
-        $exists = Account::query()
-            ->whereKey($requested)
-            ->whereIn('type', AccountType::customerValues())
-            ->exists();
-
-        return $exists ? $requested : null;
+        return Account::query()->whereKey($requested)->exists() ? $requested : null;
     }
 
     private static function user(?string $accountId, mixed $requested): ?string

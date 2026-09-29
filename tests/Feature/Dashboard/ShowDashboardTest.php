@@ -60,10 +60,22 @@ final class ShowDashboardTest extends TestCase
                 ->where('indicators.drafts', 1)
                 ->where('filters', [])
                 ->where('users', [['value' => $owner->id, 'label' => $owner->name]]));
+
+        // Staff may pick the LexIA account; a customer asking for it stays home.
+        $staff = User::factory()->platformAdmin()->create();
+        LegalCase::factory()->by($staff)->count(2)->create();
+
+        $this->actingAs($owner)
+            ->get('/painel?account='.Account::PLATFORM_ID.'&user='.$staff->id)
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('indicators.drafts', 1)
+                ->where('filters', [])
+                ->where('accounts', []));
     }
 
     #[Test]
-    public function staff_see_the_platform_card_without_the_platform_account_in_it(): void
+    public function staff_see_the_platform_card_with_the_platform_account_in_it(): void
     {
         [, $first] = $this->accountWithOwner();
         User::factory()->forAccount($first->account)->create();
@@ -74,22 +86,60 @@ final class ShowDashboardTest extends TestCase
 
         $staff = User::factory()->platformAdmin()->create();
         User::factory()->platformAdmin()->create();
+        LegalCase::factory()->by($staff)->draft()->create();
 
-        // Two customer accounts; the platform account and its two staff
-        // members are not customers and stay out of every sum.
+        // Two customer accounts plus the platform one, which counts like any
+        // other: its type only decides who may cross the boundary.
         $this->actingAs($staff)
             ->get('/painel')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->where('can.view_accounts', true)
-                ->where('platform.accounts', 2)
-                ->where('platform.legal_cases', 3)
-                ->where('platform.users', 3)
+                ->where('platform.accounts', 3)
+                ->where('platform.legal_cases', 4)
+                ->where('platform.users', 5)
                 ->where('indicators.finalized', 2)
-                ->where('indicators.drafts', 1)
-                ->where('indicators.users', 3)
-                ->has('accounts', 2)
+                ->where('indicators.drafts', 2)
+                ->where('indicators.users', 5)
+                ->has('accounts', 3)
+                ->where('accounts', fn ($accounts) => $accounts->pluck('value')->contains(Account::PLATFORM_ID))
                 ->where('users', []));
+    }
+
+    #[Test]
+    public function staff_choose_the_platform_account_and_the_chart_follows_it(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+        LegalCase::factory()->by($owner)->draft()->count(3)->create(['created_at' => '2026-04-10 10:00:00']);
+
+        $staff = User::factory()->platformAdmin()->create();
+        $colleague = User::factory()->platformAdmin()->create();
+        LegalCase::factory()->by($staff)->finalised()->create(['created_at' => '2026-04-11 10:00:00']);
+        LegalCase::factory()->by($colleague)->draft()->create(['created_at' => '2026-04-12 10:00:00']);
+
+        // Every account at once: the staff's own pleadings are in the bars.
+        $this->actingAs($staff)
+            ->get('/painel')
+            ->assertInertia(fn ($page) => $page
+                ->where('activity.months.3', ['month' => 4, 'finalized' => 1, 'drafts' => 4]));
+
+        $this->actingAs($staff)
+            ->get('/painel?account='.Account::PLATFORM_ID)
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('filters.account', Account::PLATFORM_ID)
+                ->where('indicators.finalized', 1)
+                ->where('indicators.drafts', 1)
+                ->where('indicators.users', 2)
+                ->where('activity.months.3', ['month' => 4, 'finalized' => 1, 'drafts' => 1])
+                ->where('users', fn ($users) => $users->pluck('value')->sort()->values()->all()
+                    === collect([$staff->id, $colleague->id])->sort()->values()->all()));
+
+        $this->actingAs($staff)
+            ->get('/painel?account='.Account::PLATFORM_ID.'&user='.$colleague->id)
+            ->assertInertia(fn ($page) => $page
+                ->where('filters.user', $colleague->id)
+                ->where('activity.months.3', ['month' => 4, 'finalized' => 0, 'drafts' => 1]));
     }
 
     #[Test]
@@ -117,18 +167,24 @@ final class ShowDashboardTest extends TestCase
     }
 
     #[Test]
-    public function staff_cannot_choose_the_platform_account_nor_a_malformed_id(): void
+    public function staff_cannot_choose_a_deleted_account_nor_a_malformed_id(): void
     {
         $staff = User::factory()->platformAdmin()->create();
 
-        foreach ([Account::PLATFORM_ID, 'not-a-uuid'] as $account) {
+        [$deleted] = $this->accountWithOwner();
+        $deleted->delete();
+
+        // Refused, the filter falls back to every account — the staff member
+        // alone, since the deleted one takes its owner out of the sums.
+        foreach ([$deleted->id, 'not-a-uuid'] as $account) {
             $this->actingAs($staff)
                 ->get('/painel?account='.$account.'&user=nope')
                 ->assertOk()
                 ->assertInertia(fn ($page) => $page
                     ->where('filters', [])
                     ->where('users', [])
-                    ->where('indicators.users', 0));
+                    ->has('accounts', 1)
+                    ->where('indicators.users', 1));
         }
     }
 

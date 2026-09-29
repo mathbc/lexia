@@ -74,7 +74,7 @@ Nem o tipo nem o papel são oferecidos em formulário — cadastro público e
 edição de conta trabalham com `AccountType::customerCases()`, e a conta da
 plataforma não pode ser desativada nem excluída (desativá-la reprovaria
 `canAccessPlatform()` de toda a equipe). Testes que contam contas precisam
-descontá-la.
+descontá-la — os do painel, somá-la (ver "Os indicadores").
 
 ## O design system
 
@@ -174,8 +174,11 @@ e o gráfico mensal de peças por `created_at`, empilhado pela situação **de h
 existe data de finalização. A fronteira da tela é `DashboardScope`, e não o
 `AccountScope`, que para a equipe LexIA está aberto: o cliente fica na própria conta
 qualquer que seja o `?account=`, o usuário precisa ser da conta em vista e o ano precisa
-ter peça. Sem conta escolhida, a equipe vê a soma das **contas de clientes** — a conta da
-plataforma fica fora das somas e do filtro, e com ela as peças que a equipe abre nela.
+ter peça. Sem conta escolhida, a equipe vê a soma de **todas as contas**, a da LexIA
+inclusive: no painel ela é uma conta como as outras — aparece no filtro, entra nas somas e
+no card de contas, e as peças que a equipe abre nela contam. O tipo `Platform` pesa no
+controle de acesso (quem escolhe a conta), não no que se conta. O cliente continua preso à
+própria, mesmo com o id da LexIA no `?account=`.
 
 O filtro por usuário lê `legal_cases.user_id`, que `CreateLegalCase` grava desde que a
 coluna existe. As peças anteriores ficaram com null de propósito — atribuí-las seria

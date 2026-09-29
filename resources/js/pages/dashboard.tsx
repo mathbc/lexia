@@ -145,7 +145,7 @@ export default function Dashboard({ indicators, platform, activity, years, accou
                             label="Contas cadastradas"
                             value={platform.accounts}
                             icon={Building2}
-                            description="Todas as contas de clientes"
+                            description="Todas as contas, a da LexIA inclusive"
                         >
                             <dl className="grid grid-cols-2 gap-2">
                                 <div>

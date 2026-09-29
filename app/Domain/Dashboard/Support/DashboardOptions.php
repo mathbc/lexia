@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Domain\Dashboard\Support;
 
-use App\Domain\Accounts\Enums\AccountType;
 use App\Domain\Accounts\Models\Account;
 use App\Domain\Users\Models\User;
 
@@ -15,14 +14,14 @@ use App\Domain\Users\Models\User;
 final class DashboardOptions
 {
     /**
-     * Customer accounts only: the platform account has no pleadings to chart.
+     * Every account, the LexIA one among them: staff open pleadings there too,
+     * and the chart should be able to show them.
      *
      * @return list<array{value: string, label: string}>
      */
     public static function accounts(): array
     {
         return Account::query()
-            ->whereIn('type', AccountType::customerValues())
             // The same name displayName() picks, so the order matches the labels.
             ->orderByRaw('coalesce(legal_name, name)')
             ->get()
