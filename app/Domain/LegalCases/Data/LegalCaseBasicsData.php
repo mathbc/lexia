@@ -33,6 +33,10 @@ namespace App\Domain\LegalCases\Data;
  * said, and "the AI recommended it and the lawyer declined" is worth keeping
  * exactly as it is. It arrives as the envelope the screen received and is read
  * back through InjunctiveReliefSuggestionData, never recomputed.
+ *
+ * The addressing suggestion follows the same rule, beside the addressing and
+ * the system it pre-filled: read back through CourtAddressingSuggestionData,
+ * never recomputed, and never the source of `judicial_system_id`.
  */
 final readonly class LegalCaseBasicsData
 {
@@ -46,6 +50,7 @@ final readonly class LegalCaseBasicsData
         public bool $injunctiveRelief,
         public ?string $injunctiveReliefDescription,
         public ?InjunctiveReliefSuggestionData $injunctiveReliefSuggestion = null,
+        public ?CourtAddressingSuggestionData $courtAddressingSuggestion = null,
     ) {}
 
     /**
@@ -70,9 +75,10 @@ final readonly class LegalCaseBasicsData
                 ? self::nullify($validated['injunctive_relief_description'] ?? null)
                 : null,
             injunctiveReliefSuggestion: InjunctiveReliefSuggestionData::fromArray(
-                is_array($validated['injunctive_relief_suggestion'] ?? null)
-                    ? $validated['injunctive_relief_suggestion']
-                    : null,
+                self::envelope($validated, 'injunctive_relief_suggestion'),
+            ),
+            courtAddressingSuggestion: CourtAddressingSuggestionData::fromArray(
+                self::envelope($validated, 'court_addressing_suggestion'),
             ),
         );
     }
@@ -88,11 +94,25 @@ final readonly class LegalCaseBasicsData
             'procedural_class_id' => $this->proceduralClassId,
             'judicial_system_id' => $this->judicialSystemId,
             'court_addressing' => $this->courtAddressing,
+            'court_addressing_suggestion' => $this->courtAddressingSuggestion?->toArray(),
             'facts' => $this->facts,
             'injunctive_relief' => $this->injunctiveRelief,
             'injunctive_relief_description' => $this->injunctiveReliefDescription,
             'injunctive_relief_suggestion' => $this->injunctiveReliefSuggestion?->toArray(),
         ];
+    }
+
+    /**
+     * An AI envelope as the screen sent it back, or null when it sent none.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array<string, mixed>|null
+     */
+    private static function envelope(array $validated, string $key): ?array
+    {
+        $envelope = $validated[$key] ?? null;
+
+        return is_array($envelope) ? $envelope : null;
     }
 
     private static function nullify(mixed $value): ?string

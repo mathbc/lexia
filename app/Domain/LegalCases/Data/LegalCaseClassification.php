@@ -23,11 +23,11 @@ use App\Domain\Requirements\Data\RequirementListData;
  * shape, and it is the only one — `PracticeAreaClassification` deliberately has
  * no `toArray()` of its own.
  *
- * `DefendantData`, `RequirementListData` and `InjunctiveReliefSuggestionData`
- * are the exception that proves the rule: none is unwrapped, because each is
- * already the shape its consumer takes — `UpdateLegalCaseDefendant`,
- * `SaveLegalCaseRequirements`, and the envelope the first step saves beside the
- * injunction. Flattening them here would mean writing their fields a third
+ * `DefendantData`, `RequirementListData`, `InjunctiveReliefSuggestionData` and
+ * `CourtAddressingSuggestionData` are the exception that proves the rule: none
+ * is unwrapped, because each is already the shape its consumer takes —
+ * `UpdateLegalCaseDefendant`, `SaveLegalCaseRequirements`, and the two
+ * envelopes the first step saves beside the injunction and the addressing. Flattening them here would mean writing their fields a third
  * time.
  *
  * There used to be a third exception here, `LegalResearchData`, carrying the
@@ -56,6 +56,7 @@ final readonly class LegalCaseClassification
         public ?DefendantData $defendant,
         public ?RequirementListData $requirements,
         public ?InjunctiveReliefSuggestionData $injunctiveRelief = null,
+        public ?CourtAddressingSuggestionData $courtAddressing = null,
     ) {}
 
     /**
@@ -93,6 +94,10 @@ final readonly class LegalCaseClassification
             // etapa falhou. `recommended` falso é resposta, e a tela a mostra
             // como tal: a caixa desmarcada e o "Consultar IA" de volta.
             'injunctive_relief' => $this->injunctiveRelief?->toArray(),
+            // O endereçamento com a frase já composta e o sistema do mapa, ou
+            // nulo quando a etapa falhou ou o pedido não trouxe o cliente. A
+            // tela preenche os dois campos da etapa 1 e guarda o envelope.
+            'court_addressing' => $this->courtAddressing?->toArray(),
         ];
     }
 }

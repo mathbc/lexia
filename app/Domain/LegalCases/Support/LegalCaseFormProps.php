@@ -6,6 +6,7 @@ namespace App\Domain\LegalCases\Support;
 
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\CourtDecisions\Models\CourtDecision;
+use App\Domain\LegalCases\Data\CourtAddressingSuggestionData;
 use App\Domain\LegalCases\Data\InjunctiveReliefSuggestionData;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalPrecedents\Models\LegalPrecedent;
@@ -46,6 +47,9 @@ final class LegalCaseFormProps
             'procedural_class_id' => $legalCase->procedural_class_id,
             'judicial_system_id' => self::text($legalCase->judicial_system_id),
             'court_addressing' => self::text($legalCase->court_addressing),
+            'court_addressing_suggestion' => CourtAddressingSuggestionData::fromArray(
+                $legalCase->court_addressing_suggestion,
+            )?->toArray(),
             'facts' => self::text($legalCase->facts),
             'injunctive_relief' => $legalCase->injunctive_relief,
             'injunctive_relief_description' => self::text($legalCase->injunctive_relief_description),

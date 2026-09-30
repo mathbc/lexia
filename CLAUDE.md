@@ -263,8 +263,12 @@ levanta, e `LegalThemeSelectionAgent`, que ordena por relevância os temas do ST
 trouxe para elas — ver "Os temas do STJ", abaixo; os dois seguem o `#[Provider('gemini')]`
 dos seletores, com a linha do Ollama comentada acima. E o enquadramento ganhou um terceiro
 elo, `InjunctiveReliefSuggestionAgent`, que diz se a inicial deve pedir tutela de urgência —
-ver "A tutela de urgência", abaixo; ele segue o `#[Provider]` dos irmãos da cadeia. Os
-embeddings do catálogo nunca saíram da máquina: `nomic-embed-text`, 768 dimensões.
+ver "A tutela de urgência", abaixo; ele segue o `#[Provider]` dos irmãos da cadeia. E o
+endereçamento trouxe mais dois, em série: `CourtAddressingSuggestionAgent`, que decide o
+foro competente, e `JudicialSystemSelectionAgent`, que escolhe o sistema quando o tribunal
+tem dois — ver "O endereçamento e o sistema judicial", abaixo; os dois seguem o mesmo
+`#[Provider('gemini')]`. Os embeddings do catálogo nunca saíram da máquina:
+`nomic-embed-text`, 768 dimensões.
 
 O **Gemini** responde por **um**: `LegalThesisResearchAgent`, que pesquisa nos portais
 oficiais. Ele não tem opção local, e a falha não seria graciosa —
@@ -440,9 +444,10 @@ que custou minutos — sobrevive. No payload, `null` é a extração que falhou;
 campos nulos dentro do objeto são o relato que não identifica ninguém, e a lista
 vazia é o relato que não pede nada.
 
-`POST /pecas/classificar` e `POST /pecas/tutela-de-urgencia/sugerir` são as rotas das
-Actions de agente: a primeira aponta para `ClassifyLegalCase`, a segunda para
-`SuggestInjunctiveRelief` — o "Consultar IA" da etapa 1 —, e as demais não têm
+`POST /pecas/classificar`, `POST /pecas/tutela-de-urgencia/sugerir` e
+`POST /pecas/enderecamento/sugerir` são as rotas das Actions de agente: a primeira aponta
+para `ClassifyLegalCase`, a segunda para `SuggestInjunctiveRelief` e a terceira para
+`SuggestCourtAddressing` — os dois "Consultar IA" da etapa 1 —, e as demais não têm
 `asController()` enquanto nada apontar para elas.
 O preço da rota continua sendo latência, com o navegador esperando, mas encolheu duas
 vezes. As cinco etapas estão num `Concurrency::run` — três tasks, porque área, classe e
@@ -703,9 +708,9 @@ que dispara porque o normal não consegue interromper um `curl_exec()` bloqueado
 exceção, é o processo abatido, sem gravar nada e sem nada a capturar. Subir o `#[Timeout]`
 do agente não move isso um segundo — são coisas independentes, e vence o interpretador.
 Quem levanta é o middleware `AllowLongInference` (`ai.request_time_limit`, 900 s, o pior
-caso destes dois agentes em série), pelo alias `inference` nas **cinco** rotas que
-esperam por uma inferência: classificar, pesquisar as teses, pesquisar a jurisprudência,
-concluir e gerar a minuta. Ele só
+caso destes dois agentes em série), pelo alias `inference` nas **sete** rotas que
+esperam por uma inferência: classificar, sugerir a tutela, sugerir o endereçamento,
+pesquisar as teses, pesquisar a jurisprudência, concluir e gerar a minuta. Ele só
 levanta — zero é ilimitado, que é o que a CLI e o `artisan serve` entregam, e escrever um
 número ali construiria a parede em vez de derrubá-la. Num servidor de verdade o corte
 volta de fora (`fastcgi_read_timeout`, `request_terminate_timeout`), onde nenhum
@@ -1073,8 +1078,64 @@ anteriores ficaram com null. Viaja pelo uuid, e não por slug como a área, porq
 entra em URL. O hint do select lista os tribunais do sistema escolhido, composto em PHP por
 `JudicialSystem::servedCourts()`.
 
-**Nenhum agente o lê**: o sistema não está no `LegalCaseDossier` nem no preenchimento
-inteligente, e o endereçamento continua texto livre.
+O sistema pode vir **sugerido** — ver a seção seguinte —, mas nenhum agente o **lê**: ele
+não está no `LegalCaseDossier`, e a minuta não sabe por onde a peça será protocolada.
+
+## O endereçamento e o sistema judicial
+
+`court_addressing` continua texto livre e `judicial_system_id` continua opcional, os dois
+do advogado. Na etapa 1 o sistema fica ao lado do cliente e o endereçamento logo abaixo
+dos dois, e ambos podem vir **sugeridos**, pelo "Consultar IA" do campo de endereçamento —
+que só acorda com os fatos, a área e a classe, mais abaixo, preenchidos — (`SuggestCourtAddressing`,
+`POST /pecas/enderecamento/sugerir`) e pelo preenchimento inteligente, e o envelope da
+resposta é gravado ao lado deles em `legal_cases.court_addressing_suggestion` (jsonb) — a
+mesma arrumação da tutela, com o selo "Sugestão da IA · editada" quando o texto deixa de
+ser o sugerido e "· alterado" quando o select deixa de ser o sistema sugerido.
+
+São **dois agentes em série**, e a ordem é imposta como a de área e classe: os sistemas
+candidatos só existem depois que se sabe a UF do foro.
+
+1. `CourtAddressingSuggestionAgent` **não escreve o endereçamento**. Ele escolhe o juízo
+   (`CourtDivision`, que carrega a justiça), de onde vem a cidade (`ForumSource`) e a base
+   legal, e `CourtAddressingSuggestionData` compõe a frase: "Excelentíssimo(a) Senhor(a)
+   Juiz(a) de Direito da Vara Cível da Comarca de Joinville/SC" — "Juiz(a) Federal … da
+   Subseção Judiciária", "Juiz(a) do Trabalho da Vara do Trabalho de …", "Circunscrição
+   Judiciária" no DF. É o argumento do timbre: quem vai julgar só se conhece depois da
+   distribuição, e uma forma neutra que depende de o modelo lembrar dela volta masculina.
+2. **A cidade das fichas é copiada, e a do relato é conferida.** Com a fonte no cliente ou
+   no réu, `ForumPlace` copia cidade e UF do cadastro e ignora o que o modelo escreveu; com
+   a fonte no relato (o imóvel, o local do fato, o local da prestação de serviços), a
+   cidade só vale se o relato a escrever — a guarda de cifra, aplicada a lugar. O que
+   falta vira `[CIDADE/UF]` ou `[CIDADE]/SC`, e um aviso.
+3. **A classe estreita o juízo pelo par justiça × grau.** `CourtDivision::allowedBy()` lê
+   `procedural_classes.jurisdictions`: o procedimento comum (7) não vai ao juizado, o
+   procedimento do juizado (436) não vai à vara, a ação trabalhista não sai da Justiça do
+   Trabalho. Classe sem competências abre a lista inteira; classe que só tramita em
+   tribunal, na Justiça Eleitoral ou na Militar **não chama agente nenhum** — a resposta
+   diz que o endereçamento não é sugerido.
+4. `JudicialSystemSelectionAgent` só é chamado quando o tribunal do foro tem **dois**
+   sistemas no mapa (SP, RN, RR, AP), com as candidatas injetadas e como `enum` pelo slug.
+   Com um, `SelectJudicialSystem` responde pela tabela; fora da Justiça Estadual o sistema
+   fica em branco, porque o mapa só tem os TJs; e um tribunal em transição, implantação ou
+   coexistência sai com aviso para conferir a comarca. A falha do segundo agente custa o
+   select, nunca o endereçamento.
+
+O que viaja é estreitado por `ForumBrief`: o tipo de cada parte, a idade do cliente (o
+idoso tem foro próprio), as cidades e UFs, e o **nome do réu que não é pessoa física** — é
+ele que revela o INSS, a Caixa ou o Município que mudam a justiça. O nome do cliente, as
+ruas e os documentos ficam em casa. O conhecimento é `app/Rag/knowledge/forum-competence.md`,
+sobre os arts. 42 a 66 do CPC, a CF (arts. 109 e 114), a CLT (art. 651) e as leis especiais
+de foro, com as saídas fáceis que mais erram: o domicílio do réu por hábito quando há foro
+que protege o autor, o Banco do Brasil na Federal, o benefício acidentário na Federal.
+
+No preenchimento inteligente o endereçamento é a **sexta etapa, depois do bloco
+concorrente**: é a única que precisa de duas tasks dele (a classe e o réu extraído), então
+roda em série no processo pai — o preço é uma inferência a mais na espera, duas nos
+tribunais de dois sistemas. Só roda com o `customer_id` no pedido, que a tela sempre
+manda; sem ele a chave volta nula.
+
+O fallback da minuta sem endereçamento também ficou neutro: `PleadingDraftingAgent` escreve
+"EXCELENTÍSSIMO(A) SENHOR(A) JUIZ(A) DE DIREITO DA VARA CÍVEL DA COMARCA DE [CIDADE/UF]".
 
 ## Ainda não implementado
 

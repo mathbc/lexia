@@ -82,6 +82,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * the catalogue and not text. Nullable, because the form lets it wait and the
  * rows written before it existed were left without one.
  *
+ * Both may be **suggested** by the addressing chain, the arrangement the
+ * injunction has: the text is composed from the court and the forum the agent
+ * chose, the system is read from the map, and `court_addressing_suggestion` is
+ * the provenance kept beside them. The lawyer's save still writes the two
+ * fields, and whatever they wrote over the suggestion wins.
+ *
  * `current_step` and `is_draft` are what make an unfinished pleading a first
  * class thing rather than an accident. The form saves one step at a time, so
  * the row exists long before it is complete: the step is a high-water mark —
@@ -110,6 +116,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property BrazilianState|null $defendant_state
  * @property string|null $defendant_notes
  * @property string|null $court_addressing
+ * @property array<string, mixed>|null $court_addressing_suggestion
  * @property string|null $facts
  * @property bool $injunctive_relief
  * @property string|null $injunctive_relief_description
@@ -159,6 +166,7 @@ class LegalCase extends Model
             'defendant_state' => BrazilianState::class,
             'injunctive_relief' => 'boolean',
             'injunctive_relief_suggestion' => 'array',
+            'court_addressing_suggestion' => 'array',
             'current_step' => LegalCaseStep::class,
             'is_draft' => 'boolean',
             'research_findings' => 'array',

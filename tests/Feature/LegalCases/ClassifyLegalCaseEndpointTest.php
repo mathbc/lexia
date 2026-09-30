@@ -5,12 +5,19 @@ declare(strict_types=1);
 namespace Tests\Feature\LegalCases;
 
 use App\Domain\Accounts\Enums\BrazilianState;
+use App\Domain\Accounts\Models\Account;
+use App\Domain\Customers\Models\Customer;
 use App\Domain\LegalCases\Actions\ExtractLegalCaseDefendant;
 use App\Domain\LegalCases\Actions\ExtractLegalCaseRequirements;
 use App\Domain\LegalCases\Actions\ResearchLegalCaseTheses;
+use App\Domain\LegalCases\Actions\SuggestCourtAddressing;
 use App\Domain\LegalCases\Actions\SuggestInjunctiveRelief;
+use App\Domain\LegalCases\Data\CourtAddressingSuggestionData;
 use App\Domain\LegalCases\Data\DefendantData;
+use App\Domain\LegalCases\Data\ForumPlace;
 use App\Domain\LegalCases\Data\InjunctiveReliefSuggestionData;
+use App\Domain\LegalCases\Enums\CourtDivision;
+use App\Domain\LegalCases\Enums\ForumSource;
 use App\Domain\LegalCases\Enums\InjunctiveReliefKind;
 use App\Domain\PracticeAreas\Actions\ClassifyPracticeArea;
 use App\Domain\PracticeAreas\Data\PracticeAreaClassification;
@@ -38,6 +45,10 @@ use Tests\TestCase;
  * Todo teste que chega à inferência dubla as cinco — a tutela de urgência é a
  * quinta, terceiro elo do enquadramento: uma que ficasse de fora sairia daqui
  * direto para o modelo, e um teste da suíte padrão passaria a depender dele.
+ *
+ * O endereçamento é a sexta, e a exceção a essa regra: ela só roda com o
+ * cliente no pedido, então os testes que postam só os fatos não a alcançam. Os
+ * que postam o cliente a dublam, e estão juntos no fim do arquivo.
  *
  * `ResearchLegalCaseTheses` não está entre elas, e não por esquecimento: ela
  * saiu desta rota. Ela aparece aqui uma vez só, em
@@ -596,6 +607,131 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->assertOk()
             ->assertJsonPath('practice_area.slug', 'civil')
             ->assertJsonMissingPath('research');
+    }
+
+    /**
+     * O endereçamento lê duas tasks do bloco — a classe e o réu extraído —, e
+     * por isso roda depois dele, com o cliente que o pedido trouxe.
+     */
+    #[Test]
+    public function the_addressing_runs_after_the_block_with_the_client_and_the_extracted_defendant(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $customer = Customer::factory()->forAccount($account)->create();
+        [$area, $class] = $this->fakeTheBlock();
+
+        $this->fakeAction(SuggestCourtAddressing::class)
+            ->shouldReceive('handle')
+            ->once()
+            ->withArgs(static fn (PracticeArea $given, ?ProceduralClass $chosen, string $facts, Customer $client, DefendantData $defendant): bool => $given->is($area)
+                && $chosen?->is($class) === true
+                && $facts === 'O vizinho derrubou o muro.'
+                && $client->is($customer)
+                && $defendant->name === 'Joaquim Vizinho')
+            ->andReturn(CourtAddressingSuggestionData::compose(
+                CourtDivision::Civil,
+                ForumSource::DefendantAddress,
+                new ForumPlace('Joinville', BrazilianState::SC),
+                'CPC, art. 46',
+                'O réu mora em Joinville.',
+                null,
+            ));
+
+        $this->actingAs($owner)
+            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id])
+            ->assertOk()
+            ->assertJsonPath('practice_area.slug', 'civil')
+            ->assertJsonPath('court_addressing.court_addressing', 'Excelentíssimo(a) Senhor(a) Juiz(a) de Direito da Vara Cível da Comarca de Joinville/SC')
+            ->assertJsonPath('court_addressing.justification', 'O réu mora em Joinville.');
+    }
+
+    /**
+     * O endereçamento que cai não leva o enquadramento junto: a chave volta
+     * nula, e a etapa 1 oferece o "Consultar IA".
+     */
+    #[Test]
+    public function a_failed_addressing_is_a_null_and_the_framing_survives(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $customer = Customer::factory()->forAccount($account)->create();
+        $this->fakeTheBlock();
+
+        $this->fakeAction(SuggestCourtAddressing::class)
+            ->shouldReceive('handle')
+            ->once()
+            ->andThrow(new RuntimeException('Connection refused'));
+
+        $this->actingAs($owner)
+            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id])
+            ->assertOk()
+            ->assertJsonPath('practice_area.slug', 'civil')
+            ->assertJsonPath('court_addressing', null);
+    }
+
+    #[Test]
+    public function without_a_client_the_addressing_never_runs(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+        $this->fakeTheBlock();
+
+        $this->fakeAction(SuggestCourtAddressing::class)->shouldNotReceive('handle');
+
+        $this->actingAs($owner)
+            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
+            ->assertOk()
+            ->assertJsonPath('court_addressing', null);
+    }
+
+    /**
+     * O cliente é um id vindo do pedido: o de outra conta é recusado antes de
+     * qualquer inferência.
+     */
+    #[Test]
+    public function a_client_from_another_account_is_refused(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+        $foreign = Customer::factory()->forAccount(Account::factory()->create())->create();
+
+        $this->fakeAction(ClassifyPracticeArea::class)->shouldNotReceive('handle');
+
+        $this->actingAs($owner)
+            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $foreign->id])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['customer_id']);
+    }
+
+    /**
+     * As cinco etapas do bloco, dubladas com as respostas de um caso de
+     * vizinhança, para os testes que falam do que vem depois dele.
+     *
+     * @return array{0: PracticeArea, 1: ProceduralClass}
+     */
+    private function fakeTheBlock(): array
+    {
+        $area = PracticeArea::query()->where('slug', 'civil')->sole();
+        $class = ProceduralClass::query()->where('code', 7)->sole();
+
+        $this->fakeAction(ClassifyPracticeArea::class)
+            ->shouldReceive('handle')
+            ->andReturn(new PracticeAreaClassification(practiceArea: $area, justification: 'O réu é um particular.'));
+
+        $this->fakeAction(SelectProceduralClass::class)
+            ->shouldReceive('handle')
+            ->andReturn(new ProceduralClassSelection(proceduralClass: $class, justification: 'O pedido é indenizatório.'));
+
+        $this->fakeAction(ExtractLegalCaseDefendant::class)
+            ->shouldReceive('handle')
+            ->andReturn($this->defendant());
+
+        $this->fakeAction(ExtractLegalCaseRequirements::class)
+            ->shouldReceive('handle')
+            ->andReturn(new RequirementListData([]));
+
+        $this->fakeAction(SuggestInjunctiveRelief::class)
+            ->shouldReceive('handle')
+            ->andReturn($this->suggestion(recommended: false));
+
+        return [$area, $class];
     }
 
     /**

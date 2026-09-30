@@ -401,8 +401,11 @@ final class LegalCaseDossier
      * instead of qualifying the Autor as minus fifty-three. The same guard eats
      * the first year of life, and that is the right trade — "0 anos" is not what
      * a petição writes about an infant, and the clause is optional anyway.
+     *
+     * Public because the addressing chain states the same age for a different
+     * reason: the idoso has a forum of their own (CPC, art. 53, III, e).
      */
-    private static function age(?CarbonInterface $birthDate): ?string
+    public static function age(?CarbonInterface $birthDate): ?string
     {
         $years = (int) ($birthDate?->diffInYears(CarbonImmutable::now()) ?? 0);
 

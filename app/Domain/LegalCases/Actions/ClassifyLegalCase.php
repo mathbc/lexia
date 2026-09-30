@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\LegalCases\Actions;
 
+use App\Domain\Customers\Models\Customer;
+use App\Domain\LegalCases\Data\CourtAddressingSuggestionData;
 use App\Domain\LegalCases\Data\DefendantData;
 use App\Domain\LegalCases\Data\InjunctiveReliefSuggestionData;
 use App\Domain\LegalCases\Data\LegalCaseClassification;
@@ -16,6 +18,7 @@ use App\Domain\Requirements\Data\RequirementListData;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Concurrency;
+use Illuminate\Validation\Rule;
 use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 use RuntimeException;
@@ -23,12 +26,13 @@ use Throwable;
 
 /**
  * Read the facts of a matter: frame it, describe who is on the other side,
- * write out what is being asked of the court, and say whether any of it cannot
- * wait.
+ * write out what is being asked of the court, say whether any of it cannot
+ * wait, and say to whom it is addressed.
  *
  * Cinco etapas em três tasks, e **todas** correm ao mesmo tempo dentro de um
- * único `Concurrency::run`. Não há mais nada em série depois do bloco: a espera
- * desta rota é a mais longa das três tasks, e não a soma de coisa nenhuma.
+ * único `Concurrency::run`. Depois do bloco há uma sexta, em série — o
+ * endereçamento —, e o motivo de ela não caber lá dentro está abaixo, em "O
+ * endereçamento vem depois".
  *
  * Já foi diferente, e de três formas. As extrações viajaram como argumentos
  * nomeados do construtor, com a ordem sendo a de avaliação de argumentos do
@@ -110,6 +114,26 @@ use Throwable;
  * cinco agentes pela linha comentada logo acima de cada um, mais um
  * `config:clear`.
  *
+ * ## O endereçamento vem depois
+ *
+ * `SuggestCourtAddressing` é a única etapa que precisa de duas tasks do bloco
+ * ao mesmo tempo: a classe, que diz em que justiça e em que grau a peça pode
+ * tramitar, e o réu, cujo endereço é o foro da regra geral (CPC, art. 46) e
+ * cujo nome revela o INSS, a Caixa ou o Município que mudam a justiça. Nenhuma
+ * task tem as duas, então ela espera o bloco e roda no processo pai — o que a
+ * dispensa das três regras acima: pode receber o `Customer`, que é da conta, e
+ * o tenant está de pé.
+ *
+ * O preço é explícito e é o maior desta rota: a espera passa a ser a task mais
+ * longa **mais** uma inferência, e mais duas no foro de um tribunal que usa
+ * dois sistemas (SP, RN, RR, AP), porque aí o segundo agente escolhe entre
+ * eles. Sem cliente no pedido a etapa não roda, e a chave volta nula — a tela
+ * do preenchimento inteligente sempre manda o cliente; o nulo é para quem
+ * chamar a rota só com os fatos.
+ *
+ * Ela passa por `stage()` como as outras: o endereçamento que falha não leva o
+ * enquadramento junto, e a etapa 1 abre com o "Consultar IA" à mão.
+ *
  * ## A pesquisa de teses não está mais aqui
  *
  * Ela já foi a quinta etapa deste `handle()`, e a posição se justificava: ela é
@@ -175,7 +199,7 @@ final class ClassifyLegalCase
 {
     use AsAction;
 
-    public function handle(string $facts): LegalCaseClassification
+    public function handle(string $facts, ?Customer $customer = null): LegalCaseClassification
     {
         $facts = trim($facts);
 
@@ -217,7 +241,31 @@ final class ClassifyLegalCase
             defendant: $read['defendant'],
             requirements: $read['requirements'],
             injunctiveRelief: $framing->injunctiveRelief,
+            courtAddressing: $customer === null ? null : self::addressing($framing, $read['defendant'], $customer, $facts),
         );
+    }
+
+    /**
+     * The sixth step, after the block because it reads two of its tasks — see
+     * "O endereçamento vem depois" in the class docblock.
+     *
+     * A defendant extraction that failed is not a reason to skip it: the agent
+     * reads the facts too, and an empty defendant only means the forum cannot
+     * be copied from an address that was never read.
+     */
+    private static function addressing(
+        LegalCaseFraming $framing,
+        ?DefendantData $defendant,
+        Customer $customer,
+        string $facts,
+    ): ?CourtAddressingSuggestionData {
+        return self::stage(static fn (): CourtAddressingSuggestionData => SuggestCourtAddressing::run(
+            $framing->area->practiceArea,
+            $framing->class?->proceduralClass,
+            $facts,
+            $customer,
+            $defendant ?? DefendantData::fromArray([]),
+        ));
     }
 
     /**
@@ -321,10 +369,21 @@ final class ClassifyLegalCase
     /**
      * @return array<string, mixed>
      */
-    public function rules(): array
+    public function rules(ActionRequest $request): array
     {
         return [
             'facts' => ['required', 'string'],
+            // Opcional, e só para o endereçamento: sem ele a sexta etapa não
+            // roda. Conferido contra a conta do ator pela mesma razão da etapa
+            // 1 — é um id vindo do pedido, e para a equipe LexIA o escopo está
+            // aberto.
+            'customer_id' => [
+                'nullable',
+                'uuid',
+                Rule::exists('customers', 'id')
+                    ->where('account_id', $request->user()->account_id)
+                    ->whereNull('deleted_at'),
+            ],
         ];
     }
 
@@ -335,13 +394,19 @@ final class ClassifyLegalCase
     {
         return [
             'facts' => 'fatos',
+            'customer_id' => 'cliente',
         ];
     }
 
     public function asController(ActionRequest $request): JsonResponse
     {
         try {
-            $classification = $this->handle($request->string('facts')->toString());
+            $classification = $this->handle(
+                $request->string('facts')->toString(),
+                $request->filled('customer_id')
+                    ? Customer::query()->findOrFail($request->string('customer_id')->toString())
+                    : null,
+            );
         } catch (Throwable $e) {
             report($e);
 

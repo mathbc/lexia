@@ -1,4 +1,5 @@
 import type {
+    CourtAddressingSuggestion,
     DefendantSuggestion,
     ExtractedRequirement,
     InjunctiveReliefSuggestion,
@@ -28,6 +29,7 @@ export interface LegalCaseHandoff {
     defendant: DefendantSuggestion | null;
     requirements: ExtractedRequirement[] | null;
     injunctive_relief: InjunctiveReliefSuggestion | null;
+    court_addressing: CourtAddressingSuggestion | null;
 }
 
 const KEY = "lexia:legal-case-handoff";
@@ -112,6 +114,7 @@ const parse = (value: string | null): LegalCaseHandoff | null => {
                   defendant: defendantOf(data.defendant),
                   requirements: requirementsOf(data.requirements),
                   injunctive_relief: injunctiveReliefOf(data.injunctive_relief),
+                  court_addressing: courtAddressingOf(data.court_addressing),
               }
             : null;
     } catch {
@@ -170,6 +173,41 @@ const injunctiveReliefOf = (value: unknown): InjunctiveReliefSuggestion | null =
               ...(data as InjunctiveReliefSuggestion),
               evidence: stringsOf(data.evidence),
               unsupported_amounts: stringsOf(data.unsupported_amounts),
+          }
+        : null;
+};
+
+/**
+ * O endereçamento segue a regra da tutela: é sugestão, e não invalida a
+ * entrega. Uma entrega gravada antes deste campo existir, ou fora de forma,
+ * vira nulo, e a etapa 1 abre com os dois campos em branco e o "Consultar IA"
+ * à mão. O sistema que não for um objeto com id cai sozinho, e o resto fica.
+ */
+const courtAddressingOf = (
+    value: unknown,
+): CourtAddressingSuggestion | null => {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        return null;
+    }
+
+    const data = value as Partial<CourtAddressingSuggestion>;
+    const system = data.judicial_system;
+
+    return typeof data.justification === "string" &&
+        typeof data.suggested_at === "string"
+        ? {
+              ...(data as CourtAddressingSuggestion),
+              court_addressing:
+                  typeof data.court_addressing === "string"
+                      ? data.court_addressing
+                      : null,
+              judicial_system:
+                  typeof system === "object" &&
+                  system !== null &&
+                  typeof system.id === "string"
+                      ? system
+                      : null,
+              warnings: stringsOf(data.warnings),
           }
         : null;
 };

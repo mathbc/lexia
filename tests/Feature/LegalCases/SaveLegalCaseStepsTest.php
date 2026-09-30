@@ -476,6 +476,62 @@ final class SaveLegalCaseStepsTest extends TestCase
         $this->assertSame(0, LegalCase::query()->count());
     }
 
+    /**
+     * O envelope do endereçamento é gravado ao lado dos dois campos que ele
+     * preencheu, e volta à tela na mesma forma: é o que mantém o selo depois
+     * do reload. Os campos continuam sendo do advogado — aqui ele trocou o
+     * texto, e o que vale é o dele.
+     */
+    #[Test]
+    public function the_addressing_suggestion_is_saved_beside_the_fields_it_filled(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $system = JudicialSystem::query()->where('slug', 'eproc')->sole();
+
+        $this->actingAs($owner)
+            ->post('/pecas', [
+                'judicial_system_id' => $system->id,
+                'court_addressing_suggestion' => $this->addressingSuggestion($system),
+            ] + $this->basics($account, addressing: 'Ao Juízo da 2ª Vara Cível da Comarca de Joinville/SC'))
+            ->assertSessionHasNoErrors();
+
+        $legalCase = LegalCase::query()->sole();
+
+        $this->assertSame('Ao Juízo da 2ª Vara Cível da Comarca de Joinville/SC', $legalCase->court_addressing);
+        $this->assertSame($system->id, $legalCase->judicial_system_id);
+        $this->assertEquals($this->addressingSuggestion($system), $legalCase->court_addressing_suggestion);
+
+        $this->actingAs($owner)
+            ->get("/pecas/{$legalCase->id}/editar")
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('legalCase.court_addressing_suggestion.court_addressing', 'Excelentíssimo(a) Senhor(a) Juiz(a) de Direito da Vara Cível da Comarca de Joinville/SC')
+                ->where('legalCase.court_addressing_suggestion.division_label', 'Vara Cível')
+                ->where('legalCase.court_addressing_suggestion.judicial_system.slug', 'eproc'));
+    }
+
+    #[Test]
+    public function a_malformed_addressing_suggestion_is_refused(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        $this->actingAs($owner)
+            ->post('/pecas', [
+                'court_addressing_suggestion' => [
+                    'division' => 'supreme_court',
+                    'state' => 'XX',
+                    'judicial_system' => ['slug' => 'eproc'],
+                ],
+            ] + $this->basics($account, addressing: null))
+            ->assertSessionHasErrors([
+                'court_addressing_suggestion.division',
+                'court_addressing_suggestion.state',
+                'court_addressing_suggestion.judicial_system.id',
+                'court_addressing_suggestion.suggested_at',
+            ]);
+
+        $this->assertSame(0, LegalCase::query()->count());
+    }
+
     #[Test]
     public function each_step_advances_the_pleading_to_the_next_one(): void
     {
@@ -599,6 +655,40 @@ final class SaveLegalCaseStepsTest extends TestCase
             'evidence' => ['Fotos da obra'],
             'unsupported_amounts' => [],
             'suggested_at' => '2026-09-27T12:00:00-03:00',
+        ];
+    }
+
+    /**
+     * An addressing envelope as SuggestCourtAddressing returns it.
+     *
+     * @return array<string, mixed>
+     */
+    private function addressingSuggestion(JudicialSystem $system): array
+    {
+        return [
+            'court_addressing' => 'Excelentíssimo(a) Senhor(a) Juiz(a) de Direito da Vara Cível da Comarca de Joinville/SC',
+            'division' => 'civil',
+            'division_label' => 'Vara Cível',
+            'branch' => 'state',
+            'branch_label' => 'Justiça Estadual',
+            'forum_source' => 'plaintiff_address',
+            'forum_source_label' => 'Domicílio do cliente',
+            'city' => 'Joinville',
+            'state' => 'SC',
+            'legal_basis' => 'CDC, art. 101, I',
+            'justification' => 'O consumidor pode propor no próprio domicílio.',
+            'judicial_system' => [
+                'id' => $system->id,
+                'slug' => 'eproc',
+                'name' => 'eproc',
+                'court' => 'TJSC',
+                'status' => 'active',
+                'status_label' => 'Em uso',
+                'source' => 'map',
+            ],
+            'judicial_system_justification' => null,
+            'warnings' => [],
+            'suggested_at' => '2026-09-30T12:00:00-03:00',
         ];
     }
 

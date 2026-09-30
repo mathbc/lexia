@@ -13,6 +13,8 @@ geram em `app/Ai/Agents` e `app/Ai/Tools`. O conhecimento que os agentes leem fi
 | `DefendantExtractionAgent` | Lê a descrição dos fatos e devolve os dados do réu nos doze campos `defendant_*` de `legal_cases` |
 | `RequirementExtractionAgent` | Lê a descrição dos fatos e devolve a lista do que o cliente pede ao juízo, cada pedido com a frase e o valor — menos a tutela de urgência, que tem agente próprio |
 | `InjunctiveReliefSuggestionAgent` | Com a área e a classe já decididas, diz se a inicial deve pedir tutela de urgência — de que espécie, com que medida e fundamento, e por que os dois requisitos do art. 300 estão ou não presentes |
+| `CourtAddressingSuggestionAgent` | Com a área e a classe decididas e as partes reduzidas ao tipo e à cidade, diz a quem a inicial é dirigida — o juízo (que carrega a justiça), de onde vem a cidade do foro e a base legal. Não escreve o endereçamento: a frase neutra é composta em PHP |
+| `JudicialSystemSelectionAgent` | Escolhe entre os sistemas eletrônicos do tribunal de justiça do foro, quando o mapa registra mais de um (SP, RN, RR, AP) |
 | `FactsRefinementAgent` | Reescreve o relato do cliente como a narrativa de fatos de uma inicial: registro formal, terceira pessoa, ordem cronológica — e o peso que uma perda irreparável tem |
 | `LegalThesisResearchAgent` | Pesquisa nos portais oficiais as teses que a peça pode sustentar, com as normas e os julgados que as sustentam, e devolve uma ficha rotulada |
 | `ForensicReviewTranscriptionAgent` | Transcreve a ficha da pesquisa para a estrutura aninhada de teses e precedentes |
@@ -42,6 +44,25 @@ temas de cada uma, e o seletor os ordena —, e correm **ao lado** do par: `Rese
 roda as duas metades como duas tasks do mesmo `Concurrency::run`, cada uma com marcador
 próprio, de modo que uma falha, uma repetição ou uma peça antiga sem temas afeta só a sua
 aba.
+
+O endereçamento é outro par em série, e a ordem é imposta pelo mesmo motivo que separa
+área e classe: os sistemas candidatos só existem depois que se sabe a UF do foro. Quem o
+expõe é `SuggestCourtAddressing` (`POST /pecas/enderecamento/sugerir`, o "Consultar IA" da
+etapa 1), e `ClassifyLegalCase` o chama **depois** do bloco concorrente, porque ele lê duas
+tasks de lá — a classe e o réu extraído. O primeiro agente escolhe três coisas de listas
+fechadas: o juízo, num `enum` de `CourtDivision` estreitado pelas competências CNJ da
+classe (`CourtDivision::allowedBy()`: o procedimento comum não vai ao juizado); a fonte da
+cidade (`ForumSource`); e, só quando a fonte é o relato, a cidade. Das fichas a cidade é
+**copiada** (`ForumPlace`), e a do relato só vale se o relato a escrever — a guarda de
+cifra, aplicada a lugar. A frase ("Excelentíssimo(a) Senhor(a) Juiz(a) de Direito da Vara
+Cível da Comarca de …") é composta por `CourtAddressingSuggestionData`, porque a forma
+neutra não pode depender de o modelo lembrar dela. O segundo agente só é chamado quando o
+tribunal tem dois sistemas no mapa: com um, `SelectJudicialSystem` responde pela tabela, e
+fora da Justiça Estadual o sistema fica em branco, com aviso. As partes viajam reduzidas
+(`ForumBrief`): o tipo, a idade do cliente, as cidades e o nome do réu que não é pessoa
+física — é ele que revela o INSS ou a Caixa. O conhecimento é
+`app/Rag/knowledge/forum-competence.md`, montado sobre os arts. 42 a 66 do CPC e as leis
+especiais de foro.
 
 A minuta também é um par em série, mas por outro motivo: `DraftLegalPleading` chama o
 agente de redação e, antes de citar os julgados e assinar, entrega o DO DIREITO a

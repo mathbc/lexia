@@ -301,6 +301,8 @@ export interface LegalCaseDraft {
     injunctive_relief_description: string;
     /** O que a IA disse sobre a tutela, ou nulo quando ninguém perguntou. */
     injunctive_relief_suggestion: InjunctiveReliefSuggestion | null;
+    /** O que a IA disse sobre o endereçamento e o sistema, ou nulo. */
+    court_addressing_suggestion: CourtAddressingSuggestion | null;
     current_step: LegalCaseStepValue;
     is_draft: boolean;
     defendant: Record<string, string>;
@@ -484,6 +486,52 @@ export interface InjunctiveReliefSuggestion {
     evidence: string[];
     /** Cifras que o texto cita e o relato não escreve, em decimal ("1000.00"). */
     unsupported_amounts: string[];
+    suggested_at: string;
+}
+
+/**
+ * O sistema judicial que a sugestão de endereçamento apontou, como
+ * `JudicialSystemSelection::toArray()` o publica. `source` diz quem decidiu: o
+ * mapa, quando o tribunal usa um sistema só, ou a IA, quando usa dois.
+ */
+export interface SuggestedJudicialSystem {
+    /** O uuid que vai para `judicial_system_id`. */
+    id: string;
+    slug: string;
+    name: string;
+    /** A sigla do tribunal: "TJSC", "TJDFT". */
+    court: string;
+    status: "active" | "transition" | "implementation" | "coexistence";
+    status_label: string;
+    source: "map" | "ai";
+}
+
+/**
+ * A sugestão de endereçamento como `CourtAddressingSuggestionData::toArray()`
+ * a publica.
+ *
+ * É o **envelope** da resposta, e volta inteiro ao salvar a etapa 1, como o da
+ * tutela. `court_addressing` é a frase já composta no servidor, na forma neutra
+ * ("Excelentíssimo(a) Senhor(a) Juiz(a) …"), e é a comparação com ela que diz à
+ * tela se o advogado editou o texto. Nula quando o foro não é um juízo de
+ * primeiro grau que se saiba nomear — a justificativa diz qual é o órgão.
+ */
+export interface CourtAddressingSuggestion {
+    court_addressing: string | null;
+    division: string | null;
+    division_label: string | null;
+    branch: string | null;
+    branch_label: string | null;
+    forum_source: "plaintiff_address" | "defendant_address" | "facts" | null;
+    forum_source_label: string | null;
+    city: string | null;
+    state: string | null;
+    legal_basis: string | null;
+    justification: string;
+    judicial_system: SuggestedJudicialSystem | null;
+    judicial_system_justification: string | null;
+    /** O que conferir antes de confiar: a cidade que faltou, o sistema em transição. */
+    warnings: string[];
     suggested_at: string;
 }
 
@@ -737,6 +785,8 @@ export interface LegalCaseClassification {
     defendant: DefendantSuggestion | null;
     requirements: ExtractedRequirement[] | null;
     injunctive_relief: InjunctiveReliefSuggestion | null;
+    /** Nulo quando a etapa falhou ou o pedido não levou o cliente. */
+    court_addressing: CourtAddressingSuggestion | null;
 }
 
 /** Mirrors LegalCasePageProps::abilities(). */

@@ -8,6 +8,7 @@ O conhecimento que os agentes de `app/Ai` leem. Markdown em `knowledge/`, carreg
 | `knowledge/practice-areas.md` | `PracticeAreaClassificationAgent` |
 | `knowledge/procedural-classes.md` | `ProceduralClassSelectionAgent` |
 | `knowledge/injunctive-relief.md` | `InjunctiveReliefSuggestionAgent` |
+| `knowledge/forum-competence.md` | `CourtAddressingSuggestionAgent` |
 
 ## Duas recuperações diferentes, e por quê
 

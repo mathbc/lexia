@@ -3,6 +3,7 @@ import { Mic, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppLayout } from "@/layouts/app-layout";
 import { AnalysisDialog } from "@/components/analysis-dialog";
+import { CourtAddressingFields } from "@/components/court-addressing-fields";
 import { CourtDecisionFields } from "@/components/court-decision-fields";
 import { CustomerCreateDialog } from "@/components/customer-create-dialog";
 import {
@@ -25,7 +26,7 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card";
-import { Field, Input, Select, Textarea } from "@/components/ui/field";
+import { Field, Select, Textarea } from "@/components/ui/field";
 import {
     toCourtDecisionDrafts,
     toCourtDecisionPayload,
@@ -322,6 +323,10 @@ export default function LegalCaseForm({
     // em todo o resto.
     const suggestedRelief = handoff?.injunctive_relief ?? null;
 
+    // O endereçamento vem sugerido pela mesma regra: a frase e o sistema abrem
+    // escritos, com o selo, e a peça salva manda na entrega.
+    const suggestedAddressing = handoff?.court_addressing ?? null;
+
     const basics = useForm({
         customer_id: legalCase?.customer_id ?? handoff?.customer_id ?? "",
         practice_area: selectedArea,
@@ -329,8 +334,16 @@ export default function LegalCaseForm({
             legalCase?.procedural_class_id ??
             handoff?.procedural_class_id ??
             "",
-        judicial_system_id: legalCase?.judicial_system_id ?? "",
-        court_addressing: legalCase?.court_addressing ?? "",
+        judicial_system_id:
+            legalCase?.judicial_system_id ??
+            suggestedAddressing?.judicial_system?.id ??
+            "",
+        court_addressing:
+            legalCase?.court_addressing ??
+            suggestedAddressing?.court_addressing ??
+            "",
+        court_addressing_suggestion:
+            legalCase?.court_addressing_suggestion ?? suggestedAddressing,
         facts: legalCase?.facts ?? handoff?.facts ?? "",
         injunctive_relief:
             legalCase?.injunctive_relief ??
@@ -511,7 +524,7 @@ export default function LegalCaseForm({
         selectedArea !== "" &&
         basics.data.procedural_class_id !== "";
 
-    // O sistema fica fora do `complete`: é opcional, como o endereçamento.
+    // O sistema e o endereçamento ficam fora do `complete`: são opcionais.
     const selectedSystem = judicialSystems.find(
         (system) => system.value === basics.data.judicial_system_id,
     );
@@ -898,28 +911,48 @@ export default function LegalCaseForm({
                                             clearable
                                         />
                                     </Field>
-
-                                    {/* Uma linha inteira: é uma frase, e
-                                        espremida ao lado de um select ela
-                                        quebraria antes da comarca. */}
-                                    <Field
-                                        className="sm:col-span-2"
-                                        label="Endereçamento"
-                                        error={basics.errors.court_addressing}
-                                        hint="A quem a peça é dirigida. Pode ficar em branco por ora."
-                                    >
-                                        <Input
-                                            value={basics.data.court_addressing}
-                                            onChange={(e) =>
-                                                basics.setData(
-                                                    "court_addressing",
-                                                    e.target.value,
-                                                )
-                                            }
-                                            placeholder="Ao Juízo da 3ª Vara Cível da Comarca de Florianópolis/SC"
-                                        />
-                                    </Field>
                                 </div>
+
+                                {/* Logo abaixo do cliente e do sistema, e não
+                                    depois da classe: a consulta à IA lê os
+                                    fatos, a área e a classe que vêm mais
+                                    abaixo, e o botão só acorda com eles
+                                    preenchidos — o que ele sugere é escrito
+                                    aqui e no sistema ao lado. */}
+                                <CourtAddressingFields
+                                    judicial_system_id={
+                                        basics.data.judicial_system_id
+                                    }
+                                    court_addressing={
+                                        basics.data.court_addressing
+                                    }
+                                    court_addressing_suggestion={
+                                        basics.data.court_addressing_suggestion
+                                    }
+                                    facts={basics.data.facts}
+                                    practiceArea={selectedArea}
+                                    proceduralClassId={
+                                        basics.data.procedural_class_id
+                                    }
+                                    customerId={basics.data.customer_id}
+                                    defendant={{
+                                        defendant_name:
+                                            defendant.data.defendant_name,
+                                        defendant_document:
+                                            defendant.data.defendant_document,
+                                        defendant_city:
+                                            defendant.data.defendant_city,
+                                        defendant_state:
+                                            defendant.data.defendant_state,
+                                    }}
+                                    error={basics.errors.court_addressing}
+                                    onChange={(patch) =>
+                                        basics.setData((data) => ({
+                                            ...data,
+                                            ...patch,
+                                        }))
+                                    }
+                                />
 
                                 {/* Uma caixa de texto e nada mais: os fatos
                                     vêm na ordem em que aconteceram, e qualquer

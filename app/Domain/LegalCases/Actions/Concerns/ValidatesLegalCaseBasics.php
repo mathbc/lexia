@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace App\Domain\LegalCases\Actions\Concerns;
 
+use App\Domain\Accounts\Enums\BrazilianState;
+use App\Domain\JudicialSystems\Data\JudicialSystemSelection;
+use App\Domain\JudicialSystems\Enums\AdoptionStatus;
 use App\Domain\LegalCases\Data\InjunctiveReliefSuggestionData;
 use App\Domain\LegalCases\Data\LegalCaseBasicsData;
+use App\Domain\LegalCases\Enums\CourtDivision;
+use App\Domain\LegalCases\Enums\ForumSource;
 use App\Domain\LegalCases\Enums\InjunctiveReliefKind;
 use App\Domain\PracticeAreas\Models\PracticeArea;
 use Illuminate\Validation\Rule;
@@ -74,6 +79,31 @@ trait ValidatesLegalCaseBasics
 
             'court_addressing' => ['nullable', 'string', 'max:255'],
 
+            // O envelope da sugestão de endereçamento, pela mesma regra do da
+            // tutela: o registro de uma resposta, conferido só na forma. O
+            // sistema dentro dele é proveniência — quem grava a chave é
+            // `judicial_system_id`, validado acima contra o catálogo.
+            'court_addressing_suggestion' => ['nullable', 'array'],
+            'court_addressing_suggestion.court_addressing' => ['nullable', 'string'],
+            'court_addressing_suggestion.division' => ['nullable', Rule::enum(CourtDivision::class)],
+            'court_addressing_suggestion.forum_source' => ['nullable', Rule::enum(ForumSource::class)],
+            'court_addressing_suggestion.city' => ['nullable', 'string'],
+            'court_addressing_suggestion.state' => ['nullable', Rule::enum(BrazilianState::class)],
+            'court_addressing_suggestion.legal_basis' => ['nullable', 'string'],
+            'court_addressing_suggestion.justification' => ['nullable', 'string'],
+            'court_addressing_suggestion.judicial_system' => ['nullable', 'array'],
+            'court_addressing_suggestion.judicial_system.id' => ['required_with:court_addressing_suggestion.judicial_system', 'uuid'],
+            'court_addressing_suggestion.judicial_system.slug' => ['nullable', 'string'],
+            'court_addressing_suggestion.judicial_system.name' => ['nullable', 'string'],
+            'court_addressing_suggestion.judicial_system.court' => ['nullable', 'string'],
+            'court_addressing_suggestion.judicial_system.status' => ['nullable', Rule::enum(AdoptionStatus::class)],
+            'court_addressing_suggestion.judicial_system.status_label' => ['nullable', 'string'],
+            'court_addressing_suggestion.judicial_system.source' => ['nullable', Rule::in([JudicialSystemSelection::FROM_MAP, JudicialSystemSelection::FROM_AGENT])],
+            'court_addressing_suggestion.judicial_system_justification' => ['nullable', 'string'],
+            'court_addressing_suggestion.warnings' => ['nullable', 'array'],
+            'court_addressing_suggestion.warnings.*' => ['string'],
+            'court_addressing_suggestion.suggested_at' => ['required_with:court_addressing_suggestion', 'date'],
+
             'facts' => ['nullable', 'string'],
             'injunctive_relief' => ['required', 'boolean'],
             'injunctive_relief_description' => ['nullable', 'string'],
@@ -105,6 +135,7 @@ trait ValidatesLegalCaseBasics
             'procedural_class_id' => 'classe processual',
             'judicial_system_id' => 'sistema judicial',
             'court_addressing' => 'endereçamento',
+            'court_addressing_suggestion' => 'sugestão de endereçamento',
             'facts' => 'fatos',
             'injunctive_relief' => 'tutela de urgência',
             'injunctive_relief_description' => 'descrição da tutela',

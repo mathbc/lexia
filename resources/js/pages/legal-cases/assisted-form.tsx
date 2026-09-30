@@ -109,7 +109,9 @@ export default function LegalCaseAssistedForm({
         try {
             const classification = await postJson<LegalCaseClassification>(
                 "/pecas/classificar",
-                { facts },
+                // O cliente só serve ao endereçamento: é o domicílio dele que
+                // o foro do consumidor, do alimentando e do idoso aponta.
+                { facts, customer_id: customerId },
             );
 
             const area = classification.practice_area.slug;
@@ -133,6 +135,10 @@ export default function LegalCaseAssistedForm({
                 // mesmo das extrações: a etapa falhou, e a etapa 1 oferece o
                 // "Consultar IA" em vez de abrir com uma sugestão.
                 injunctive_relief: classification.injunctive_relief,
+                // O endereçamento vem depois do bloco e pelo mesmo caminho: o
+                // nulo é a etapa que falhou, e a etapa 1 abre os dois campos em
+                // branco com o "Consultar IA" à mão.
+                court_addressing: classification.court_addressing,
             });
 
             // Sem desligar o estado de espera: a navegação já está em curso, e

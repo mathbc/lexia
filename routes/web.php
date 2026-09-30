@@ -31,6 +31,7 @@ use App\Domain\LegalCases\Actions\SaveLegalCaseRequirements;
 use App\Domain\LegalCases\Actions\ShowAssistedLegalCaseForm;
 use App\Domain\LegalCases\Actions\ShowLegalCaseForm;
 use App\Domain\LegalCases\Actions\ShowLegalPleading;
+use App\Domain\LegalCases\Actions\SuggestCourtAddressing;
 use App\Domain\LegalCases\Actions\SuggestInjunctiveRelief;
 use App\Domain\LegalCases\Actions\UpdateLegalCaseBasics;
 use App\Domain\LegalCases\Actions\UpdateLegalCaseDefendant;
@@ -122,6 +123,13 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::post('/pecas/tutela-de-urgencia/sugerir', SuggestInjunctiveRelief::class)
         ->middleware('inference')
         ->name('legal-cases.injunctive-relief.suggest');
+
+    // A terceira, pelo mesmo motivo da tutela: o "Consultar IA" do
+    // endereçamento preenche o juízo e o sistema da etapa 1 com o cliente e o
+    // réu que a tela tem, antes de a peça existir.
+    Route::post('/pecas/enderecamento/sugerir', SuggestCourtAddressing::class)
+        ->middleware('inference')
+        ->name('legal-cases.court-addressing.suggest');
 
     Route::post('/pecas', CreateLegalCase::class)->name('legal-cases.store');
 

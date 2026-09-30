@@ -257,8 +257,9 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
 
         1. **O endereçamento**, em CAIXA ALTA, na primeira linha. Use o que o dossiê traz
            em "Endereçamento". Se não houver, escreva o juízo que a classe processual
-           pede com a comarca entre colchetes — "EXCELENTÍSSIMO SENHOR DOUTOR JUIZ DE
-           DIREITO DA VARA CÍVEL DA COMARCA DE [CIDADE/UF]".
+           pede com a comarca entre colchetes — "EXCELENTÍSSIMO(A) SENHOR(A) JUIZ(A) DE
+           DIREITO DA VARA CÍVEL DA COMARCA DE [CIDADE/UF]". A forma é sempre neutra,
+           com o "(A)": quem vai julgar só se conhece depois da distribuição.
         2. **A distribuição por dependência**, uma linha, só quando a classe processual
            for de peça acessória a um processo em curso (embargos, impugnação,
            reconvenção). Nas demais, não escreva esta linha.
@@ -495,7 +496,7 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
         do Superior Tribunal de Justiça sobre vício do produto, com o marcador
         `[[JULGADO 1]]`.
 
-        {"content": "EXCELENTÍSSIMO SENHOR DOUTOR JUIZ DE DIREITO DA VARA CÍVEL DA COMARCA DE ITAJAÍ/SC\\n\\nMARIA DA SILVA, brasileira, [estado civil], [profissão], portadora do CPF nº 123.456.789-00, residente e domiciliada em [Endereço Completo], Itajaí/SC, por intermédio de seu advogado infra-assinado, vem, respeitosamente, à presença de Vossa Excelência, propor a presente AÇÃO DE INDENIZAÇÃO POR DANOS MORAIS em face de COMÉRCIO DE MÓVEIS LTDA, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº 11.222.333/0001-44, com sede em [Endereço Completo], pelos fatos e fundamentos a seguir expostos.\\n\\nI – PRELIMINARMENTE: DA GRATUIDADE DA JUSTIÇA\\n\\nA Autora não possui condições de arcar com as custas processuais sem prejuízo do próprio sustento, fazendo jus ao benefício da gratuidade da justiça, nos termos do art. 98 do Código de Processo Civil.\\n\\nII – DOS FATOS\\n\\n[...]\\n\\nIII – DO DIREITO\\n\\nDa Responsabilidade Civil do Fornecedor pelo Vício do Produto\\n\\n[...] nos termos do art. 18 do CDC.\\n\\nNesse sentido, é o entendimento do Superior Tribunal de Justiça:\\n\\n[[JULGADO 1]]\\n\\nIV – DOS PEDIDOS E REQUERIMENTOS\\n\\nAnte o exposto, requer:\\n\\n1. A concessão da Gratuidade da Justiça;\\n2. A condenação da Ré ao pagamento de R\$ 12.000,00 a título de danos morais.\\n\\nProtesta provar o alegado por todos os meios de prova em direito admitidos.\\n\\nDá-se à causa o valor de R\$ 12.000,00.\\n\\nNestes termos, pede deferimento.", "excerpts": [{"ruling": 1, "passages": [3]}]}
+        {"content": "EXCELENTÍSSIMO(A) SENHOR(A) JUIZ(A) DE DIREITO DA VARA CÍVEL DA COMARCA DE ITAJAÍ/SC\\n\\nMARIA DA SILVA, brasileira, [estado civil], [profissão], portadora do CPF nº 123.456.789-00, residente e domiciliada em [Endereço Completo], Itajaí/SC, por intermédio de seu advogado infra-assinado, vem, respeitosamente, à presença de Vossa Excelência, propor a presente AÇÃO DE INDENIZAÇÃO POR DANOS MORAIS em face de COMÉRCIO DE MÓVEIS LTDA, pessoa jurídica de direito privado, inscrita no CNPJ sob o nº 11.222.333/0001-44, com sede em [Endereço Completo], pelos fatos e fundamentos a seguir expostos.\\n\\nI – PRELIMINARMENTE: DA GRATUIDADE DA JUSTIÇA\\n\\nA Autora não possui condições de arcar com as custas processuais sem prejuízo do próprio sustento, fazendo jus ao benefício da gratuidade da justiça, nos termos do art. 98 do Código de Processo Civil.\\n\\nII – DOS FATOS\\n\\n[...]\\n\\nIII – DO DIREITO\\n\\nDa Responsabilidade Civil do Fornecedor pelo Vício do Produto\\n\\n[...] nos termos do art. 18 do CDC.\\n\\nNesse sentido, é o entendimento do Superior Tribunal de Justiça:\\n\\n[[JULGADO 1]]\\n\\nIV – DOS PEDIDOS E REQUERIMENTOS\\n\\nAnte o exposto, requer:\\n\\n1. A concessão da Gratuidade da Justiça;\\n2. A condenação da Ré ao pagamento de R\$ 12.000,00 a título de danos morais.\\n\\nProtesta provar o alegado por todos os meios de prova em direito admitidos.\\n\\nDá-se à causa o valor de R\$ 12.000,00.\\n\\nNestes termos, pede deferimento.", "excerpts": [{"ruling": 1, "passages": [3]}]}
 
         Repare: o estado civil e a profissão viraram colchete; o endereço que ninguém
         registrou virou colchete; a comarca veio do endereçamento do dossiê; a numeração
@@ -512,7 +513,7 @@ final class PleadingDraftingAgent implements Agent, HasProviderOptions, HasStruc
 
         ## Erro a não repetir
 
-        {"content": "EXCELENTÍSSIMO SENHOR DOUTOR JUIZ [...]\\n\\nMARIA DA SILVA, brasileira, casada, comerciante, [...] residente na Rua das Flores, nº 120, Centro, Itajaí/SC [...]\\n\\nIII – DO DIREITO\\n\\n[...]\\n\\nJurisprudência:\\n\\n\\"APELAÇÃO CÍVEL. VÍCIO DO PRODUTO. DANO MORAL CONFIGURADO. (TJSC, Apelação Cível n. 0300123-45.2020.8.24.0000)\\"\\n\\nIV – DOS PEDIDOS\\n\\n1. A concessão da Gratuidade da Justiça;\\n2. A condenação da Ré ao pagamento de R\$ 12.000,00 a título de danos morais, totalizando R\$ 12.500,00 com as custas.\\n\\n[...]"}
+        {"content": "EXCELENTÍSSIMO(A) SENHOR(A) JUIZ(A) [...]\\n\\nMARIA DA SILVA, brasileira, casada, comerciante, [...] residente na Rua das Flores, nº 120, Centro, Itajaí/SC [...]\\n\\nIII – DO DIREITO\\n\\n[...]\\n\\nJurisprudência:\\n\\n\\"APELAÇÃO CÍVEL. VÍCIO DO PRODUTO. DANO MORAL CONFIGURADO. (TJSC, Apelação Cível n. 0300123-45.2020.8.24.0000)\\"\\n\\nIV – DOS PEDIDOS\\n\\n1. A concessão da Gratuidade da Justiça;\\n2. A condenação da Ré ao pagamento de R\$ 12.000,00 a título de danos morais, totalizando R\$ 12.500,00 com as custas.\\n\\n[...]"}
 
         Quatro erros, e cada um é de um tipo:
 

@@ -84,6 +84,7 @@ final class LegalCaseClassificationPayloadTest extends TestCase
                 'defendant',
                 'requirements',
                 'injunctive_relief',
+                'court_addressing',
             ],
             array_keys($payload),
         );
@@ -154,6 +155,10 @@ final class LegalCaseClassificationPayloadTest extends TestCase
         // "Consultar IA" em vez de ler um campo que não veio.
         $this->assertArrayHasKey('injunctive_relief', $payload);
         $this->assertNull($payload['injunctive_relief']);
+        // O endereçamento, pela mesma regra: a chave vem nula quando a etapa
+        // não rodou, e a etapa 1 abre com o "Consultar IA".
+        $this->assertArrayHasKey('court_addressing', $payload);
+        $this->assertNull($payload['court_addressing']);
     }
 
     /**

@@ -65,7 +65,7 @@ final class SuggestInjunctiveRelief
 
         $response = (new InjunctiveReliefSuggestionAgent(
             areaLabel: $area->label,
-            classLine: $class === null ? null : self::classLine($class),
+            classLine: $class?->promptLine(),
             knowledge: $this->knowledge->get('injunctive-relief'),
         ))->prompt($facts);
 
@@ -74,24 +74,6 @@ final class SuggestInjunctiveRelief
         }
 
         return InjunctiveReliefSuggestionData::fromAgent($response->toArray(), $facts);
-    }
-
-    /**
-     * "[7] Procedimento Comum Cível — description. Base legal: …", the line the
-     * class selection agent reads, because the operational description and the
-     * statutes are what say whether the class carries a liminar of its own.
-     */
-    private static function classLine(ProceduralClass $class): string
-    {
-        $line = "[{$class->code}] {$class->name}";
-
-        if ($class->description !== null && trim($class->description) !== '') {
-            $line .= " — {$class->description}";
-        }
-
-        $bases = $class->citedLegalBases();
-
-        return $bases === [] ? $line : $line.' Base legal: '.implode('; ', $bases).'.';
     }
 
     /**

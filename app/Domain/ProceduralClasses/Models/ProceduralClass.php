@@ -83,6 +83,27 @@ class ProceduralClass extends Model
     }
 
     /**
+     * "[7] Procedimento Comum Cível — description. Base legal: …", the line an
+     * agent reads once the class is decided.
+     *
+     * The operational description and the statutes are what say whether the
+     * class carries a liminar of its own, and where it runs; the same line the
+     * class selection agent reads for each candidate.
+     */
+    public function promptLine(): string
+    {
+        $line = "[{$this->code}] {$this->name}";
+
+        if ($this->description !== null && trim($this->description) !== '') {
+            $line .= " — {$this->description}";
+        }
+
+        $bases = $this->citedLegalBases();
+
+        return $bases === [] ? $line : $line.' Base legal: '.implode('; ', $bases).'.';
+    }
+
+    /**
      * The statute the class rests on, spelled out the way a pleading cites it.
      */
     public function legalBasis(): ?string
