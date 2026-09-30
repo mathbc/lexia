@@ -20,9 +20,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/field";
+import { Field, Input, Select } from "@/components/ui/field";
 import { postJson } from "@/lib/api";
-import type { CourtAddressingSuggestion } from "@/types";
+import type { CourtAddressingSuggestion, JudicialSystemOption } from "@/types";
+
+/**
+ * A grade do endereçamento e do sistema: dois terços para a frase, que é longa,
+ * e um para o select. Exportada para que o cliente, logo acima, use a mesma e
+ * tenha exatamente a largura do endereçamento.
+ */
+export const ADDRESSING_GRID =
+    "grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]";
 
 /** Os três campos da etapa 1 que esta parte da tela escreve. */
 export interface CourtAddressingValues {
@@ -46,7 +54,10 @@ interface Props extends CourtAddressingValues {
     proceduralClassId: string;
     customerId: string;
     defendant: CourtAddressingDefendant;
+    /** `LegalCaseOptions::judicialSystems()`, com os tribunais de cada um. */
+    systems: JudicialSystemOption[];
     error?: string;
+    systemError?: string;
     onChange: (patch: Partial<CourtAddressingValues>) => void;
 }
 
@@ -59,14 +70,14 @@ interface Props extends CourtAddressingValues {
  * pelas cidades das partes, e o servidor compõe a frase na forma neutra
  * ("Excelentíssimo(a) Senhor(a) Juiz(a) …") e lê o sistema do mapa do tribunal.
  *
- * O select do sistema **não** mora aqui: ele fica ao lado do cliente, no topo
- * da etapa, e este bloco logo abaixo dos dois. A consulta escreve nos dois
- * campos mesmo assim — por isso o sistema entra nos valores e sai no
- * `onChange` —, e é a nota daqui que diz qual sistema a IA apontou e por quê.
+ * Os dois campos ficam **lado a lado**, o endereçamento com dois terços da
+ * linha porque a frase é longa, e a nota da IA embaixo, na largura toda: são o
+ * par que a mesma consulta escreve, e a nota fala dos dois — o juízo e o
+ * sistema que o mapa ou a IA apontou, e por quê.
  *
  * A consulta lê o cliente, o relato, a área e a classe, e os três últimos
  * ficam **abaixo** deste bloco: o botão só acorda quando eles estão
- * preenchidos, e a descrição diz isso. O réu vem da etapa 2 — o que o
+ * preenchidos, e a frase ao lado dele, acima dos dois campos, diz isso. O réu vem da etapa 2 — o que o
  * preenchimento inteligente extraiu, ou o que já foi salvo —, e numa peça
  * montada à mão ele vai vazio: o agente lê o relato.
  *
@@ -89,7 +100,9 @@ export function CourtAddressingFields({
     proceduralClassId,
     customerId,
     defendant,
+    systems,
     error,
+    systemError,
     onChange,
 }: Props) {
     const [consulting, setConsulting] = useState(false);
@@ -102,6 +115,8 @@ export function CourtAddressingFields({
         practiceArea !== "" &&
         proceduralClassId !== "" &&
         customerId !== "";
+
+    const selectedSystem = systems.find((system) => system.value === systemId);
 
     // Só há o que perder quando a caixa tem texto que não é o da sugestão.
     const edited =
@@ -147,50 +162,74 @@ export function CourtAddressingFields({
 
     return (
         <div className="space-y-4">
-            {/* O botão vai no rótulo, como o "Novo cliente" do campo ao lado
-                do sistema: a consulta é um atalho para este campo, e não uma
-                seção própria da etapa. */}
-            <Field
-                label="Endereçamento"
-                error={error}
-                hint="A quem a peça é dirigida. A IA sugere o endereçamento e o sistema judicial depois que os fatos, a área e a classe estiverem preenchidos."
-                action={
-                    <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={!ready || consulting}
-                        onClick={ask}
-                        title={
-                            ready
-                                ? undefined
-                                : "Escolha o cliente, escreva os fatos e escolha a área e a classe para consultar a IA."
+            {/* A consulta fica acima do par, e não no rótulo de um deles: ela
+                escreve nos dois, e no rótulo do endereçamento parecia servir
+                só a ele. A frase ao lado diz o que a acorda, porque um botão
+                desabilitado não mostra o `title`. */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                    A IA sugere o endereçamento e o sistema judicial depois que
+                    os fatos, a área e a classe estiverem preenchidos.
+                </p>
+
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!ready || consulting}
+                    onClick={ask}
+                >
+                    {consulting ? (
+                        <LoaderCircle className="animate-spin" />
+                    ) : suggested ? (
+                        <RefreshCw />
+                    ) : (
+                        <Sparkles />
+                    )}
+                    {consulting
+                        ? "Analisando a competência…"
+                        : suggested
+                          ? "Gerar novamente"
+                          : "Consultar IA"}
+                </Button>
+            </div>
+
+            <div className={ADDRESSING_GRID}>
+                <Field
+                    label="Endereçamento"
+                    error={error}
+                    hint="A quem a peça é dirigida."
+                >
+                    <Input
+                        value={addressing}
+                        onChange={(e) =>
+                            onChange({ court_addressing: e.target.value })
                         }
-                    >
-                        {consulting ? (
-                            <LoaderCircle className="animate-spin" />
-                        ) : suggested ? (
-                            <RefreshCw />
-                        ) : (
-                            <Sparkles />
-                        )}
-                        {consulting
-                            ? "Analisando a competência…"
-                            : suggested
-                              ? "Gerar novamente"
-                              : "Consultar IA"}
-                    </Button>
-                }
-            >
-                <Input
-                    value={addressing}
-                    onChange={(e) =>
-                        onChange({ court_addressing: e.target.value })
+                        disabled={consulting}
+                        placeholder="Excelentíssimo(a) Senhor(a) Juiz(a) de Direito da Vara Cível da Comarca de Florianópolis/SC"
+                    />
+                </Field>
+
+                <Field
+                    label="Sistema judicial"
+                    error={systemError}
+                    hint={
+                        selectedSystem
+                            ? `Adotado por ${selectedSystem.courts}.`
+                            : "Por onde a peça será protocolada. Pode ficar em branco por ora."
                     }
-                    disabled={consulting}
-                    placeholder="Excelentíssimo(a) Senhor(a) Juiz(a) de Direito da Vara Cível da Comarca de Florianópolis/SC"
-                />
-            </Field>
+                >
+                    <Select
+                        value={systemId}
+                        onValueChange={(value) =>
+                            onChange({ judicial_system_id: value })
+                        }
+                        options={systems}
+                        placeholder="Selecione o sistema"
+                        clearable
+                    />
+                </Field>
+            </div>
 
             {failure !== null && (
                 <Alert variant="destructive">

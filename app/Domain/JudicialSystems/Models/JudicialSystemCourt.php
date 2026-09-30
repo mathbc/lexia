@@ -22,11 +22,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Nothing points at these rows, so the migration rebuilds them wholesale on a
  * resync and the uuids do not survive it — unlike the systems'.
  *
+ * The `url` lives here and not on the system because each court runs its own
+ * instance: the eproc of one court is not the eproc of the next. Null for a
+ * court whose instance the map does not know yet.
+ *
  * @property string $id
  * @property string $judicial_system_id
  * @property BrazilianState $state
  * @property string $court
  * @property AdoptionStatus $status
+ * @property string|null $url
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property-read JudicialSystem $judicialSystem
@@ -54,5 +59,14 @@ class JudicialSystemCourt extends Model
     public function judicialSystem(): BelongsTo
     {
         return $this->belongsTo(JudicialSystem::class);
+    }
+
+    /**
+     * "em transição", or null for a court simply using the system — the one
+     * status not worth saying beside the acronym.
+     */
+    public function statusNote(): ?string
+    {
+        return $this->status === AdoptionStatus::Active ? null : mb_strtolower($this->status->label());
     }
 }

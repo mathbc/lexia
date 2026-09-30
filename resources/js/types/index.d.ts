@@ -222,12 +222,34 @@ export interface JurisdictionTag {
 }
 
 /**
+ * One court's instance of a system, as JudicialSystem::accessLinks() publishes
+ * it. Each court runs its own, so the address is the court's and not the
+ * system's.
+ */
+export interface JudicialSystemLink {
+    court: string;
+    state: string;
+    url: string;
+    /** "em transição", "em implantação" — nulo para o tribunal que só usa o sistema. */
+    note: string | null;
+}
+
+/**
+ * A client as LegalCaseOptions::customers() publishes it: the CPF or the
+ * CNPJ, whichever the type calls for, in bare digits.
+ */
+export interface CustomerOption extends Option {
+    document: string | null;
+}
+
+/**
  * A judicial system as LegalCaseOptions::judicialSystems() publishes it:
- * the uuid as the value, and the state courts that file through it already
- * written out for the hint under the select.
+ * the uuid as the value, the state courts that file through it already
+ * written out for the hint under the select, and where each one runs it.
  */
 export interface JudicialSystemOption extends Option {
     courts: string;
+    links: JudicialSystemLink[];
 }
 
 /** A procedural class as ProceduralClassOptionsQuery projects it. */

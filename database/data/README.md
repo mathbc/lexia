@@ -134,9 +134,10 @@ passada os refaça.
 
 ## Sistemas judiciais
 
-`judicial-systems.json` é carregado pela mesma via, por
-`2026_09_29_120001_seed_judicial_systems.php`, e pelo mesmo motivo: a etapa 1 da peça
-oferece o sistema, e produção precisa dele tanto quanto uma máquina de desenvolvimento.
+`judicial-systems.json` é carregado pela mesma via, e pelo mesmo motivo: a etapa 1 da peça
+oferece o sistema, e produção precisa dele tanto quanto uma máquina de desenvolvimento. A
+carga vigente é `2026_09_30_130001_reload_judicial_systems_with_urls.php`, que é a primeira,
+`2026_09_29_120001_seed_judicial_systems.php`, com a `url` gravada ao lado do `status`.
 
 Não é dado do CNJ. É um **levantamento de 29/09/2026** de qual sistema eletrônico cada
 tribunal de justiça estadual usa, transcrito sem acréscimos. Duas chaves:
@@ -157,9 +158,46 @@ O `status` de cada vínculo é o `AdoptionStatus`:
 | `implementation` | "eproc / implantação", "eproc em implantação" |
 | `coexistence` | "eproc / coexistência com sistemas anteriores" |
 
+### O endereço de cada vínculo
+
+`url` é onde o advogado abre aquele sistema **naquele tribunal** para protocolar uma
+inicial de 1º grau. Mora no vínculo e não no sistema porque cada tribunal roda a própria
+instância: o eproc do TJSC é `eproc1g.tjsc.jus.br`, o do TJTO é
+`eproc1.tjto.jus.br/eprocV2_prod_1grau/`. **Levantamento de 30/09/2026**, cada endereço lido
+no site do próprio tribunal e conferido de pé.
+
+Duas regras de escrita:
+
+- **O endereço que o tribunal publica, e não a tela de login.** Quase todos redirecionam
+  para um login único — o PDPJ (`sso.cloud.pje.jus.br`) ou o do próprio tribunal
+  (`sso.tjsc.jus.br`) — com um `state` de uso único na URL; copiar esse destino gravaria
+  um link que vence. `pje.tjpe.jus.br/1g`, e não o host de nuvem para onde ele manda hoje.
+- **Sempre `*.jus.br`, sempre HTTPS**, e o host termina na sigla do tribunal. O teste
+  confere as três coisas.
+
+`null` é o vínculo que **não recebe inicial nova** — não há para onde mandar o advogado, e
+a tela deixa esse tribunal fora do botão. São quatro, e em todos é o mapa que está
+atrás do tribunal, não o endereço que falta:
+
+| Vínculo | O que o tribunal diz |
+|---|---|
+| TJAM × e-SAJ | desde 01/01/2025 a inicial de 1º e 2º grau é só pelo Projudi (`projudi.tjam.jus.br/projudi/`); o e-SAJ ficou com os processos não migrados |
+| TJRN × e-SAJ | desligado em 05/06/2023 (Portaria Conjunta 37/2022); tudo foi para o PJe |
+| TJRR × PJe | instância legada, que o site do tribunal não oferece; o advogado é mandado ao Projudi |
+| TJES × eproc | convênio com o TRF4 assinado em 09/2025, sem instância publicada; a inicial segue pelo PJe (`pje.tjes.jus.br`) |
+
+E duas ressalvas que o endereço não resolve. O **TJSP tem duas instâncias de 1º grau do
+eproc**: `eproc1g` (cível, JEC, empresarial, registros públicos) é a gravada, e
+`eproc1g-ef.tjsp.jus.br` recebe Fazenda Pública, JEFAZ, acidentes do trabalho e
+previdenciário. O **PJe do TJMT** saiu do ar num ataque em 21/09/2026; o endereço é o
+certo e fica.
+
+### Atualização
+
 Este mapa envelhece mais depressa que a TPU: o eproc está em expansão, e 8 dos 31
 vínculos descrevem um tribunal mudando de sistema. Atualizar é editar o JSON e
-acrescentar uma migration que roda a mesma rotina, que é idempotente — upsert dos
+acrescentar uma migration que roda a mesma rotina — **copiando a carga vigente**, e não a
+primeira, que refaria os vínculos sem endereço. A rotina é idempotente — upsert dos
 sistemas por `slug`, e os vínculos refeitos inteiros, porque um tribunal que deixa um
 sistema some do arquivo e um upsert deixaria o vínculo velho no lugar.
 `JudicialSystemCatalogTest` fixa as contagens e muda junto.

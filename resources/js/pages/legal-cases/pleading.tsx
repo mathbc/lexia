@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { AnalysisDialog } from '@/components/analysis-dialog'
+import { JudicialSystemAccess } from '@/components/judicial-system-access'
 import { LegalCaseTabs } from '@/components/legal-case-tabs'
 import { PleadingDocument } from '@/components/pleading-document'
 import { RegeneratePleadingDialog } from '@/components/regenerate-pleading-dialog'
@@ -29,7 +30,12 @@ import { SelectInput } from '@/components/ui/select'
 import { AppLayout } from '@/layouts/app-layout'
 import { formatDateTime, formatPhone, formatPostalCode } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import type { LegalPleading, LegalPleadingVersion, PleadingLetterhead } from '@/types'
+import type {
+    JudicialSystemLink,
+    LegalPleading,
+    LegalPleadingVersion,
+    PleadingLetterhead,
+} from '@/types'
 
 /**
  * As etapas que o agente redator percorre, para a espera não ser uma tela parada.
@@ -52,7 +58,11 @@ interface Props {
         procedural_class: string
         is_draft: boolean
         current_step: string
+        /** A UF do foro, da sugestão de endereçamento: escolhe o tribunal do botão. */
+        forum_state: string | null
     }
+    /** O sistema da etapa 1, com o endereço de cada tribunal; nulo quando não escolhido. */
+    judicialSystem: { name: string; links: JudicialSystemLink[] } | null
     /** A versão exibida — a última, ou a do `?versao` —, ou nulo quando a geração falhou. */
     pleading: LegalPleading | null
     /** Todas as versões, da mais nova para a mais antiga: a primeira é a atual. */
@@ -117,6 +127,7 @@ interface Props {
  */
 export default function LegalCasePleading({
     legalCase,
+    judicialSystem,
     pleading,
     versions,
     letterhead,
@@ -197,6 +208,15 @@ export default function LegalCasePleading({
                     available
                     current="pleading"
                 />
+            }
+            tabsActions={
+                judicialSystem && (
+                    <JudicialSystemAccess
+                        name={judicialSystem.name}
+                        links={judicialSystem.links}
+                        forumState={legalCase.forum_state}
+                    />
+                )
             }
         >
             <Head title="Minuta da peça" />

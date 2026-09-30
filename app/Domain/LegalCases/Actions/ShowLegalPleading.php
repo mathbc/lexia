@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\LegalCases\Actions;
 
+use App\Domain\JudicialSystems\Models\JudicialSystem;
+use App\Domain\LegalCases\Data\CourtAddressingSuggestionData;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalPleadings\Models\LegalPleading;
 use App\Domain\LegalPleadings\Support\PleadingLetterhead;
@@ -40,6 +42,12 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * GenerateLegalPleading. `can.export` is simply "there is a version": the PDF
  * and the DOCX print the latest saved one, and viewing the tab already required
  * the `view` their routes check.
+ *
+ * `judicialSystem` is the header's way out to where the document goes next: the
+ * system the first step chose, with each court's address, and `forum_state` is
+ * how the screen picks the forum's court among them — the state the addressing
+ * suggestion placed the forum in, when there was one. The same pair the
+ * assistant tab reads live off its form, so the button is the same on both.
  */
 final class ShowLegalPleading
 {
@@ -52,7 +60,7 @@ final class ShowLegalPleading
 
     public function asController(LegalCase $legalCase, ActionRequest $request): Response
     {
-        $legalCase->loadMissing(['account', 'customer', 'proceduralClass']);
+        $legalCase->loadMissing(['account', 'customer', 'proceduralClass', 'judicialSystem.courts']);
 
         $pleading = $legalCase->pleadingVersion($request->integer('versao') ?: null);
 
@@ -63,7 +71,16 @@ final class ShowLegalPleading
                 'procedural_class' => $legalCase->proceduralClass->name,
                 'is_draft' => $legalCase->is_draft,
                 'current_step' => $legalCase->current_step->value,
+                'forum_state' => CourtAddressingSuggestionData::fromArray(
+                    $legalCase->court_addressing_suggestion,
+                )?->state?->value,
             ],
+            'judicialSystem' => $legalCase->judicialSystem instanceof JudicialSystem
+                ? [
+                    'name' => $legalCase->judicialSystem->name,
+                    'links' => $legalCase->judicialSystem->accessLinks(),
+                ]
+                : null,
             'pleading' => $pleading instanceof LegalPleading
                 ? [
                     'id' => $pleading->id,

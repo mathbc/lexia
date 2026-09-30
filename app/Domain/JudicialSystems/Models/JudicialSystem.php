@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Domain\JudicialSystems\Models;
 
-use App\Domain\JudicialSystems\Enums\AdoptionStatus;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -68,9 +67,34 @@ class JudicialSystem extends Model
     public function servedCourts(): string
     {
         return $this->courts
-            ->map(static fn (JudicialSystemCourt $court): string => $court->status === AdoptionStatus::Active
+            ->map(static fn (JudicialSystemCourt $court): string => $court->statusNote() === null
                 ? $court->court
-                : $court->court.' ('.mb_strtolower($court->status->label()).')')
+                : "{$court->court} ({$court->statusNote()})")
             ->implode(', ');
+    }
+
+    /**
+     * Where the lawyer opens the system to file: one address per court, since
+     * each court runs its own instance.
+     *
+     * The state goes along because it is how the screen picks the one link
+     * that matters — the forum's — out of the fourteen the eproc has. A court
+     * with no known address is left out rather than sent empty: a button that
+     * goes nowhere is worse than no button.
+     *
+     * @return list<array{court: string, state: string, url: string, note: string|null}>
+     */
+    public function accessLinks(): array
+    {
+        return $this->courts
+            ->filter(static fn (JudicialSystemCourt $court): bool => $court->url !== null)
+            ->map(static fn (JudicialSystemCourt $court): array => [
+                'court' => $court->court,
+                'state' => $court->state->value,
+                'url' => (string) $court->url,
+                'note' => $court->statusNote(),
+            ])
+            ->values()
+            ->all();
     }
 }

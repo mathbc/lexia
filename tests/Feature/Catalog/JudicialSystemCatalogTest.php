@@ -17,8 +17,8 @@ use Tests\TestCase;
  * the migration itself — a truncated load would otherwise only surface as a
  * select missing an option.
  *
- * The numbers are those of the map of 29/09/2026. Editing the map is expected
- * to change this test with it.
+ * The numbers are those of the map of 29/09/2026, and the addresses those of
+ * 30/09/2026. Editing the map is expected to change this test with it.
  */
 final class JudicialSystemCatalogTest extends TestCase
 {
@@ -114,9 +114,73 @@ final class JudicialSystemCatalogTest extends TestCase
     }
 
     /**
+     * The address is the court's own instance, so its host names the court:
+     * `eproc1g.tjsc.jus.br`, `pjepg.tjro.jus.br`. Anything else would be a
+     * mirror, a login redirect copied by mistake, or another court's system.
+     */
+    #[Test]
+    public function every_address_is_the_courts_own(): void
+    {
+        $courts = JudicialSystemCourt::query()->whereNotNull('url')->get();
+
+        $this->assertCount(27, $courts);
+
+        foreach ($courts as $court) {
+            $url = (string) $court->url;
+
+            $this->assertSame('https', parse_url($url, PHP_URL_SCHEME), $url);
+            $this->assertStringEndsWith(
+                mb_strtolower($court->court).'.jus.br',
+                (string) parse_url($url, PHP_URL_HOST),
+                $url,
+            );
+        }
+
+        $this->assertSame('https://eproc1g.tjsc.jus.br/eproc/', $this->adoption(BrazilianState::SC, 'eproc')->url);
+        $this->assertSame('https://eproc1.tjto.jus.br/eprocV2_prod_1grau/', $this->adoption(BrazilianState::TO, 'eproc')->url);
+    }
+
+    /**
+     * Null is a link that takes no new petição inicial — the system switched
+     * off, legacy, or not yet published —, not an address nobody looked up.
+     * The README says what each court says.
+     */
+    #[Test]
+    public function a_link_that_takes_no_new_filings_has_no_address(): void
+    {
+        $this->assertNull($this->adoption(BrazilianState::AM, 'esaj')->url);
+        $this->assertNull($this->adoption(BrazilianState::RN, 'esaj')->url);
+        $this->assertNull($this->adoption(BrazilianState::RR, 'pje')->url);
+        $this->assertNull($this->adoption(BrazilianState::ES, 'eproc')->url);
+    }
+
+    #[Test]
+    public function the_access_links_leave_out_a_court_with_no_address(): void
+    {
+        $links = collect($this->system('eproc')->accessLinks())->keyBy('state');
+
+        // Catorze tribunais no mapa, treze com instância: o TJES ainda não tem.
+        $this->assertCount(13, $links);
+        $this->assertFalse($links->has('ES'));
+
+        $this->assertSame([
+            'court' => 'TJSC',
+            'state' => 'SC',
+            'url' => 'https://eproc1g.tjsc.jus.br/eproc/',
+            'note' => null,
+        ], $links['SC']);
+
+        // Só o que não é "em uso" se diz, como na dica do select.
+        $this->assertSame('em transição', $links['BA']['note']);
+    }
+
+    /**
      * Rodar a carga de novo é o protocolo de atualização do mapa — ver
      * database/data/README.md —, então ela não pode duplicar linha nem trocar
      * o id de um sistema que uma peça já cita.
+     *
+     * É a carga vigente que se roda, a que grava os endereços: a primeira os
+     * apagaria, e é por isso que a próxima atualização copia esta.
      */
     #[Test]
     public function running_the_load_again_changes_nothing(): void
@@ -125,11 +189,12 @@ final class JudicialSystemCatalogTest extends TestCase
 
         // A classe anônima declara `up()`; a base `Migration` não, então a
         // instância é usada onde é carregada, como em FoldFactsStepMigrationTest.
-        $migration = require database_path('migrations/2026_09_29_120001_seed_judicial_systems.php');
+        $migration = require database_path('migrations/2026_09_30_130001_reload_judicial_systems_with_urls.php');
         $migration->up();
 
         $this->assertSame(5, JudicialSystem::query()->count());
         $this->assertSame(31, JudicialSystemCourt::query()->count());
+        $this->assertSame(27, JudicialSystemCourt::query()->whereNotNull('url')->count());
         $this->assertEquals($ids, JudicialSystem::query()->pluck('id', 'slug')->all());
     }
 

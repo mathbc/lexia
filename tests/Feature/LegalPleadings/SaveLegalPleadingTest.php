@@ -6,6 +6,7 @@ namespace Tests\Feature\LegalPleadings;
 
 use App\Domain\Accounts\Enums\AccountLogo;
 use App\Domain\Accounts\Models\Account;
+use App\Domain\JudicialSystems\Models\JudicialSystem;
 use App\Domain\LegalCases\Actions\DraftLegalPleading;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalPleadings\Models\LegalPleading;
@@ -139,6 +140,45 @@ final class SaveLegalPleadingTest extends TestCase
                 ->where('letterhead.logo', null)
                 ->where('can.generate', true)
                 ->where('can.export', true));
+    }
+
+    /**
+     * The header's way to the filing system: the system the first step chose,
+     * each court's address, and the forum's state to pick the one that matters.
+     */
+    #[Test]
+    public function the_header_carries_the_filing_system_and_the_forum_state(): void
+    {
+        [, $owner, $case] = $this->pleading();
+        $system = JudicialSystem::query()->where('slug', 'eproc')->sole();
+
+        $case->update([
+            'judicial_system_id' => $system->id,
+            'court_addressing_suggestion' => ['state' => 'SC', 'suggested_at' => now()->toIso8601String()],
+        ]);
+
+        $this->actingAs($owner)
+            ->get(route('legal-cases.pleading', $case))
+            ->assertInertia(fn ($page) => $page
+                ->where('legalCase.forum_state', 'SC')
+                ->where('judicialSystem.name', 'eproc')
+                ->has('judicialSystem.links', 13)
+                // Na ordem da sigla, e sem o TJES, que não tem instância.
+                ->where('judicialSystem.links.9.court', 'TJSC')
+                ->where('judicialSystem.links.9.url', 'https://eproc1g.tjsc.jus.br/eproc/'));
+    }
+
+    #[Test]
+    public function without_a_system_the_header_offers_none(): void
+    {
+        [, $owner, $case] = $this->pleading();
+        $case->update(['judicial_system_id' => null, 'court_addressing_suggestion' => null]);
+
+        $this->actingAs($owner)
+            ->get(route('legal-cases.pleading', $case))
+            ->assertInertia(fn ($page) => $page
+                ->where('judicialSystem', null)
+                ->where('legalCase.forum_state', null));
     }
 
     /**

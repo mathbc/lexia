@@ -1071,7 +1071,7 @@ por **migration** a partir de `database/data/judicial-systems.json` — ver o RE
 que tem a origem e o protocolo de atualização.
 
 A peça aponta para o sistema por `legal_cases.judicial_system_id`, escolhido na etapa 1 ao
-lado do cliente, com `restrictOnDelete()` como a área e a classe. É **opcional**: nullable
+lado do endereçamento, com `restrictOnDelete()` como a área e a classe. É **opcional**: nullable
 na coluna e fora do `complete` na tela, porque o advogado pode não saber ainda, uma peça da
 Justiça Federal ou do Trabalho está fora dos tribunais que o mapa cobre, e as peças
 anteriores ficaram com null. Viaja pelo uuid, e não por slug como a área, porque nunca
@@ -1081,11 +1081,22 @@ entra em URL. O hint do select lista os tribunais do sistema escolhido, composto
 O sistema pode vir **sugerido** — ver a seção seguinte —, mas nenhum agente o **lê**: ele
 não está no `LegalCaseDossier`, e a minuta não sabe por onde a peça será protocolada.
 
+**O endereço é do tribunal, não do sistema.** O eproc do TJSC e o do TJRS são o mesmo
+programa em dois hosts, então a URL oficial mora em `judicial_system_courts.url`, uma por
+vínculo, e não em `judicial_systems` — um "link do eproc" não levaria a lugar nenhum em que
+se protocola. É nula quando o mapa registra um tribunal que ainda não publicou a instância,
+e `JudicialSystem::accessLinks()` deixa esse de fora. O cabeçalho da peça, nas duas abas,
+desenha `JudicialSystemAccess` na ponta direita da linha das abas (`tabsActions` do
+`AppLayout`): com a UF do foro — o `state` da sugestão de endereçamento — ou um tribunal
+só, é um link direto com a sigla à vista; sem ela, um menu com os tribunais do sistema, em
+vez de adivinhar um. No assistente ele segue o select ao vivo; na Minuta, o que foi salvo.
+
 ## O endereçamento e o sistema judicial
 
 `court_addressing` continua texto livre e `judicial_system_id` continua opcional, os dois
-do advogado. Na etapa 1 o sistema fica ao lado do cliente e o endereçamento logo abaixo
-dos dois, e ambos podem vir **sugeridos**, pelo "Consultar IA" do campo de endereçamento —
+do advogado. Na etapa 1 os dois ficam lado a lado, logo abaixo do cliente — o
+endereçamento com dois terços da linha, porque a frase é longa —, dentro de
+`CourtAddressingFields`, e ambos podem vir **sugeridos**, pelo "Consultar IA" acima dos dois campos —
 que só acorda com os fatos, a área e a classe, mais abaixo, preenchidos — (`SuggestCourtAddressing`,
 `POST /pecas/enderecamento/sugerir`) e pelo preenchimento inteligente, e o envelope da
 resposta é gravado ao lado deles em `legal_cases.court_addressing_suggestion` (jsonb) — a

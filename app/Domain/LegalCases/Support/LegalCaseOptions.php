@@ -23,7 +23,11 @@ final class LegalCaseOptions
      * select silently listing another tenant's clients is the worst kind of
      * leak — it looks like it works.
      *
-     * @return list<array{value: string, label: string}>
+     * `document` is the CPF or the CNPJ, whichever the type calls for, as bare
+     * digits: the form writes it beside the name, masked on the React side
+     * like every other document on screen.
+     *
+     * @return list<array{value: string, label: string, document: string|null}>
      */
     public static function customers(string $accountId): array
     {
@@ -34,6 +38,7 @@ final class LegalCaseOptions
             ->map(static fn (Customer $customer): array => [
                 'value' => $customer->id,
                 'label' => $customer->displayName(),
+                'document' => $customer->identifier(),
             ])
             ->all();
     }
@@ -66,9 +71,11 @@ final class LegalCaseOptions
      * ever goes from the select to the form's payload and back, never into a
      * URL or a fixture. `courts` is the hint under the select — which state
      * courts file through it — composed here so the Portuguese stays on this
-     * side.
+     * side. `links` is where each of those courts runs the system, for the
+     * access button in the pleading's header: it follows the select as the
+     * lawyer changes it, so every system's addresses travel with the list.
      *
-     * @return list<array{value: string, label: string, courts: string}>
+     * @return list<array{value: string, label: string, courts: string, links: list<array{court: string, state: string, url: string, note: string|null}>}>
      */
     public static function judicialSystems(): array
     {
@@ -80,6 +87,7 @@ final class LegalCaseOptions
                 'value' => $system->id,
                 'label' => $system->name,
                 'courts' => $system->servedCourts(),
+                'links' => $system->accessLinks(),
             ])
             ->all();
     }

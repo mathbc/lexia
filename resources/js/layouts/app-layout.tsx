@@ -17,6 +17,12 @@ interface Props {
     actions?: ReactNode
     /** Rendered under the header, above the scrolling area. */
     tabs?: ReactNode
+    /**
+     * The right end of the tabs' row: what belongs to the record as a whole and
+     * not to the tab open — the pleading's way into its filing system. Draws the
+     * row on its own when there are no tabs yet.
+     */
+    tabsActions?: ReactNode
     /** Contents of the right-hand filter panel; the toggle only appears with it. */
     filters?: ReactNode
     /** How many filters are on, shown on the toggle so a hidden panel is never silent. */
@@ -33,7 +39,7 @@ const sidebarDefaultOpen = (): boolean => {
     return document.cookie.includes('sidebar_state=true') || !document.cookie.includes('sidebar_state=')
 }
 
-export function AppLayout({ title, subtitle, actions, tabs, filters, activeFilters = 0, children }: Props) {
+export function AppLayout({ title, subtitle, actions, tabs, tabsActions, filters, activeFilters = 0, children }: Props) {
     const { auth, flash, url } = usePage<PageProps>().props as PageProps & { url?: string }
     const currentPath = typeof window === 'undefined' ? (url ?? '') : window.location.pathname
     const user = auth.user
@@ -81,7 +87,14 @@ export function AppLayout({ title, subtitle, actions, tabs, filters, activeFilte
                         </div>
                     </div>
 
-                    {tabs ? <div className="mt-4 -mb-px pb-4">{tabs}</div> : <div className="h-4" />}
+                    {tabs || tabsActions ? (
+                        <div className="mt-4 -mb-px flex flex-wrap items-center gap-3 pb-4">
+                            {tabs}
+                            {tabsActions && <div className="ml-auto flex items-center gap-2">{tabsActions}</div>}
+                        </div>
+                    ) : (
+                        <div className="h-4" />
+                    )}
                 </header>
 
                 <div className="flex min-h-0 flex-1 overflow-hidden">

@@ -7,32 +7,90 @@
         { "slug": "tucujuris", "name": "Tucujuris", "position": 5 }
     ],
     "courts": [
-        { "state": "AC", "court": "TJAC", "systems": [{ "system": "eproc", "status": "active" }] },
-        { "state": "AL", "court": "TJAL", "systems": [{ "system": "eproc", "status": "active" }] },
-        { "state": "AP", "court": "TJAP", "systems": [{ "system": "tucujuris", "status": "active" }, { "system": "eproc", "status": "implementation" }] },
-        { "state": "AM", "court": "TJAM", "systems": [{ "system": "esaj", "status": "active" }] },
-        { "state": "BA", "court": "TJBA", "systems": [{ "system": "eproc", "status": "transition" }] },
-        { "state": "CE", "court": "TJCE", "systems": [{ "system": "pje", "status": "active" }] },
-        { "state": "DF", "court": "TJDFT", "systems": [{ "system": "pje", "status": "active" }] },
-        { "state": "ES", "court": "TJES", "systems": [{ "system": "eproc", "status": "transition" }] },
-        { "state": "GO", "court": "TJGO", "systems": [{ "system": "projudi", "status": "active" }] },
-        { "state": "MA", "court": "TJMA", "systems": [{ "system": "pje", "status": "active" }] },
-        { "state": "MT", "court": "TJMT", "systems": [{ "system": "pje", "status": "active" }] },
-        { "state": "MS", "court": "TJMS", "systems": [{ "system": "eproc", "status": "transition" }] },
-        { "state": "MG", "court": "TJMG", "systems": [{ "system": "eproc", "status": "transition" }] },
-        { "state": "PA", "court": "TJPA", "systems": [{ "system": "pje", "status": "active" }] },
-        { "state": "PB", "court": "TJPB", "systems": [{ "system": "pje", "status": "active" }] },
-        { "state": "PR", "court": "TJPR", "systems": [{ "system": "eproc", "status": "implementation" }] },
-        { "state": "PE", "court": "TJPE", "systems": [{ "system": "pje", "status": "active" }] },
-        { "state": "PI", "court": "TJPI", "systems": [{ "system": "pje", "status": "active" }] },
-        { "state": "RJ", "court": "TJRJ", "systems": [{ "system": "eproc", "status": "coexistence" }] },
-        { "state": "RN", "court": "TJRN", "systems": [{ "system": "pje", "status": "active" }, { "system": "esaj", "status": "active" }] },
-        { "state": "RS", "court": "TJRS", "systems": [{ "system": "eproc", "status": "active" }] },
-        { "state": "RO", "court": "TJRO", "systems": [{ "system": "pje", "status": "active" }] },
-        { "state": "RR", "court": "TJRR", "systems": [{ "system": "pje", "status": "active" }, { "system": "projudi", "status": "active" }] },
-        { "state": "SC", "court": "TJSC", "systems": [{ "system": "eproc", "status": "active" }] },
-        { "state": "SP", "court": "TJSP", "systems": [{ "system": "esaj", "status": "active" }, { "system": "eproc", "status": "active" }] },
-        { "state": "SE", "court": "TJSE", "systems": [{ "system": "eproc", "status": "transition" }] },
-        { "state": "TO", "court": "TJTO", "systems": [{ "system": "eproc", "status": "active" }] }
+        { "state": "AC", "court": "TJAC", "systems": [
+            { "system": "eproc", "status": "active", "url": "https://eproc1g.tjac.jus.br/eproc/" }
+        ] },
+        { "state": "AL", "court": "TJAL", "systems": [
+            { "system": "eproc", "status": "active", "url": "https://eproc1g.tjal.jus.br/" }
+        ] },
+        { "state": "AP", "court": "TJAP", "systems": [
+            { "system": "tucujuris", "status": "active", "url": "https://tucujuris.tjap.jus.br/pages/login/" },
+            { "system": "eproc", "status": "implementation", "url": "https://eproc1g.tjap.jus.br/eproc/" }
+        ] },
+        { "state": "AM", "court": "TJAM", "systems": [
+            { "system": "esaj", "status": "active", "url": null }
+        ] },
+        { "state": "BA", "court": "TJBA", "systems": [
+            { "system": "eproc", "status": "transition", "url": "https://eproc1g.tjba.jus.br/eproc/" }
+        ] },
+        { "state": "CE", "court": "TJCE", "systems": [
+            { "system": "pje", "status": "active", "url": "https://pje.tjce.jus.br/pje1grau" }
+        ] },
+        { "state": "DF", "court": "TJDFT", "systems": [
+            { "system": "pje", "status": "active", "url": "https://pje.tjdft.jus.br/pje" }
+        ] },
+        { "state": "ES", "court": "TJES", "systems": [
+            { "system": "eproc", "status": "transition", "url": null }
+        ] },
+        { "state": "GO", "court": "TJGO", "systems": [
+            { "system": "projudi", "status": "active", "url": "https://projudi.tjgo.jus.br/" }
+        ] },
+        { "state": "MA", "court": "TJMA", "systems": [
+            { "system": "pje", "status": "active", "url": "https://pje.tjma.jus.br/pje" }
+        ] },
+        { "state": "MT", "court": "TJMT", "systems": [
+            { "system": "pje", "status": "active", "url": "https://pje.tjmt.jus.br/pje" }
+        ] },
+        { "state": "MS", "court": "TJMS", "systems": [
+            { "system": "eproc", "status": "transition", "url": "https://eproc1g.tjms.jus.br/eproc/" }
+        ] },
+        { "state": "MG", "court": "TJMG", "systems": [
+            { "system": "eproc", "status": "transition", "url": "https://eproc1g.tjmg.jus.br/eproc/" }
+        ] },
+        { "state": "PA", "court": "TJPA", "systems": [
+            { "system": "pje", "status": "active", "url": "https://pje.tjpa.jus.br/pje" }
+        ] },
+        { "state": "PB", "court": "TJPB", "systems": [
+            { "system": "pje", "status": "active", "url": "https://pje.tjpb.jus.br/pje" }
+        ] },
+        { "state": "PR", "court": "TJPR", "systems": [
+            { "system": "eproc", "status": "implementation", "url": "https://eproc1g.tjpr.jus.br/eproc/" }
+        ] },
+        { "state": "PE", "court": "TJPE", "systems": [
+            { "system": "pje", "status": "active", "url": "https://pje.tjpe.jus.br/1g" }
+        ] },
+        { "state": "PI", "court": "TJPI", "systems": [
+            { "system": "pje", "status": "active", "url": "https://pje.tjpi.jus.br/1g" }
+        ] },
+        { "state": "RJ", "court": "TJRJ", "systems": [
+            { "system": "eproc", "status": "coexistence", "url": "https://eproc1g.tjrj.jus.br/eproc/" }
+        ] },
+        { "state": "RN", "court": "TJRN", "systems": [
+            { "system": "pje", "status": "active", "url": "https://pje1g.tjrn.jus.br/pje" },
+            { "system": "esaj", "status": "active", "url": null }
+        ] },
+        { "state": "RS", "court": "TJRS", "systems": [
+            { "system": "eproc", "status": "active", "url": "https://eproc1g.tjrs.jus.br/eproc/" }
+        ] },
+        { "state": "RO", "court": "TJRO", "systems": [
+            { "system": "pje", "status": "active", "url": "https://pjepg.tjro.jus.br/pje" }
+        ] },
+        { "state": "RR", "court": "TJRR", "systems": [
+            { "system": "pje", "status": "active", "url": null },
+            { "system": "projudi", "status": "active", "url": "https://projudi.tjrr.jus.br/projudi/" }
+        ] },
+        { "state": "SC", "court": "TJSC", "systems": [
+            { "system": "eproc", "status": "active", "url": "https://eproc1g.tjsc.jus.br/eproc/" }
+        ] },
+        { "state": "SP", "court": "TJSP", "systems": [
+            { "system": "esaj", "status": "active", "url": "https://esaj.tjsp.jus.br/esaj/portal.do?servico=820000" },
+            { "system": "eproc", "status": "active", "url": "https://eproc1g.tjsp.jus.br/eproc/" }
+        ] },
+        { "state": "SE", "court": "TJSE", "systems": [
+            { "system": "eproc", "status": "transition", "url": "https://eproc1g.tjse.jus.br/eproc/" }
+        ] },
+        { "state": "TO", "court": "TJTO", "systems": [
+            { "system": "eproc", "status": "active", "url": "https://eproc1.tjto.jus.br/eprocV2_prod_1grau/" }
+        ] }
     ]
 }

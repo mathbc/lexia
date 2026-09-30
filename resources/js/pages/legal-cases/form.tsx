@@ -3,7 +3,10 @@ import { Mic, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppLayout } from "@/layouts/app-layout";
 import { AnalysisDialog } from "@/components/analysis-dialog";
-import { CourtAddressingFields } from "@/components/court-addressing-fields";
+import {
+    ADDRESSING_GRID,
+    CourtAddressingFields,
+} from "@/components/court-addressing-fields";
 import { CourtDecisionFields } from "@/components/court-decision-fields";
 import { CustomerCreateDialog } from "@/components/customer-create-dialog";
 import {
@@ -15,6 +18,7 @@ import { ForensicReviewFields } from "@/components/forensic-review-fields";
 import { InjunctiveReliefFields } from "@/components/injunctive-relief-fields";
 import { LegalCaseSteps, type StepItem } from "@/components/legal-case-steps";
 import { LegalCaseTabs } from "@/components/legal-case-tabs";
+import { JudicialSystemAccess } from "@/components/judicial-system-access";
 import { PracticeAreaPicker } from "@/components/practice-area-picker";
 import { ProceduralClassPicker } from "@/components/procedural-class-picker";
 import { RequirementFormFields } from "@/components/requirement-form-fields";
@@ -33,6 +37,7 @@ import {
     type CourtDecisionDraft,
 } from "@/lib/court-decisions";
 import { toDocumentDrafts, type DocumentDraft } from "@/lib/documents";
+import { formatDocument } from "@/lib/format";
 import {
     toForensicReviewPayload,
     toThesisDrafts,
@@ -50,6 +55,7 @@ import {
     type RequirementDraft,
 } from "@/lib/requirements";
 import type {
+    CustomerOption,
     DefendantSuggestion,
     ForensicReviewTab,
     JudicialSystemOption,
@@ -207,7 +213,7 @@ interface Props {
     initialStep: LegalCaseStepValue;
     /** `LegalCaseStep::options()` — os rótulos em português vêm do enum. */
     steps: Option[];
-    customers: Option[];
+    customers: CustomerOption[];
     practiceAreas: Option[];
     proceduralClasses: ProceduralClassOption[];
     /** A área da query string: é o servidor que guarda essa escolha. */
@@ -301,6 +307,20 @@ export default function LegalCaseForm({
     );
 
     const currentStep = STEP_ORDER[step];
+
+    // O documento ao lado do nome, separado por um traço: é o que distingue
+    // dois clientes homônimos na lista. A máscara sai do comprimento, e o
+    // servidor já mandou o CNPJ para a pessoa jurídica e o CPF para a física.
+    const customerOptions = useMemo(
+        () =>
+            customers.map((customer) => ({
+                value: customer.value,
+                label: customer.document
+                    ? `${customer.label} — ${formatDocument(customer.document)}`
+                    : customer.label,
+            })),
+        [customers],
+    );
 
     /**
      * A entrega do preenchimento inteligente, lida uma vez na montagem.
@@ -801,6 +821,20 @@ export default function LegalCaseForm({
                     />
                 ) : undefined
             }
+            tabsActions={
+                // O select ao vivo, e não o que foi salvo: escolher o sistema
+                // já mostra a porta, e a UF do foro vem da sugestão que está
+                // no formulário agora.
+                selectedSystem && (
+                    <JudicialSystemAccess
+                        name={selectedSystem.label}
+                        links={selectedSystem.links}
+                        forumState={
+                            basics.data.court_addressing_suggestion?.state
+                        }
+                    />
+                )
+            }
         >
             <Head title={title} />
 
@@ -844,7 +878,10 @@ export default function LegalCaseForm({
                             </CardHeader>
 
                             <CardContent className="space-y-8">
-                                <div className="grid gap-4 sm:grid-cols-2">
+                                {/* Na grade do endereçamento, que vem logo
+                                    abaixo: o cliente fica com a largura dele,
+                                    e a coluna do sistema, vazia aqui. */}
+                                <div className={ADDRESSING_GRID}>
                                     <Field
                                         label="Cliente"
                                         required
@@ -882,43 +919,19 @@ export default function LegalCaseForm({
                                                     value,
                                                 )
                                             }
-                                            options={customers}
+                                            options={customerOptions}
                                             placeholder="Selecione o cliente"
-                                        />
-                                    </Field>
-
-                                    <Field
-                                        label="Sistema judicial"
-                                        error={basics.errors.judicial_system_id}
-                                        hint={
-                                            selectedSystem
-                                                ? `Adotado por ${selectedSystem.courts}.`
-                                                : "Por onde a peça será protocolada. Pode ficar em branco por ora."
-                                        }
-                                    >
-                                        <Select
-                                            value={
-                                                basics.data.judicial_system_id
-                                            }
-                                            onValueChange={(value) =>
-                                                basics.setData(
-                                                    "judicial_system_id",
-                                                    value,
-                                                )
-                                            }
-                                            options={judicialSystems}
-                                            placeholder="Selecione o sistema"
-                                            clearable
                                         />
                                     </Field>
                                 </div>
 
-                                {/* Logo abaixo do cliente e do sistema, e não
-                                    depois da classe: a consulta à IA lê os
-                                    fatos, a área e a classe que vêm mais
-                                    abaixo, e o botão só acorda com eles
-                                    preenchidos — o que ele sugere é escrito
-                                    aqui e no sistema ao lado. */}
+                                {/* Logo abaixo do cliente, e não depois da
+                                    classe: a consulta à IA lê os fatos, a área
+                                    e a classe que vêm mais abaixo, e o botão
+                                    só acorda com eles preenchidos. O sistema
+                                    judicial mora dentro deste bloco, ao lado
+                                    do endereçamento: são o par que a mesma
+                                    consulta escreve. */}
                                 <CourtAddressingFields
                                     judicial_system_id={
                                         basics.data.judicial_system_id
@@ -946,6 +959,10 @@ export default function LegalCaseForm({
                                             defendant.data.defendant_state,
                                     }}
                                     error={basics.errors.court_addressing}
+                                    systems={judicialSystems}
+                                    systemError={
+                                        basics.errors.judicial_system_id
+                                    }
                                     onChange={(patch) =>
                                         basics.setData((data) => ({
                                             ...data,
@@ -1064,8 +1081,7 @@ export default function LegalCaseForm({
                                             .injunctive_relief_description
                                     }
                                     injunctive_relief_suggestion={
-                                        basics.data
-                                            .injunctive_relief_suggestion
+                                        basics.data.injunctive_relief_suggestion
                                     }
                                     facts={basics.data.facts}
                                     practiceArea={selectedArea}

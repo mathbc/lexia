@@ -112,6 +112,34 @@ final class ListLegalCasesTest extends TestCase
     }
 
     #[Test]
+    public function each_client_in_the_select_carries_the_document_its_type_calls_for(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        Customer::factory()->forAccount($account)->create([
+            'name' => 'Ana Souza',
+            'cpf' => '11586325922',
+        ]);
+        Customer::factory()->forAccount($account)->company()->create([
+            'name' => 'Bravo Engenharia',
+            'legal_name' => 'Bravo Engenharia Ltda.',
+            'cnpj' => '11222333000181',
+        ]);
+
+        // Bare digits: the mask is the screen's, as it is for every other
+        // document shown.
+        $this->actingAs($owner)
+            ->get('/pecas/nova')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('customers', 2)
+                ->where('customers.0.label', 'Ana Souza')
+                ->where('customers.0.document', '11586325922')
+                ->where('customers.1.label', 'Bravo Engenharia Ltda.')
+                ->where('customers.1.document', '11222333000181'));
+    }
+
+    #[Test]
     public function a_client_registered_from_the_dialog_comes_back_chosen(): void
     {
         [$account, $owner] = $this->accountWithOwner();
@@ -254,6 +282,10 @@ final class ListLegalCasesTest extends TestCase
                 ->where('legalCase.court_addressing', 'Ao Juízo da 1ª Vara Cível')
                 ->where('legalCase.judicial_system_id', $system->id)
                 ->has('judicialSystems', 5)
+                // O endereço de cada tribunal viaja com a opção: o botão do
+                // cabeçalho segue o select ao vivo, sem ida ao servidor.
+                ->where('judicialSystems.0.label', 'eproc')
+                ->has('judicialSystems.0.links', 13)
                 ->where('legalCase.defendant.defendant_name', 'Construtora Atlântico Ltda.')
                 ->where('legalCase.facts', 'O imóvel foi ocupado em março.')
                 // O slug, e não o uuid: é a moeda do seletor de área.
