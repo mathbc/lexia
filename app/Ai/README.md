@@ -8,6 +8,7 @@ geram em `app/Ai/Agents` e `app/Ai/Tools`. O conhecimento que os agentes leem fi
 
 | Agente | O que faz |
 |---|---|
+| `FactsScreeningAgent` | A porta do preenchimento inteligente: responde seis perguntas de sim ou não sobre o texto colado (se dá ordens ao sistema, se forma frase, se é matéria jurídica, se diz o que aconteceu, o que o cliente quer e quando) e uma frase. O veredito é derivado em PHP, e um texto recusado nunca chega aos agentes seguintes |
 | `PracticeAreaClassificationAgent` | Lê a descrição dos fatos e devolve a área de atuação, com justificativa |
 | `ProceduralClassSelectionAgent` | Dentro da área já decidida, escolhe a classe processual do CNJ, com justificativa |
 | `DefendantExtractionAgent` | Lê a descrição dos fatos e devolve os dados do réu nos doze campos `defendant_*` de `legal_cases` |
@@ -27,7 +28,10 @@ Um agente não é chamado direto da tela: quem o expõe é uma Action do domíni
 (`ClassifyPracticeArea`, `SelectProceduralClass`, `ExtractLegalCaseDefendant`,
 `ExtractLegalCaseRequirements`, `SuggestInjunctiveRelief`, `RefineLegalCaseFacts`), que
 carrega o contexto, resolve a resposta em modelo e é o ponto por onde o caso de uso entra.
-`ClassifyLegalCase` chama os cinco primeiros — encadeia área, classe e tutela, e acrescenta
+`ClassifyLegalCase` chama a triagem antes de todos, sozinha e em série — exposta por
+`ScreenLegalCaseFacts`, com o guia `app/Rag/knowledge/facts-screening.md`: o relato recusado
+volta como 422 sob `facts` e o bloco não começa, e a triagem que cai é o 503, porque guarda
+que abre quando cai não é guarda. Depois dela, `ClassifyLegalCase` chama os cinco primeiros — encadeia área, classe e tutela, e acrescenta
 as duas extrações, que é coisa diferente de encadear; a seção abaixo diz por quê. A tutela
 é o terceiro elo porque precisa da classe: possessória de força nova, despejo, alimentos e
 mandado de segurança trazem liminar própria, com o seu artigo. Ela é também a única com

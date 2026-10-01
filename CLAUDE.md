@@ -357,6 +357,26 @@ Ele escolhe onde gastar a janela, não quais respostas são possíveis — é a 
 ao top-k, evitada por construção. Os dois READMEs em `app/Ai` e `app/Rag`
 detalham o resto.
 
+**Antes de tudo isso há uma porta.** `FactsScreeningAgent`, exposto por
+`ScreenLegalCaseFacts`, é a primeira inferência de `POST /pecas/classificar`, sozinha e em
+série, antes do bloco concorrente: ela nasceu de uma cantiga infantil que foi enquadrada e
+gravada como rascunho. O agente **não dá veredito**: responde seis perguntas de sim ou não
+(`instructs_the_system`, `intelligible`, `legal_matter`, `describes_events`,
+`states_claim`, `has_timeline`) e uma frase, e `FactsScreeningData::fromAgent()` deriva o
+veredito nesta ordem — instrução ao sistema, ininteligível, sem matéria jurídica, vago (sem
+fato ou sem pretensão), admissível. **A data nunca recusa sozinha**: só entra na lista do
+que falta quando o relato já é vago por outro motivo. A frase que a tela mostra é composta
+em PHP; a razão do agente é omitida quando o texto dá ordens ao sistema, para não ecoar a
+injeção. O relato recusado vira `InadmissibleFactsException`, que o `asController()`
+transforma num **422 sob `facts`** (a tela o desenha debaixo do campo) e num
+`Log::notice` **sem o texto**, porque o falso positivo é o relato de um cliente de
+verdade. A triagem que **falha** não passa por `stage()` e é o 503: guarda que abre quando
+cai não é guarda. Antes dela, o `min:20` das regras poupa a inferência do que nem frase é.
+O preço é uma inferência curta (3 a 8 s no Gemini) a mais em todo preenchimento. O guia é
+`app/Rag/knowledge/facts-screening.md`, e a assimetria está escrita nele: na dúvida,
+admitir, porque recusar o relato real de um cliente é o erro mais caro. Os "Consultar IA"
+da etapa 1 **não** passam pela porta.
+
 O enquadramento de um caso são **dois** agentes em série, e a ordem é imposta, não
 escolhida. `PracticeAreaClassificationAgent` recebe os fatos e devolve a área de
 atuação; `ProceduralClassSelectionAgent` recebe a área já decidida e escolhe entre

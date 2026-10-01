@@ -10,6 +10,7 @@ use App\Domain\LegalCases\Data\DefendantData;
 use App\Domain\LegalCases\Data\InjunctiveReliefSuggestionData;
 use App\Domain\LegalCases\Data\LegalCaseClassification;
 use App\Domain\LegalCases\Data\LegalCaseFraming;
+use App\Domain\LegalCases\Exceptions\InadmissibleFactsException;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\PracticeAreas\Actions\ClassifyPracticeArea;
 use App\Domain\ProceduralClasses\Actions\SelectProceduralClass;
@@ -18,7 +19,9 @@ use App\Domain\Requirements\Data\RequirementListData;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Concurrency;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 use RuntimeException;
@@ -39,6 +42,28 @@ use Throwable;
  * PHP; depois viraram `statement` em série, o que era garantia do desenho mas
  * cobrava do advogado a soma de todas as esperas; e por último houve uma quinta
  * etapa aqui — a pesquisa de teses —, que saiu. Onde ela foi parar está abaixo.
+ *
+ * ## A triagem vem antes
+ *
+ * Antes do bloco, e sozinha, `ScreenLegalCaseFacts` diz se o texto é o relato
+ * de um caso jurídico. Ela nasceu de uma cantiga infantil que foi enquadrada,
+ * ganhou classe e virou rascunho: até ali a única guarda era o `required`, e
+ * cada texto sem sentido custava as cinco inferências — e um texto que dá
+ * ordens ao modelo, em vez de narrar fatos, chegava como prompt de todos eles.
+ *
+ * Ela corre **em série** porque o ponto é exatamente não acionar o bloco: ao
+ * lado dele, a recusa chegaria depois de as três tasks já terem gastado a cota.
+ * O preço é uma inferência curta a mais na espera de todo preenchimento.
+ *
+ * Duas saídas, e a diferença entre elas é o desenho. A recusa é uma resposta
+ * sobre a entrada: `InadmissibleFactsException`, que a casca transforma num
+ * 422 sob `facts`, com a frase que `FactsScreeningData::message()` compôs. A
+ * triagem que **falha** — o provider fora, a resposta sem estrutura — não passa
+ * por `stage()` e vira o 503 de sempre: uma guarda que abre quando cai não é
+ * guarda, e o agente da área, que viria em seguida, mora no mesmo provider.
+ *
+ * Antes dela há um piso que não custa nada, o `min:20` das regras, para que
+ * "teste" e "asdf" nem cheguem a ser perguntados.
  *
  * ## O que corre junto, e o que não pode
  *
@@ -166,6 +191,8 @@ use Throwable;
  * enquadramento nenhum a devolver, e a resposta é o 503 lá de baixo. O preço do
  * paralelismo aparece exatamente aqui: quando a área cai, as duas extrações já
  * correram e são descartadas. É desperdício de cota, não de tempo de parede.
+ * A triagem, que vem antes de todas, também não pode faltar — mas ela não é
+ * uma das cinco: é a porta, e a falha dela custa só a ela mesma.
  *
  * Fora dela, uma etapa que cai não leva as outras junto. O relato que não
  * identifica o réu, a extração que não voltou, o agente que caiu, o portal do
@@ -221,6 +248,13 @@ final class ClassifyLegalCase
 
         if ($facts === '') {
             throw new RuntimeException('Não há fatos para classificar.');
+        }
+
+        // A porta, fora de `stage()` — ver "A triagem vem antes" no docblock.
+        $screening = ScreenLegalCaseFacts::run($facts);
+
+        if (! $screening->admissible()) {
+            throw new InadmissibleFactsException($screening);
         }
 
         // As cinco etapas básicas, em três tasks. O que cada closure pode
@@ -388,7 +422,8 @@ final class ClassifyLegalCase
     public function rules(ActionRequest $request): array
     {
         return [
-            'facts' => ['required', 'string'],
+            // O piso não julga nada: só poupa a triagem do que nem frase é.
+            'facts' => ['required', 'string', 'min:20'],
             // Opcional, e só para o endereçamento: sem ele a sexta etapa não
             // roda. Conferido contra a conta do ator pela mesma razão da etapa
             // 1 — é um id vindo do pedido, e para a equipe LexIA o escopo está
@@ -423,6 +458,20 @@ final class ClassifyLegalCase
 
         try {
             $classification = $this->handle($facts, $customer);
+        } catch (InadmissibleFactsException $e) {
+            // Sem o texto: um falso positivo é o relato de um cliente de
+            // verdade, e o log não é lugar para ele. Quem recusa o quê, e
+            // quantas vezes, é o que serve para ver um usuário insistindo.
+            Log::notice('Relato recusado pela triagem.', [
+                'user_id' => $request->user()->id,
+                'account_id' => $request->user()->account_id,
+                'verdict' => $e->screening->verdict->value,
+                'length' => mb_strlen($facts),
+            ]);
+
+            // Lançada de dentro do `catch`, a validação não cai no irmão de
+            // baixo, e o handler a desenha como o 422 de sempre.
+            throw ValidationException::withMessages(['facts' => $e->getMessage()]);
         } catch (Throwable $e) {
             report($e);
 

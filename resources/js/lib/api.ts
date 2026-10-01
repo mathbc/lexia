@@ -3,6 +3,30 @@ const XSRF_COOKIE = 'XSRF-TOKEN'
 const XSRF_HEADER = 'X-XSRF-TOKEN'
 
 /**
+ * A recusa do servidor, com o que a tela precisa para desenhá-la no lugar certo.
+ *
+ * Continua sendo um `Error` com a frase do servidor em `message`, então quem só
+ * mostra a frase não muda. O que ela acrescenta é o status e os erros de campo
+ * do 422: uma recusa que é sobre um campo — o relato que a triagem não aceitou —
+ * vai para baixo dele, e não para um alerta solto no topo da tela.
+ */
+export class ApiError extends Error {
+    constructor(
+        message: string,
+        readonly status: number,
+        readonly errors: Record<string, string[]> = {},
+    ) {
+        super(message)
+        this.name = 'ApiError'
+    }
+
+    /** O primeiro erro de um campo, que é o que um `Field` desenha. */
+    field(name: string): string | undefined {
+        return this.errors[name]?.[0]
+    }
+}
+
+/**
  * Um POST que troca JSON com o próprio backend.
  *
  * É a exceção que precisa de explicação, porque o Inertia cobre toda navegação
@@ -12,8 +36,8 @@ const XSRF_HEADER = 'X-XSRF-TOKEN'
  * volta por uma requisição só engordaria o bundle sem resolver nada que as
  * quatro linhas de `csrf()` não resolvam.
  *
- * O erro vira `Error` com a frase do servidor quando ela existe, porque é essa
- * frase que a tela mostra: "não foi possível enquadrar o caso agora" diz ao
+ * O erro vira `ApiError` com a frase do servidor quando ela existe, porque é
+ * essa frase que a tela mostra: "não foi possível enquadrar o caso agora" diz ao
  * advogado o que fazer, e um 503 não diz nada.
  */
 export async function postJson<T>(url: string, body: unknown): Promise<T> {
@@ -37,7 +61,7 @@ export async function postJson<T>(url: string, body: unknown): Promise<T> {
     const data = await response.json().catch(() => null)
 
     if (!response.ok) {
-        throw new Error(failure(data, response.status))
+        throw new ApiError(failure(data, response.status), response.status, fieldErrors(data))
     }
 
     return data as T
@@ -83,4 +107,13 @@ const failure = (data: unknown, status: number): string => {
     return typeof message === 'string' && message !== ''
         ? message
         : `A requisição falhou (${status}).`
+}
+
+/** Os erros por campo do 422 do validador; qualquer outra resposta não tem nenhum. */
+const fieldErrors = (data: unknown): Record<string, string[]> => {
+    const errors = (data as { errors?: unknown } | null)?.errors
+
+    return typeof errors === 'object' && errors !== null
+        ? (errors as Record<string, string[]>)
+        : {}
 }

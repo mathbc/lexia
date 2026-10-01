@@ -14,7 +14,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Field, Select, Textarea } from "@/components/ui/field";
-import { postJson } from "@/lib/api";
+import { ApiError, postJson } from "@/lib/api";
 import { stashHandoff } from "@/lib/legal-case-handoff";
 import type { LegalCaseClassification, Option } from "@/types";
 
@@ -28,12 +28,17 @@ import type { LegalCaseClassification, Option } from "@/types";
  * aqui é a de quem lê, não a de quem executa. A chamada é uma só e o servidor
  * não relata por onde anda, então nenhuma delas afirma que uma etapa terminou.
  *
+ * A primeira frase é a triagem, e é a única cuja posição é verdade: ela roda
+ * sozinha e antes de todas, e um relato que ela recusa volta antes de as
+ * outras começarem — com o motivo debaixo do campo Fatos.
+ *
  * A pesquisa de teses **não está aqui**, e as frases dela saíram junto: ela
  * acontece ao abrir a etapa 5, sobre uma peça já gravada, com o diálogo próprio
  * de `ForensicReviewFields`. Prometê-la nesta tela era prometer uma espera que
  * não acontece mais aqui.
  */
 const ANALYSIS_STEPS = [
+    "Conferindo se o texto é o relato de um caso jurídico.",
     "Lendo o relato e separando o que tem peso jurídico.",
     "Comparando os fatos com as áreas de atuação do catálogo.",
     "Reunindo as classes processuais de ajuizamento da área.",
@@ -104,12 +109,20 @@ export default function LegalCaseAssistedForm({
     const [facts, setFacts] = useState("");
     const [classifying, setClassifying] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // A recusa que é sobre um campo vai para baixo dele: o relato que a
+    // triagem não aceitou é corrigido ali, e um alerta no topo ficaria longe
+    // do texto que precisa mudar.
+    const [fieldErrors, setFieldErrors] = useState<{
+        facts?: string;
+        customer_id?: string;
+    }>({});
 
     const ready = customerId !== "" && facts.trim() !== "";
 
     const classify = async () => {
         setClassifying(true);
         setError(null);
+        setFieldErrors({});
 
         try {
             const classification = await postJson<LegalCaseClassification>(
@@ -164,11 +177,26 @@ export default function LegalCaseAssistedForm({
             // segundo pedido tão demorado quanto o primeiro.
             router.visit(`/pecas/nova?area=${encodeURIComponent(area)}`);
         } catch (failure) {
-            setError(
-                failure instanceof Error
-                    ? failure.message
-                    : "Não foi possível enquadrar o caso agora.",
-            );
+            // O 422 da triagem e o do validador trazem o campo; o 503 do
+            // agente que caiu, não, e continua no alerta do topo.
+            const refused =
+                failure instanceof ApiError
+                    ? {
+                          facts: failure.field("facts"),
+                          customer_id: failure.field("customer_id"),
+                      }
+                    : {};
+
+            if (refused.facts || refused.customer_id) {
+                setFieldErrors(refused);
+            } else {
+                setError(
+                    failure instanceof Error
+                        ? failure.message
+                        : "Não foi possível enquadrar o caso agora.",
+                );
+            }
+
             setClassifying(false);
         }
     };
@@ -199,6 +227,7 @@ export default function LegalCaseAssistedForm({
                         <Field
                             label="Cliente"
                             required
+                            error={fieldErrors.customer_id}
                             hint={
                                 customers.length === 0
                                     ? "Nenhum cliente cadastrado ainda."
@@ -219,7 +248,10 @@ export default function LegalCaseAssistedForm({
                         >
                             <Select
                                 value={customerId}
-                                onValueChange={setCustomerId}
+                                onValueChange={(value) => {
+                                    setCustomerId(value);
+                                    setFieldErrors(({ facts }) => ({ facts }));
+                                }}
                                 options={customers}
                                 placeholder="Selecione o cliente"
                             />
@@ -231,11 +263,18 @@ export default function LegalCaseAssistedForm({
                         <Field
                             label="Fatos"
                             required
+                            error={fieldErrors.facts}
                             hint="Quanto mais completo o relato — datas, valores, nomes, o que já se tentou —, menos o modelo precisa supor."
                         >
                             <Textarea
                                 value={facts}
-                                onChange={(e) => setFacts(e.target.value)}
+                                onChange={(e) => {
+                                    setFacts(e.target.value);
+                                    // A recusa era sobre o texto de antes.
+                                    setFieldErrors(({ customer_id }) => ({
+                                        customer_id,
+                                    }));
+                                }}
                                 rows={18}
                                 placeholder="Relate o caso como o cliente o contou: quando começou, o que foi feito, o que foi cobrado, o que se tentou resolver antes de procurar a Justiça…"
                             />

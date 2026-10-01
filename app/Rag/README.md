@@ -5,6 +5,7 @@ O conhecimento que os agentes de `app/Ai` leem. Markdown em `knowledge/`, carreg
 
 | Documento | Usado por |
 |---|---|
+| `knowledge/facts-screening.md` | `FactsScreeningAgent` |
 | `knowledge/practice-areas.md` | `PracticeAreaClassificationAgent` |
 | `knowledge/procedural-classes.md` | `ProceduralClassSelectionAgent` |
 | `knowledge/injunctive-relief.md` | `InjunctiveReliefSuggestionAgent` |

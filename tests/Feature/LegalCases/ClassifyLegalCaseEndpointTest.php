@@ -12,13 +12,16 @@ use App\Domain\JudicialSystems\Models\JudicialSystemCourt;
 use App\Domain\LegalCases\Actions\ExtractLegalCaseDefendant;
 use App\Domain\LegalCases\Actions\ExtractLegalCaseRequirements;
 use App\Domain\LegalCases\Actions\ResearchLegalCaseTheses;
+use App\Domain\LegalCases\Actions\ScreenLegalCaseFacts;
 use App\Domain\LegalCases\Actions\SuggestCourtAddressing;
 use App\Domain\LegalCases\Actions\SuggestInjunctiveRelief;
 use App\Domain\LegalCases\Data\CourtAddressingSuggestionData;
 use App\Domain\LegalCases\Data\DefendantData;
+use App\Domain\LegalCases\Data\FactsScreeningData;
 use App\Domain\LegalCases\Data\ForumPlace;
 use App\Domain\LegalCases\Data\InjunctiveReliefSuggestionData;
 use App\Domain\LegalCases\Enums\CourtDivision;
+use App\Domain\LegalCases\Enums\FactsScreeningVerdict;
 use App\Domain\LegalCases\Enums\ForumSource;
 use App\Domain\LegalCases\Enums\InjunctiveReliefKind;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
@@ -33,6 +36,7 @@ use App\Domain\Requirements\Data\RequirementData;
 use App\Domain\Requirements\Data\RequirementListData;
 use App\Domain\Requirements\Models\Requirement;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 use Mockery;
 use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\Test;
@@ -50,6 +54,10 @@ use Tests\TestCase;
  * Todo teste que chega à inferência dubla as cinco — a tutela de urgência é a
  * quinta, terceiro elo do enquadramento: uma que ficasse de fora sairia daqui
  * direto para o modelo, e um teste da suíte padrão passaria a depender dele.
+ *
+ * E dubla também a triagem, que vem antes das cinco: `admit()` a faz deixar o
+ * relato passar. Os testes que falam dela — a recusa, a queda, o piso — estão
+ * logo depois do relato vazio, porque são a mesma pergunta um degrau acima.
  *
  * O endereçamento é a sexta, e a exceção a essa regra: ela só roda com o
  * cliente no pedido, então os testes que postam só os fatos não a alcançam. Os
@@ -74,6 +82,8 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
 
         $area = PracticeArea::query()->where('slug', 'civil')->sole();
         $class = ProceduralClass::query()->where('code', 7)->sole();
+
+        $this->admit();
 
         $this->fakeAction(ClassifyPracticeArea::class)
             ->shouldReceive('handle')
@@ -187,6 +197,8 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
     {
         [, $owner] = $this->accountWithOwner();
 
+        $this->admit();
+
         $this->fakeAction(ClassifyPracticeArea::class)
             ->shouldReceive('handle')
             ->andReturn(new PracticeAreaClassification(
@@ -236,6 +248,8 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
     public function a_framing_without_a_class_keeps_the_shape(): void
     {
         [, $owner] = $this->accountWithOwner();
+
+        $this->admit();
 
         $this->fakeAction(ClassifyPracticeArea::class)
             ->shouldReceive('handle')
@@ -292,6 +306,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
     {
         [, $owner] = $this->accountWithOwner();
 
+        $this->fakeAction(ScreenLegalCaseFacts::class)->shouldNotReceive('handle');
         $this->fakeAction(ClassifyPracticeArea::class)->shouldNotReceive('handle');
         $this->fakeAction(SelectProceduralClass::class)->shouldNotReceive('handle');
         $this->fakeAction(ExtractLegalCaseDefendant::class)->shouldNotReceive('handle');
@@ -301,6 +316,108 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
 
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => ''])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('facts');
+    }
+
+    /**
+     * A porta: um texto que não é relato de caso volta como erro de validação
+     * dos fatos, e nada do que viria depois dele é acordado.
+     *
+     * É o 422, e não o 503, porque a recusa é uma resposta sobre a entrada — e
+     * é o 422 que a tela desenha debaixo do campo. Sem peça gravada, mesmo com
+     * o cliente no pedido: o rascunho só existe depois do enquadramento.
+     *
+     * O log registra quem foi recusado e por quê, e **não** o texto: o falso
+     * positivo é o relato de um cliente de verdade.
+     */
+    #[Test]
+    public function a_text_that_is_not_a_case_is_refused_before_the_block(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $customer = Customer::factory()->forAccount($account)->create();
+        $facts = 'Batatinha quando nasce se espalha a rama pelo chão.';
+        $screening = $this->screening(legalMatter: false, reason: 'É a letra de uma cantiga infantil.');
+
+        $log = Log::spy();
+
+        $this->fakeAction(ScreenLegalCaseFacts::class)
+            ->shouldReceive('handle')
+            ->once()
+            ->with($facts)
+            ->andReturn($screening);
+
+        foreach ([
+            ClassifyPracticeArea::class,
+            SelectProceduralClass::class,
+            ExtractLegalCaseDefendant::class,
+            ExtractLegalCaseRequirements::class,
+            SuggestInjunctiveRelief::class,
+            SuggestCourtAddressing::class,
+        ] as $action) {
+            $this->fakeAction($action)->shouldNotReceive('handle');
+        }
+
+        $this->actingAs($owner)
+            ->postJson('/pecas/classificar', ['facts' => $facts, 'customer_id' => $customer->id])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['facts' => $screening->message()])
+            ->assertJsonPath('message', $screening->message());
+
+        $this->assertSame(0, LegalCase::acrossAllAccounts()->count());
+
+        $log->shouldHaveReceived('notice')
+            ->once()
+            ->withArgs(static fn (string $message, array $context): bool => $message === 'Relato recusado pela triagem.'
+                && $context === [
+                    'user_id' => $owner->id,
+                    'account_id' => $account->id,
+                    'verdict' => 'not_legal',
+                    'length' => mb_strlen($facts),
+                ]);
+    }
+
+    /**
+     * A triagem que cai não abre a porta: sem ela não há como saber se o texto
+     * é um caso, e o agente da área, que viria logo depois, mora no mesmo
+     * provider. É o 503 de sempre, e o bloco nem começa.
+     */
+    #[Test]
+    public function a_screening_that_fails_answers_503_and_never_frames(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+
+        $this->fakeAction(ScreenLegalCaseFacts::class)
+            ->shouldReceive('handle')
+            ->andThrow(new RuntimeException('Connection refused'));
+
+        $this->fakeAction(ClassifyPracticeArea::class)->shouldNotReceive('handle');
+        $this->fakeAction(ExtractLegalCaseDefendant::class)->shouldNotReceive('handle');
+        $this->fakeAction(ExtractLegalCaseRequirements::class)->shouldNotReceive('handle');
+
+        $this->actingAs($owner)
+            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
+            ->assertStatus(503)
+            ->assertJsonPath(
+                'message',
+                'Não foi possível enquadrar o caso agora. Tente novamente em instantes.',
+            );
+    }
+
+    /**
+     * O piso não custa inferência: o que nem chega a ser frase é recusado pelo
+     * validador, antes de a triagem ser perguntada.
+     */
+    #[Test]
+    public function a_text_below_the_floor_is_refused_before_the_screening(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+
+        $this->fakeAction(ScreenLegalCaseFacts::class)->shouldNotReceive('handle');
+        $this->fakeAction(ClassifyPracticeArea::class)->shouldNotReceive('handle');
+
+        $this->actingAs($owner)
+            ->postJson('/pecas/classificar', ['facts' => 'teste teste'])
             ->assertStatus(422)
             ->assertJsonValidationErrors('facts');
     }
@@ -324,6 +441,8 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
     public function an_agent_that_fails_answers_with_a_message_the_screen_can_show(): void
     {
         [, $owner] = $this->accountWithOwner();
+
+        $this->admit();
 
         $this->fakeAction(ClassifyPracticeArea::class)
             ->shouldReceive('handle')
@@ -360,7 +479,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
     }
 
     /**
-     * A cadeia que sobrou: área, depois classe, depois tutela.
+     * A cadeia que sobrou: a triagem, e então área, depois classe, depois tutela.
      *
      * O que se verifica aqui não é o resultado, é a **dependência** — e ela é o
      * que restou de afirmável depois que as quatro etapas básicas passaram a
@@ -388,6 +507,15 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         [, $owner] = $this->accountWithOwner();
 
         $area = PracticeArea::query()->where('slug', 'civil')->sole();
+
+        // A porta abre a fila: nada do bloco roda antes de ela ter voltado.
+        $this->fakeAction(ScreenLegalCaseFacts::class)
+            ->shouldReceive('handle')
+            ->once()
+            ->globally()
+            ->ordered()
+            ->with('O vizinho derrubou o muro.')
+            ->andReturn($this->screening());
 
         $this->fakeAction(ClassifyPracticeArea::class)
             ->shouldReceive('handle')
@@ -450,6 +578,8 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
     public function a_class_that_could_not_be_chosen_does_not_stop_the_queue(): void
     {
         [, $owner] = $this->accountWithOwner();
+
+        $this->admit();
 
         $this->fakeAction(ClassifyPracticeArea::class)
             ->shouldReceive('handle')
@@ -522,6 +652,8 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
     {
         [, $owner] = $this->accountWithOwner();
 
+        $this->admit();
+
         $this->fakeAction(ClassifyPracticeArea::class)
             ->shouldReceive('handle')
             ->andReturn(new PracticeAreaClassification(
@@ -577,6 +709,8 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
     public function the_classification_never_researches_and_never_leaves_the_machine(): void
     {
         [, $owner] = $this->accountWithOwner();
+
+        $this->admit();
 
         $this->fakeAction(ClassifyPracticeArea::class)
             ->shouldReceive('handle')
@@ -712,6 +846,8 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         $area = PracticeArea::query()->where('slug', 'civil')->sole();
         $class = ProceduralClass::query()->where('code', 7)->sole();
         $court = JudicialSystemCourt::query()->where('court', 'TJSC')->firstOrFail();
+
+        $this->admit();
 
         $this->fakeAction(ClassifyPracticeArea::class)
             ->shouldReceive('handle')
@@ -855,6 +991,8 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         [$account, $owner] = $this->accountWithOwner();
         $customer = Customer::factory()->forAccount($account)->create();
 
+        $this->admit();
+
         $this->fakeAction(ClassifyPracticeArea::class)
             ->shouldReceive('handle')
             ->andReturn(new PracticeAreaClassification(
@@ -905,6 +1043,8 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
     {
         [$account, $owner] = $this->accountWithOwner();
         $customer = Customer::factory()->forAccount($account)->create();
+
+        $this->admit();
 
         $this->fakeAction(ClassifyPracticeArea::class)
             ->shouldReceive('handle')
@@ -977,6 +1117,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         [, $owner] = $this->accountWithOwner();
         $foreign = Customer::factory()->forAccount(Account::factory()->create())->create();
 
+        $this->fakeAction(ScreenLegalCaseFacts::class)->shouldNotReceive('handle');
         $this->fakeAction(ClassifyPracticeArea::class)->shouldNotReceive('handle');
 
         $this->actingAs($owner)
@@ -995,6 +1136,8 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
     {
         $area = PracticeArea::query()->where('slug', 'civil')->sole();
         $class = ProceduralClass::query()->where('code', 7)->sole();
+
+        $this->admit();
 
         $this->fakeAction(ClassifyPracticeArea::class)
             ->shouldReceive('handle')
@@ -1062,6 +1205,42 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             unsupportedAmounts: [],
             suggestedAt: '2026-09-27T12:00:00-03:00',
         );
+    }
+
+    /**
+     * A triagem deixando o relato passar, para os testes que falam do que vem
+     * depois dela.
+     */
+    private function admit(): void
+    {
+        $this->fakeAction(ScreenLegalCaseFacts::class)
+            ->shouldReceive('handle')
+            ->andReturn($this->screening());
+    }
+
+    /**
+     * Uma triagem como `FactsScreeningData::fromAgent()` a devolveria — por
+     * ele mesmo, para que o veredito saia da derivação e não de um palpite do
+     * teste.
+     */
+    private function screening(bool $legalMatter = true, ?string $reason = null): FactsScreeningData
+    {
+        $screening = FactsScreeningData::fromAgent([
+            'instructs_the_system' => false,
+            'intelligible' => true,
+            'legal_matter' => $legalMatter,
+            'describes_events' => true,
+            'states_claim' => true,
+            'has_timeline' => false,
+            'reason' => $reason ?? 'Narra o muro derrubado pelo vizinho.',
+        ]);
+
+        $this->assertSame(
+            $legalMatter ? FactsScreeningVerdict::Admissible : FactsScreeningVerdict::NotLegal,
+            $screening->verdict,
+        );
+
+        return $screening;
     }
 
     /**
