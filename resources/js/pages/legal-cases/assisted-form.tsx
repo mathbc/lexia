@@ -63,14 +63,19 @@ interface Props {
  * os quatro são deduzidos dos fatos; o destino das duas é o mesmo formulário, e
  * a diferença é só quem preenche o quê.
  *
- * Por isso não há trilha de etapas nem `useForm`: nada é salvo desta tela. Ela
- * faz uma chamada só, `POST /pecas/classificar`, que não devolve tela nenhuma
- * — devolve o que os agentes leram do relato —, guarda o resultado junto com o
- * cliente e o relato e navega para `/pecas/nova`, onde o assistente abre com a
- * área e a classe escolhidas, os fatos já escritos e as etapas do réu e dos
- * pedidos sugeridas. O `?area=` é o que faz o servidor mandar as classes
- * daquela área; o resto viaja pelo `sessionStorage`, e
- * `@/lib/legal-case-handoff` explica por quê.
+ * Por isso não há trilha de etapas nem `useForm`. A tela faz uma chamada só,
+ * `POST /pecas/classificar`, que não devolve tela nenhuma — devolve o que os
+ * agentes leram do relato e, no mesmo gesto, **grava a peça como rascunho**
+ * com isso tudo (ver `CreateAssistedLegalCase`). A navegação é para
+ * `/pecas/{id}/editar`: o assistente abre na etapa 1 de uma peça que já
+ * existe, com a área e a classe escolhidas, os fatos escritos e o réu e os
+ * pedidos gravados atrás do "Continuar" de cada etapa. A espera de minutos
+ * passa a sobreviver a uma aba fechada.
+ *
+ * Quando a resposta não traz peça — a seleção de classe falhou, e a coluna não
+ * aceita peça sem classe, ou a gravação caiu —, vale o caminho antigo: o
+ * resultado vai com o cliente e o relato pelo `sessionStorage` até
+ * `/pecas/nova?area=`, e `@/lib/legal-case-handoff` explica por quê.
  *
  * A espera é pelas quatro etapas, em três tasks que correm em paralelo, e
  * nenhuma delas sai da máquina. Ainda assim é espera de inferência local e não
@@ -114,6 +119,19 @@ export default function LegalCaseAssistedForm({
                 { facts, customer_id: customerId },
             );
 
+            // O caminho de sempre: a rota já gravou a peça como rascunho, e o
+            // assistente abre nela, na etapa 1, com o réu e os pedidos atrás
+            // do "Continuar" de cada etapa. Sem desligar o estado de espera,
+            // pelo motivo escrito lá embaixo.
+            if (classification.legal_case_id) {
+                router.visit(`/pecas/${classification.legal_case_id}/editar`);
+
+                return;
+            }
+
+            // A reserva: sem classe não há peça que a coluna aceite, e uma
+            // gravação que falhou não devolveu id. O enquadramento continua
+            // valendo e vai até `/pecas/nova` pela entrega, como ia antes.
             const area = classification.practice_area.slug;
 
             stashHandoff({
@@ -228,8 +246,8 @@ export default function LegalCaseAssistedForm({
                 <div className="flex flex-wrap items-center justify-end gap-3">
                     <p className="mr-auto text-sm text-muted-foreground">
                         A área de atuação, a classe processual, os dados do réu
-                        e os pedidos serão sugeridos, e você poderá revisá-los
-                        no assistente.
+                        e os pedidos serão sugeridos, e a peça fica salva como
+                        rascunho para você revisá-los no assistente.
                     </p>
 
                     <Button variant="outline" asChild>
@@ -258,7 +276,7 @@ export default function LegalCaseAssistedForm({
             <AnalysisDialog
                 open={classifying}
                 title="Analisando o caso"
-                hint="A análise pode levar alguns minutos. Mantenha esta aba aberta: ao terminar, o assistente abre com o enquadramento, os dados do réu e os pedidos preenchidos."
+                hint="A análise pode levar alguns minutos. Mantenha esta aba aberta: ao terminar, a peça é salva como rascunho e o assistente abre com o enquadramento, os dados do réu e os pedidos preenchidos."
                 messages={ANALYSIS_STEPS}
             />
         </AppLayout>

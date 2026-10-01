@@ -23,12 +23,13 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * `is_draft` is left to the column's default rather than set: every pleading is
  * a draft today, and writing it out here would suggest this Action had a say.
  *
- * O relato e a tutela são desta etapa, e o relato é opcional. Quem vem do
- * preenchimento inteligente chega com ele já escrito — lá o advogado relata os
- * fatos antes de existir peça, e foram eles que produziram a área e a classe
- * que o assistente já abre escolhidas —, e a criação é o que o faz sobreviver à
- * navegação que ela mesma provoca. Numa peça montada à mão a caixa pode ir
- * vazia, e o servidor grava null.
+ * O relato e a tutela são desta etapa, e o relato é opcional. Numa peça
+ * montada à mão a caixa pode ir vazia, e o servidor grava null.
+ *
+ * O preenchimento inteligente não passa mais por aqui: ele grava o próprio
+ * rascunho por `CreateAssistedLegalCase`, ao fim do enquadramento. Só a
+ * reserva dele — a entrega pelo `sessionStorage`, quando a peça não pôde ser
+ * gravada — chega a este "Continuar" com o relato já escrito.
  */
 final class CreateLegalCase
 {

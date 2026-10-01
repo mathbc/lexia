@@ -809,6 +809,12 @@ export interface LegalCaseClassification {
     injunctive_relief: InjunctiveReliefSuggestion | null;
     /** Nulo quando a etapa falhou ou o pedido não levou o cliente. */
     court_addressing: CourtAddressingSuggestion | null;
+    /**
+     * A peça que a rota gravou como rascunho com tudo o que está acima — ver
+     * `CreateAssistedLegalCase`. Nula sem cliente, sem classe ou com a gravação
+     * falhando, e aí o enquadramento segue pela entrega do `sessionStorage`.
+     */
+    legal_case_id: string | null;
 }
 
 /** Mirrors LegalCasePageProps::abilities(). */

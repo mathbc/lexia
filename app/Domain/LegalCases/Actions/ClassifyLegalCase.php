@@ -176,9 +176,10 @@ use Throwable;
  * ## A casca HTTP
  *
  * `POST /pecas/classificar` devolve `LegalCaseClassification::toArray()` como
- * JSON, e não uma resposta do Inertia: quem chama é a tela de preenchimento
- * inteligente, que precisa do resultado em mãos para carregá-lo até o
- * assistente — a navegação vem depois, e é do browser.
+ * JSON, mais o id da peça gravada (ver "O rascunho", abaixo), e não uma
+ * resposta do Inertia: quem chama é a tela de preenchimento inteligente, que
+ * precisa do resultado em mãos para decidir para onde ir — a navegação vem
+ * depois, e é do browser.
  *
  * O preço continua sendo a latência, mas encolheu duas vezes. O bloco trocou a
  * soma das etapas pela mais longa delas; a saída da pesquisa tirou da conta a
@@ -194,6 +195,21 @@ use Throwable;
  * Um agente fora do ar é condição de operação, não defeito de código: daí o
  * 503 com uma frase que a tela consegue mostrar, e o `report()` para que a
  * causa real continue chegando ao log.
+ *
+ * ## O rascunho
+ *
+ * Com o enquadramento na mão, a casca grava a peça por `CreateAssistedLegalCase`
+ * — a etapa 1, o réu e os pedidos, como rascunho parado na etapa 1 — e a
+ * resposta ganha `legal_case_id`, que é para onde a tela navega. O `handle()`
+ * continua sem tocar no banco, e é de propósito: ele é o que os testes de
+ * agente exercitam, e "tudo o que um relato pode dar sem uma peça gravada"
+ * segue sendo a descrição exata dele.
+ *
+ * A gravação vem depois da inferência e nunca no lugar dela. Sem cliente no
+ * pedido, sem classe escolhida — as duas colunas são NOT NULL — ou com a
+ * gravação falhando, `legal_case_id` volta nulo e o payload é o de sempre: a
+ * tela leva o enquadramento até `/pecas/nova` pela entrega do
+ * `sessionStorage`, que deixou de ser o caminho e virou a reserva.
  */
 final class ClassifyLegalCase
 {
@@ -400,13 +416,13 @@ final class ClassifyLegalCase
 
     public function asController(ActionRequest $request): JsonResponse
     {
+        $facts = $request->string('facts')->toString();
+        $customer = $request->filled('customer_id')
+            ? Customer::query()->findOrFail($request->string('customer_id')->toString())
+            : null;
+
         try {
-            $classification = $this->handle(
-                $request->string('facts')->toString(),
-                $request->filled('customer_id')
-                    ? Customer::query()->findOrFail($request->string('customer_id')->toString())
-                    : null,
-            );
+            $classification = $this->handle($facts, $customer);
         } catch (Throwable $e) {
             report($e);
 
@@ -415,6 +431,42 @@ final class ClassifyLegalCase
             ], 503);
         }
 
-        return response()->json($classification->toArray());
+        return response()->json([
+            ...$classification->toArray(),
+            'legal_case_id' => $this->draft($request, $customer, $facts, $classification)?->id,
+        ]);
+    }
+
+    /**
+     * The pleading saved as a draft, or null when it cannot be — see "O
+     * rascunho" in the class docblock.
+     *
+     * Sem cliente ou sem classe a recusa é esperada e não vai ao log: a coluna
+     * não admite nenhum dos dois nulos, e a tela segue pela entrega. A gravação
+     * que falha vai, porque é defeito — e nem ela custa o enquadramento.
+     */
+    private function draft(
+        ActionRequest $request,
+        ?Customer $customer,
+        string $facts,
+        LegalCaseClassification $classification,
+    ): ?LegalCase {
+        if ($customer === null || $classification->proceduralClass === null) {
+            return null;
+        }
+
+        try {
+            return CreateAssistedLegalCase::run(
+                $request->user()->account_id,
+                $request->user()->id,
+                $customer,
+                $facts,
+                $classification,
+            );
+        } catch (Throwable $e) {
+            report($e);
+
+            return null;
+        }
     }
 }

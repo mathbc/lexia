@@ -6,7 +6,13 @@ import type {
 } from "@/types";
 
 /**
- * O que o preenchimento inteligente entrega ao assistente.
+ * O que o preenchimento inteligente entrega ao assistente **quando não há peça
+ * gravada**.
+ *
+ * Deixou de ser o caminho: a rota do enquadramento grava o rascunho e a tela
+ * navega para ele (ver `CreateAssistedLegalCase`). A entrega sobra para o
+ * enquadramento que a coluna não aceita — a seleção de classe que falhou — e
+ * para a gravação que caiu, para que nenhum dos dois custe a inferência.
  *
  * A área vai no slug porque é a moeda do formulário e da query string; a classe
  * vai no uuid porque é ele que será gravado. São as mesmas duas formas do

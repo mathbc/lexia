@@ -456,6 +456,16 @@ pesquisa tirou da conta a única que abria páginas. Sobram cinco inferências, 
 enquadramento é a mais longa.
 **A dívida da fila continua de pé**, e agora por um motivo menor do que era.
 
+**O preenchimento inteligente termina com a peça gravada.** Depois do `handle()`, o
+`asController()` de `ClassifyLegalCase` chama `CreateAssistedLegalCase`, que grava numa
+transação a etapa 1 (com os envelopes da tutela e do endereçamento), o réu e os pedidos,
+com `is_draft` no default e a **marca d'água em `basics`** — quem preencheu foi a IA, e o
+advogado ainda confere cada etapa no "Continuar" dela. A resposta ganha `legal_case_id` e a
+tela abre `/pecas/{id}/editar`. O `handle()` continua sem tocar no banco, que é o que os
+testes de agente exercitam. Sem cliente, sem classe (a coluna é NOT NULL) ou com a gravação
+falhando, a chave volta nula e o payload segue pela entrega do `sessionStorage` até
+`/pecas/nova`, que virou reserva: a gravação nunca custa a inferência.
+
 Duas consequências operacionais. O driver vive em `CONCURRENCY_DRIVER`
 (`config/concurrency.php`): em `process` — o default, e o único que serve a um request web,
 já que o `fork` recusa rodar fora do console — cada task é um `artisan` novo, com o retorno

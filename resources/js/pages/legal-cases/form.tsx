@@ -261,15 +261,20 @@ interface Props {
  * verdadeira sobre a peça — e a sexta, sendo a última, é quem carrega o botão
  * que fecha tudo.
  *
- * Uma peça nova pode chegar aqui preenchida: quem vem do preenchimento
- * inteligente traz o cliente, a classe, o relato, os dados do réu e os pedidos
- * numa entrega guardada pelo browser, e a área na própria URL — ver
- * `@/lib/legal-case-handoff`. Nada disso está salvo, e cada etapa grava o que é
- * dela quando o advogado clica em "Continuar": a primeira grava o enquadramento
- * e o relato, a segunda grava o réu se ele for aceito, a terceira grava os
- * pedidos que sobreviverem à revisão. O advogado vê as sugestões antes de
- * aceitá-las, que é o ponto de devolvê-las ao assistente em vez de abrir a
- * minuta direto.
+ * Quem vem do preenchimento inteligente chega, quase sempre, a uma peça **já
+ * gravada**: a rota do enquadramento salva o rascunho com a etapa 1, o réu e
+ * os pedidos, e com a marca d'água ainda na etapa 1 — ver
+ * `CreateAssistedLegalCase`. Daí em diante é uma peça como outra qualquer: a
+ * trilha abre a etapa 1, e cada "Continuar" regrava a etapa que o advogado
+ * acabou de ler e destrava a seguinte. O advogado vê as sugestões antes de
+ * seguir com elas, que é o ponto de devolvê-las ao assistente em vez de abrir
+ * a minuta direto.
+ *
+ * A peça nova preenchida é a reserva: sem classe escolhida não há rascunho que
+ * a coluna aceite, e o cliente, a classe, o relato, o réu e os pedidos chegam
+ * numa entrega guardada pelo browser, com a área na própria URL — ver
+ * `@/lib/legal-case-handoff`. Ali nada está salvo, e cada etapa grava o que é
+ * dela no "Continuar", como sempre gravou.
  *
  * As etapas 5 e 6 são as duas que abrem **pesquisando**, e são a mesma tela
  * duas vezes: a revisão forense procura as teses nos portais oficiais, a

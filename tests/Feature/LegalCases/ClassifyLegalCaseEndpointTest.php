@@ -7,6 +7,8 @@ namespace Tests\Feature\LegalCases;
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Accounts\Models\Account;
 use App\Domain\Customers\Models\Customer;
+use App\Domain\JudicialSystems\Data\JudicialSystemSelection;
+use App\Domain\JudicialSystems\Models\JudicialSystemCourt;
 use App\Domain\LegalCases\Actions\ExtractLegalCaseDefendant;
 use App\Domain\LegalCases\Actions\ExtractLegalCaseRequirements;
 use App\Domain\LegalCases\Actions\ResearchLegalCaseTheses;
@@ -19,6 +21,8 @@ use App\Domain\LegalCases\Data\InjunctiveReliefSuggestionData;
 use App\Domain\LegalCases\Enums\CourtDivision;
 use App\Domain\LegalCases\Enums\ForumSource;
 use App\Domain\LegalCases\Enums\InjunctiveReliefKind;
+use App\Domain\LegalCases\Enums\LegalCaseStep;
+use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\PracticeAreas\Actions\ClassifyPracticeArea;
 use App\Domain\PracticeAreas\Data\PracticeAreaClassification;
 use App\Domain\PracticeAreas\Models\PracticeArea;
@@ -27,6 +31,7 @@ use App\Domain\ProceduralClasses\Data\ProceduralClassSelection;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
 use App\Domain\Requirements\Data\RequirementData;
 use App\Domain\Requirements\Data\RequirementListData;
+use App\Domain\Requirements\Models\Requirement;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Mockery\MockInterface;
@@ -48,7 +53,8 @@ use Tests\TestCase;
  *
  * O endereçamento é a sexta, e a exceção a essa regra: ela só roda com o
  * cliente no pedido, então os testes que postam só os fatos não a alcançam. Os
- * que postam o cliente a dublam, e estão juntos no fim do arquivo.
+ * que postam o cliente a dublam, e estão juntos no fim do arquivo — e são
+ * também os que gravam o rascunho, porque a peça não existe sem cliente.
  *
  * `ResearchLegalCaseTheses` não está entre elas, e não por esquecimento: ela
  * saiu desta rota. Ela aparece aqui uma vez só, em
@@ -668,6 +674,10 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->assertJsonPath('court_addressing', null);
     }
 
+    /**
+     * Sem cliente não há endereçamento, e também não há rascunho: a peça não
+     * existe sem cliente. A chave volta nula, presente, e nada é gravado.
+     */
     #[Test]
     public function without_a_client_the_addressing_never_runs(): void
     {
@@ -679,7 +689,282 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         $this->actingAs($owner)
             ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
             ->assertOk()
-            ->assertJsonPath('court_addressing', null);
+            ->assertJsonPath('court_addressing', null)
+            ->assertJsonPath('legal_case_id', null);
+
+        $this->assertSame(0, LegalCase::acrossAllAccounts()->count());
+    }
+
+    /**
+     * O enquadramento termina com a peça gravada como rascunho: a etapa 1, o
+     * réu e os pedidos, do jeito que a tela os preenchia a partir da entrega.
+     *
+     * A marca d'água fica na etapa 1, e é a afirmação mais importante daqui:
+     * quem preencheu foi a IA, e o advogado ainda confere cada etapa no
+     * "Continuar" dela.
+     */
+    #[Test]
+    public function with_a_client_the_framing_is_saved_as_a_draft(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $customer = Customer::factory()->forAccount($account)->create();
+
+        $area = PracticeArea::query()->where('slug', 'civil')->sole();
+        $class = ProceduralClass::query()->where('code', 7)->sole();
+        $court = JudicialSystemCourt::query()->where('court', 'TJSC')->firstOrFail();
+
+        $this->fakeAction(ClassifyPracticeArea::class)
+            ->shouldReceive('handle')
+            ->andReturn(new PracticeAreaClassification(practiceArea: $area, justification: 'O réu é um particular.'));
+
+        $this->fakeAction(SelectProceduralClass::class)
+            ->shouldReceive('handle')
+            ->andReturn(new ProceduralClassSelection(proceduralClass: $class, justification: 'O pedido é indenizatório.'));
+
+        $this->fakeAction(ExtractLegalCaseDefendant::class)
+            ->shouldReceive('handle')
+            ->andReturn($this->defendant());
+
+        $this->fakeAction(ExtractLegalCaseRequirements::class)
+            ->shouldReceive('handle')
+            ->andReturn(new RequirementListData([
+                new RequirementData(
+                    id: null,
+                    description: 'A condenação do Réu à reconstrução do muro derrubado;',
+                    amount: null,
+                ),
+                new RequirementData(
+                    id: null,
+                    description: 'A condenação do Réu ao pagamento de R$ 4.300,00 a título de danos materiais;',
+                    amount: '4300.00',
+                ),
+            ]));
+
+        $this->fakeAction(SuggestInjunctiveRelief::class)
+            ->shouldReceive('handle')
+            ->andReturn($this->suggestion(recommended: true));
+
+        $this->fakeAction(SuggestCourtAddressing::class)
+            ->shouldReceive('handle')
+            ->andReturn(CourtAddressingSuggestionData::compose(
+                CourtDivision::Civil,
+                ForumSource::DefendantAddress,
+                new ForumPlace('Joinville', BrazilianState::SC),
+                'CPC, art. 46',
+                'O réu mora em Joinville.',
+                JudicialSystemSelection::fromMap($court),
+            ));
+
+        $response = $this->actingAs($owner)
+            ->postJson('/pecas/classificar', ['facts' => "  O vizinho derrubou o muro.\n", 'customer_id' => $customer->id])
+            ->assertOk()
+            // O payload continua inteiro: é ele que a tela usa quando a peça
+            // não pôde ser gravada.
+            ->assertJsonPath('practice_area.slug', 'civil');
+
+        $legalCase = LegalCase::acrossAllAccounts()->sole();
+
+        $response->assertJsonPath('legal_case_id', $legalCase->id);
+
+        $this->assertSame($account->id, $legalCase->account_id);
+        $this->assertSame($owner->id, $legalCase->user_id);
+        $this->assertSame($customer->id, $legalCase->customer_id);
+        $this->assertSame($area->id, $legalCase->practice_area_id);
+        $this->assertSame($class->id, $legalCase->procedural_class_id);
+        $this->assertSame('O vizinho derrubou o muro.', $legalCase->facts);
+
+        $this->assertTrue($legalCase->is_draft);
+        $this->assertSame(LegalCaseStep::Basics, $legalCase->current_step);
+
+        // A tutela recomendada abre marcada e escrita, com o envelope ao lado.
+        $this->assertTrue($legalCase->injunctive_relief);
+        $this->assertSame(
+            'Medida pretendida: que se determine ao Réu a reconstrução do muro.',
+            $legalCase->injunctive_relief_description,
+        );
+        $this->assertTrue($legalCase->injunctive_relief_suggestion['recommended'] ?? null);
+
+        // O endereçamento e o sistema saem da sugestão; o envelope fica.
+        $this->assertSame(
+            'Excelentíssimo(a) Senhor(a) Juiz(a) de Direito da Vara Cível da Comarca de Joinville/SC',
+            $legalCase->court_addressing,
+        );
+        $this->assertSame($court->judicial_system_id, $legalCase->judicial_system_id);
+        $this->assertSame('O réu mora em Joinville.', $legalCase->court_addressing_suggestion['justification'] ?? null);
+
+        $this->assertSame('Joaquim Vizinho', $legalCase->defendant_name);
+
+        // Pela frase, e não pela posição: dois pedidos gravados no mesmo
+        // segundo não têm ordem entre si — ver `LegalCase::requirements()`.
+        $this->assertEqualsCanonicalizing([
+            'A condenação do Réu à reconstrução do muro derrubado;' => null,
+            'A condenação do Réu ao pagamento de R$ 4.300,00 a título de danos materiais;' => '4300.00',
+        ], $legalCase->requirements()->pluck('amount', 'description')->all());
+
+        // Sem o escopo de conta, que filtraria justamente o que se quer ver.
+        $this->assertSame(
+            [$account->id],
+            Requirement::acrossAllAccounts()
+                ->where('legal_case_id', $legalCase->id)
+                ->pluck('account_id')
+                ->unique()
+                ->values()
+                ->all(),
+        );
+    }
+
+    /**
+     * A tutela que a IA não recomenda não marca a caixa, mas o envelope é
+     * gravado: "a IA não viu urgência" é o registro de uma resposta.
+     */
+    #[Test]
+    public function an_injunction_not_recommended_is_saved_unchecked_with_its_envelope(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $customer = Customer::factory()->forAccount($account)->create();
+        $this->fakeTheBlock();
+
+        $this->fakeAction(SuggestCourtAddressing::class)
+            ->shouldReceive('handle')
+            ->andThrow(new RuntimeException('Connection refused'));
+
+        $this->actingAs($owner)
+            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id])
+            ->assertOk();
+
+        $legalCase = LegalCase::acrossAllAccounts()->sole();
+
+        $this->assertFalse($legalCase->injunctive_relief);
+        $this->assertNull($legalCase->injunctive_relief_description);
+        $this->assertFalse($legalCase->injunctive_relief_suggestion['recommended'] ?? null);
+
+        // O endereçamento que caiu é a etapa 1 com os dois campos em branco.
+        $this->assertNull($legalCase->court_addressing);
+        $this->assertNull($legalCase->judicial_system_id);
+        $this->assertNull($legalCase->court_addressing_suggestion);
+    }
+
+    /**
+     * Sem classe não há rascunho — a coluna é NOT NULL —, e o enquadramento
+     * não se perde por isso: o payload volta inteiro e a tela segue pela
+     * entrega, abrindo a lista da área.
+     */
+    #[Test]
+    public function a_framing_without_a_class_is_not_saved_and_keeps_the_payload(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $customer = Customer::factory()->forAccount($account)->create();
+
+        $this->fakeAction(ClassifyPracticeArea::class)
+            ->shouldReceive('handle')
+            ->andReturn(new PracticeAreaClassification(
+                practiceArea: PracticeArea::query()->where('slug', 'civil')->sole(),
+                justification: 'O réu é um particular.',
+            ));
+
+        $this->fakeAction(SelectProceduralClass::class)
+            ->shouldReceive('handle')
+            ->andThrow(new RuntimeException('Connection refused'));
+
+        $this->fakeAction(ExtractLegalCaseDefendant::class)
+            ->shouldReceive('handle')
+            ->andReturn($this->defendant());
+
+        $this->fakeAction(ExtractLegalCaseRequirements::class)
+            ->shouldReceive('handle')
+            ->andReturn(new RequirementListData([]));
+
+        $this->fakeAction(SuggestInjunctiveRelief::class)
+            ->shouldReceive('handle')
+            ->andReturn($this->suggestion(recommended: false));
+
+        $this->fakeAction(SuggestCourtAddressing::class)
+            ->shouldReceive('handle')
+            ->andThrow(new RuntimeException('Connection refused'));
+
+        $this->actingAs($owner)
+            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id])
+            ->assertOk()
+            ->assertJsonPath('practice_area.slug', 'civil')
+            ->assertJsonPath('procedural_class', null)
+            ->assertJsonPath('defendant.defendant_name', 'Joaquim Vizinho')
+            ->assertJsonPath('legal_case_id', null);
+
+        $this->assertSame(0, LegalCase::acrossAllAccounts()->count());
+    }
+
+    /**
+     * A gravação é uma transação, e a que falha não leva o enquadramento.
+     *
+     * Um telefone que não cabe na coluna derruba o insert; nem a etapa 1 nem
+     * os pedidos ficam para trás como meia peça, e o payload volta inteiro para
+     * a tela seguir pela entrega.
+     */
+    #[Test]
+    public function a_draft_that_cannot_be_saved_does_not_cost_the_framing(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $customer = Customer::factory()->forAccount($account)->create();
+
+        $this->fakeAction(ClassifyPracticeArea::class)
+            ->shouldReceive('handle')
+            ->andReturn(new PracticeAreaClassification(
+                practiceArea: PracticeArea::query()->where('slug', 'civil')->sole(),
+                justification: 'O réu é um particular.',
+            ));
+
+        $this->fakeAction(SelectProceduralClass::class)
+            ->shouldReceive('handle')
+            ->andReturn(new ProceduralClassSelection(
+                proceduralClass: ProceduralClass::query()->where('code', 7)->sole(),
+                justification: 'O pedido é indenizatório.',
+            ));
+
+        $this->fakeAction(ExtractLegalCaseDefendant::class)
+            ->shouldReceive('handle')
+            ->andReturn(new DefendantData(
+                name: 'Joaquim Vizinho',
+                document: null,
+                email: null,
+                // Dois telefones colados: 22 dígitos numa coluna de 20.
+                phone: '4733334444047999998888',
+                postalCode: null,
+                street: null,
+                number: null,
+                complement: null,
+                district: null,
+                city: null,
+                state: null,
+                notes: null,
+            ));
+
+        $this->fakeAction(ExtractLegalCaseRequirements::class)
+            ->shouldReceive('handle')
+            ->andReturn(new RequirementListData([
+                new RequirementData(
+                    id: null,
+                    description: 'A condenação do Réu à reconstrução do muro derrubado;',
+                    amount: null,
+                ),
+            ]));
+
+        $this->fakeAction(SuggestInjunctiveRelief::class)
+            ->shouldReceive('handle')
+            ->andReturn($this->suggestion(recommended: false));
+
+        $this->fakeAction(SuggestCourtAddressing::class)
+            ->shouldReceive('handle')
+            ->andThrow(new RuntimeException('Connection refused'));
+
+        $this->actingAs($owner)
+            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id])
+            ->assertOk()
+            ->assertJsonPath('procedural_class.code', 7)
+            ->assertJsonCount(1, 'requirements')
+            ->assertJsonPath('legal_case_id', null);
+
+        $this->assertSame(0, LegalCase::acrossAllAccounts()->count());
+        $this->assertSame(0, Requirement::acrossAllAccounts()->count());
     }
 
     /**
