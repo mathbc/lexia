@@ -43,6 +43,7 @@ final class LegalCaseFormProps
     {
         return [
             'id' => $legalCase->id,
+            'code' => $legalCase->code,
             'customer_id' => $legalCase->customer_id,
             'practice_area' => $legalCase->practiceArea->slug,
             'procedural_class_id' => $legalCase->procedural_class_id,

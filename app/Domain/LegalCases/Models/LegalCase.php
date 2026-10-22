@@ -36,6 +36,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 /**
  * A pleading an account drafts for one of its clients.
@@ -97,7 +98,16 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * The two are deliberately independent: reaching the last step is not the same
  * as declaring the pleading done.
  *
+ * `code` is the second identifier, the one a person can read out: six letters
+ * and digits, case-sensitive, drawn on create and never rewritten. The uuid is
+ * still what every route and foreign key uses. The code is unique across all
+ * accounts, the trashed rows included, which is why the draw checks against
+ * `acrossAllAccounts()->withTrashed()`. Under the tenant scope it would only
+ * look inside the actor's own account, and a collision with another one would
+ * come back from the unique index as a 500.
+ *
  * @property string $id
+ * @property string $code
  * @property string $account_id
  * @property string|null $user_id
  * @property string $customer_id
@@ -158,7 +168,32 @@ class LegalCase extends Model
     use HasUuids;
     use SoftDeletes;
 
+    public const int CODE_LENGTH = 6;
+
     protected $guarded = ['id'];
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $legalCase): void {
+            $legalCase->code ??= self::freshCode();
+        });
+    }
+
+    /**
+     * A code no pleading has, in any account and including the trashed ones.
+     *
+     * `Str::random()` only draws from `[A-Za-z0-9]`: it is base64 with the `/`,
+     * `+` and `=` removed. With 62⁶ combinations a second draw is rare, but the
+     * loop is what makes the unique index a guarantee rather than an error.
+     */
+    public static function freshCode(): string
+    {
+        do {
+            $code = Str::random(self::CODE_LENGTH);
+        } while (self::acrossAllAccounts()->withTrashed()->where('code', $code)->exists());
+
+        return $code;
+    }
 
     /**
      * @return array<string, string>

@@ -36,6 +36,7 @@ final class LegalCaseIndexQuery
             // Without this the card grid asks the database three times a row.
             ->with(['customer', 'practiceArea', 'proceduralClass'])
             ->when($filters['search'] ?? null, $this->search(...))
+            ->when($filters['code'] ?? null, $this->byCode(...))
             ->when($filters['customer'] ?? null, $this->byCustomer(...))
             ->when($filters['practice_area'] ?? null, $this->byPracticeArea(...))
             // Passing the value explicitly: when() would hand the callback the
@@ -63,6 +64,7 @@ final class LegalCaseIndexQuery
     {
         return [
             'id' => $legalCase->id,
+            'code' => $legalCase->code,
             'customer' => [
                 'id' => $legalCase->customer->id,
                 // A company trades under its corporate name, a person under
@@ -135,6 +137,30 @@ final class LegalCaseIndexQuery
         }
 
         $query->where('is_draft', $status === 'draft');
+    }
+
+    /**
+     * The pleading's own code, matched as a fragment and ignoring case, like
+     * the free search: a code read off the screen is typed in part and in
+     * whatever case, even though the case tells two codes apart.
+     *
+     * The screens print it as "#aB3x9Q", so a code copied from them arrives
+     * with the "#", and often with a stray space. A code is only letters and
+     * digits, so everything else is dropped before matching. That also keeps
+     * a typed `%` or `_` from acting as a LIKE wildcard. A term left empty,
+     * such as a bare "#", filters nothing.
+     *
+     * @param  Builder<LegalCase>  $query
+     */
+    private function byCode(Builder $query, string $term): void
+    {
+        $code = (string) preg_replace('/[^A-Za-z0-9]/', '', $term);
+
+        if ($code === '') {
+            return;
+        }
+
+        $query->where('code', 'ilike', "%{$code}%");
     }
 
     /**

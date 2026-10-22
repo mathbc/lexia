@@ -418,6 +418,18 @@ final class SaveLegalCaseStepsTest extends TestCase
                 ->where('legalCase.injunctive_relief_suggestion.recommended', true));
     }
 
+    #[Test]
+    public function the_form_shows_the_pleadings_code(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $legalCase = $this->openPleading($account);
+
+        $this->actingAs($owner)
+            ->get("/pecas/{$legalCase->id}/editar")
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('legalCase.code', $legalCase->code));
+    }
+
     /**
      * Desmarcar apaga a descrição, mas não o registro do que a IA disse: "a IA
      * recomendou e o advogado recusou" é informação, e é exatamente essa.

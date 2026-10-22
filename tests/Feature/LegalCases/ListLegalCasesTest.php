@@ -58,6 +58,66 @@ final class ListLegalCasesTest extends TestCase
     }
 
     #[Test]
+    public function each_card_carries_the_pleadings_code(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        $case = LegalCase::factory()->forAccount($account)->create();
+
+        $this->actingAs($owner)
+            ->get('/pecas')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('legalCases.data.0.id', $case->id)
+                ->where('legalCases.data.0.code', $case->code));
+    }
+
+    /**
+     * The screens print the code as "#aB3x9Q", so that is what gets pasted,
+     * often with a stray space around it. When it is typed by hand, it comes
+     * in part and in any case.
+     */
+    #[Test]
+    public function the_listing_finds_a_pleading_by_part_of_its_code_in_any_case(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+
+        $case = LegalCase::factory()->forAccount($account)->create(['code' => 'aB3x9Q']);
+        LegalCase::factory()->forAccount($account)->create(['code' => 'Zz7Kp2']);
+
+        foreach (['aB3x9Q', '#aB3x9Q', ' #aB3x9Q ', '#ab3', 'AB3X', 'x9q'] as $term) {
+            $this->actingAs($owner)
+                ->get('/pecas?code='.urlencode($term))
+                ->assertOk()
+                ->assertInertia(fn ($page) => $page
+                    ->where('legalCases.total', 1)
+                    ->where('legalCases.data.0.id', $case->id));
+        }
+
+        // Um "#" sozinho não é código nenhum, e um "%" não vira curinga do
+        // LIKE: os dois não filtram nada.
+        foreach (['#', '%', '_'] as $term) {
+            $this->actingAs($owner)
+                ->get('/pecas?code='.urlencode($term))
+                ->assertInertia(fn ($page) => $page->where('legalCases.total', 2));
+        }
+    }
+
+    #[Test]
+    public function the_code_of_another_accounts_pleading_finds_nothing(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+
+        [$other] = $this->accountWithOwner();
+        LegalCase::factory()->forAccount($other)->create(['code' => 'aB3x9Q']);
+
+        $this->actingAs($owner)
+            ->get('/pecas?code=aB3x9Q')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('legalCases.total', 0));
+    }
+
+    #[Test]
     public function the_listing_filters_by_client_and_by_practice_area(): void
     {
         [$account, $owner] = $this->accountWithOwner();

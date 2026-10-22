@@ -13,6 +13,7 @@ use App\Domain\Shared\Tenancy\TenantContext;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -144,5 +145,60 @@ final class ManageLegalCasesTest extends TestCase
         $this->assertSoftDeleted($case);
         $this->assertSame(24, PracticeArea::query()->count());
         $this->assertSame(615, ProceduralClass::query()->count());
+    }
+
+    #[Test]
+    public function a_pleading_is_born_with_a_six_character_code(): void
+    {
+        [$account] = $this->accountWithOwner();
+
+        $case = LegalCase::factory()->forAccount($account)->create();
+
+        $this->assertMatchesRegularExpression('/^[A-Za-z0-9]{6}$/', $case->code);
+    }
+
+    /**
+     * The draw runs inside a tenant's request, where AccountScope hides every
+     * other account and SoftDeletes every trashed row. A code taken in either
+     * place has to be drawn again, not left for the unique index to refuse.
+     */
+    #[Test]
+    public function a_code_taken_in_another_account_or_in_the_trash_is_drawn_again(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        [$other] = $this->accountWithOwner();
+
+        LegalCase::factory()->forAccount($other)->create(['code' => 'AbC123']);
+        LegalCase::factory()->forAccount($account)->create(['code' => 'XyZ789'])->delete();
+
+        $customer = Customer::factory()->forAccount($account)->create();
+        $this->actingAsUser($owner);
+
+        Str::createRandomStringsUsingSequence(['AbC123', 'XyZ789', 'Qwe456']);
+
+        try {
+            $case = LegalCase::factory()->forCustomer($customer)->create();
+        } finally {
+            Str::createRandomStringsNormally();
+        }
+
+        $this->assertSame('Qwe456', $case->code);
+    }
+
+    /**
+     * Case is part of the code: the schema keeps two that differ only in it,
+     * and refuses the same one twice.
+     */
+    #[Test]
+    public function codes_that_differ_only_in_case_are_two_pleadings(): void
+    {
+        [$account] = $this->accountWithOwner();
+
+        LegalCase::factory()->forAccount($account)->create(['code' => 'abc123']);
+        LegalCase::factory()->forAccount($account)->create(['code' => 'ABC123']);
+
+        $this->expectException(QueryException::class);
+
+        LegalCase::factory()->forAccount($account)->create(['code' => 'abc123']);
     }
 }

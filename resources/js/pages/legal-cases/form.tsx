@@ -877,13 +877,23 @@ export default function LegalCaseForm({
             title={title}
             tabs={
                 id ? (
-                    <LegalCaseTabs
-                        legalCaseId={id}
-                        // A aba da minuta só existe depois de a peça ser
-                        // registrada: antes disso não há documento nenhum.
-                        available={legalCase !== null && !legalCase.is_draft}
-                        current="form"
-                    />
+                    <>
+                        {/* O código abre a linha, à esquerda das abas e do
+                            lado oposto ao acesso ao sistema judicial. */}
+                        <span className="text-sm text-muted-foreground">
+                            Código{" "}
+                            <span className="font-medium text-foreground">
+                                #{legalCase.code}
+                            </span>
+                        </span>
+                        <LegalCaseTabs
+                            legalCaseId={id}
+                            // A aba da minuta só existe depois de a peça ser
+                            // registrada: antes disso não há documento nenhum.
+                            available={!legalCase.is_draft}
+                            current="form"
+                        />
+                    </>
                 ) : undefined
             }
             tabsActions={

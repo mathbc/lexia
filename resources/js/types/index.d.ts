@@ -288,6 +288,8 @@ export type LegalCaseStepValue =
 /** A pleading as LegalCaseIndexQuery projects it for a card. */
 export interface LegalCaseCard {
     id: string;
+    /** O identificador legível: seis letras e dígitos, com caixa. */
+    code: string;
     customer: { id: string; display_name: string };
     practice_area: { slug: string; label: string };
     procedural_class: {
@@ -310,6 +312,8 @@ export interface LegalCaseCard {
  */
 export interface LegalCaseDraft {
     id: string;
+    /** O identificador legível: seis letras e dígitos, com caixa. */
+    code: string;
     customer_id: string;
     /** O slug, nunca o uuid — ver LegalCaseOptions::practiceAreas(). */
     practice_area: string;

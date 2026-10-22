@@ -30,7 +30,7 @@ final class ListLegalCases
     public function asController(ActionRequest $request): Response
     {
         $actor = $request->user();
-        $filters = $request->only(['search', 'customer', 'practice_area', 'status', 'sort', 'direction']);
+        $filters = $request->only(['search', 'code', 'customer', 'practice_area', 'status', 'sort', 'direction']);
 
         return Inertia::render('legal-cases/index', [
             'legalCases' => $this->query->paginate($actor->account_id, $filters),

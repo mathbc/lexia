@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     Card,
+    CardAction,
     CardContent,
     CardDescription,
     CardFooter,
@@ -25,6 +26,8 @@ import type {
 
 interface Filters {
     search?: string;
+    /** Como foi digitado: o servidor tira o `#` e os espaços. */
+    code?: string;
     customer?: string;
     practice_area?: string;
     /** 'draft' ou 'final' — string porque viaja na query. */
@@ -50,6 +53,7 @@ export default function LegalCasesIndex({
     can,
 }: Props) {
     const [search, setSearch] = useState(filters.search ?? "");
+    const [code, setCode] = useState(filters.code ?? "");
 
     // preserveState mantém foco, rolagem e o painel de filtros aberto;
     // replace evita empilhar histórico a cada filtro.
@@ -63,11 +67,13 @@ export default function LegalCasesIndex({
 
     const clear = () => {
         setSearch("");
+        setCode("");
         router.get("/pecas", {}, { preserveState: true, replace: true });
     };
 
     const activeFilters = [
         filters.search,
+        filters.code,
         filters.customer,
         filters.practice_area,
         filters.status,
@@ -95,6 +101,25 @@ export default function LegalCasesIndex({
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Buscar"
                                 aria-label="Buscar peças"
+                            />
+                        </Field>
+                    </form>
+
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            apply({ code: code || undefined });
+                        }}
+                    >
+                        <Field
+                            label="Código da peça"
+                            hint="Com ou sem o #; basta um trecho, em maiúsculas ou minúsculas"
+                        >
+                            <Input
+                                value={code}
+                                onChange={(e) => setCode(e.target.value)}
+                                placeholder="#aB3x9Q"
+                                aria-label="Buscar pelo código da peça"
                             />
                         </Field>
                     </form>
@@ -167,6 +192,12 @@ export default function LegalCasesIndex({
                                 <CardDescription>
                                     {legalCase.practice_area.label}
                                 </CardDescription>
+                                <CardAction
+                                    title="Código da peça"
+                                    className="tabular text-xs font-medium text-muted-foreground"
+                                >
+                                    #{legalCase.code}
+                                </CardAction>
                             </CardHeader>
 
                             <CardContent className="flex-1 px-5">
@@ -215,7 +246,7 @@ export default function LegalCasesIndex({
                         <Link
                             key={legalCase.id}
                             href={`/pecas/${legalCase.id}/editar`}
-                            aria-label={`Abrir peça de ${legalCase.customer.display_name}`}
+                            aria-label={`Abrir peça ${legalCase.code} de ${legalCase.customer.display_name}`}
                             className="rounded-xl focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
                         >
                             {card}
