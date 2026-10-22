@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace Tests\Feature\LegalCases;
 
 use App\Domain\Accounts\Models\Account;
+use App\Domain\Doctrines\Data\DoctrineData;
+use App\Domain\Doctrines\Models\Doctrine;
+use App\Domain\LegalCases\Actions\ResearchLegalCaseDoctrines;
 use App\Domain\LegalCases\Actions\ResearchLegalCaseThemes;
 use App\Domain\LegalCases\Actions\ResearchLegalCaseTheses;
+use App\Domain\LegalCases\Data\DoctrineResearchData;
 use App\Domain\LegalCases\Data\ForensicReviewData;
 use App\Domain\LegalCases\Data\LegalResearchData;
 use App\Domain\LegalCases\Data\LegalThemeResearchData;
@@ -37,14 +41,18 @@ use Tests\TestCase;
  * This used to be the fifth step of `POST /pecas/classificar`, and what is
  * pinned here is the two things that move made possible: the result **is
  * persisted**, and it is asked for **once**. Since the themes tab arrived there
- * is a third: the two halves — theses and themes — run side by side and are
- * **marked, retried and failed apart**.
+ * is a third: the halves — theses, themes and, since the third tab, doctrine —
+ * run side by side and are **marked, retried and failed apart**.
+ *
+ * A request without `tabs` runs every half, so every test that posts one fakes
+ * all three: an unfaked doctrine half would reach the LexML.
  *
  * The inner Actions are mocked throughout. The agents are exercised for real in
- * `tests/Agents/LegalThesisResearchTest` and `LegalThemeSelectionTest`; what
- * this file is about is the Action around them, and a test that reached the
- * network would be red on days a portal was. The suite runs the
- * `Concurrency::run` in `sync`, which is what lets the mocks be seen at all.
+ * `tests/Agents/LegalThesisResearchTest`, `LegalThemeSelectionTest` and
+ * `DoctrineResearchTest`; what this file is about is the Action around them,
+ * and a test that reached the network would be red on days a portal was. The
+ * suite runs the `Concurrency::run` in `sync`, which is what lets the mocks be
+ * seen at all.
  */
 final class ResearchLegalCaseForensicReviewTest extends TestCase
 {
@@ -60,6 +68,7 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
 
         $this->fakeResearch()->shouldReceive('handle')->once()->andReturn($this->found());
         $this->fakeThemes()->shouldReceive('handle')->once()->andReturn($this->selected($theme));
+        $this->fakeDoctrines()->shouldReceive('handle')->once()->andReturn($this->doctrines());
 
         $this->actingAs($owner)
             ->post(route('legal-cases.forensic-review.research', $case))
@@ -103,6 +112,16 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
         $this->assertSame(['Definir se é válido o reajuste de plano de saúde por faixa etária.'], $case->theme_findings['questions'] ?? null);
         $this->assertNotEmpty($case->theme_findings['researched_at'] ?? null);
 
+        // E a terceira aba: a obra como o registro a traz, a nota do agente ao
+        // lado, e os termos da busca no marcador que é só dela.
+        $doctrine = Doctrine::query()->where('legal_case_id', $case->id)->sole();
+
+        $this->assertSame('Tupinambá, Carolina', $doctrine->author);
+        $this->assertSame('Trata da responsabilidade por assalto ao empregado.', $doctrine->relevance);
+        $this->assertSame($account->id, $doctrine->account_id);
+        $this->assertSame(['responsabilidade civil assalto empregado'], $case->doctrine_findings['search_terms'] ?? null);
+        $this->assertNotEmpty($case->doctrine_findings['researched_at'] ?? null);
+
         // A gravação também marca a marca d'água, porque é a Action irmã que
         // grava — a mesma que o "Concluir" chama.
         $this->assertSame(LegalCaseStep::Review, $case->current_step);
@@ -131,6 +150,11 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
             considered: 12,
             questions: ['Definir se o relato levanta alguma questão de direito.'],
         ));
+        $this->fakeDoctrines()->shouldReceive('handle')->once()->andReturn(new DoctrineResearchData(
+            searchTerms: ['questão sem doutrina'],
+            doctrines: [],
+            pending: ['Nenhuma obra do acervo trata da questão.'],
+        ));
 
         $this->actingAs($owner)
             ->post(route('legal-cases.forensic-review.research', $case))
@@ -145,9 +169,12 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
             $case->research_findings['pending'],
         );
 
-        // O mesmo para os temas: nenhum se aplica é resposta, e fica marcada.
+        // O mesmo para os temas e para a doutrina: nada se aplica é resposta,
+        // e fica marcada.
         $this->assertCount(0, $case->themes);
         $this->assertIsArray($case->theme_findings);
+        $this->assertCount(0, $case->doctrines);
+        $this->assertSame(['Nenhuma obra do acervo trata da questão.'], $case->doctrine_findings['pending'] ?? null);
     }
 
     /**
@@ -251,6 +278,7 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
             ->shouldReceive('handle')
             ->andThrow(new RuntimeException('504 Gateway Timeout'));
         $this->fakeThemes()->shouldReceive('handle')->once()->andReturn($this->selected($theme));
+        $this->fakeDoctrines()->shouldReceive('handle')->once()->andReturn($this->doctrines());
 
         // Um erro de validação por aba, e não um 500: é o que chega ao
         // `onError` da tela e a impede de pesquisar de novo sozinha.
@@ -258,7 +286,7 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
             ->post(route('legal-cases.forensic-review.research', $case))
             ->assertRedirect()
             ->assertSessionHasErrors('theses')
-            ->assertSessionDoesntHaveErrors('themes');
+            ->assertSessionDoesntHaveErrors(['themes', 'doctrines']);
 
         $case->refresh();
 
@@ -267,28 +295,62 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
 
         $this->assertSame([$theme->id], $case->themes->pluck('id')->all());
         $this->assertIsArray($case->theme_findings);
+        $this->assertCount(1, $case->doctrines);
+        $this->assertIsArray($case->doctrine_findings);
+    }
+
+    /**
+     * A busca de doutrina sai da máquina como a de teses, e cai pelos mesmos
+     * motivos — a cota, o LexML fora do ar. Ela cai sozinha.
+     */
+    #[Test]
+    public function a_failed_doctrine_search_is_told_on_its_own_tab(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $case = $this->pleading($account);
+        $theme = LegalTheme::factory()->create();
+
+        $this->fakeResearch()->shouldReceive('handle')->once()->andReturn($this->found());
+        $this->fakeThemes()->shouldReceive('handle')->once()->andReturn($this->selected($theme));
+        $this->fakeDoctrines()->shouldReceive('handle')->andThrow(new RuntimeException('429 Too Many Requests'));
+
+        $this->actingAs($owner)
+            ->post(route('legal-cases.forensic-review.research', $case))
+            ->assertRedirect()
+            ->assertSessionHasErrors('doctrines')
+            ->assertSessionDoesntHaveErrors(['theses', 'themes']);
+
+        $case->refresh();
+
+        $this->assertCount(0, $case->doctrines);
+        $this->assertNull($case->doctrine_findings);
+        $this->assertCount(1, $case->theses);
+        $this->assertCount(1, $case->themes);
     }
 
     #[Test]
-    public function when_both_halves_fail_nothing_is_written_and_both_tabs_are_told(): void
+    public function when_every_half_fails_nothing_is_written_and_every_tab_is_told(): void
     {
         [$account, $owner] = $this->accountWithOwner();
         $case = $this->pleading($account);
 
         $this->fakeResearch()->shouldReceive('handle')->andThrow(new RuntimeException('504 Gateway Timeout'));
         $this->fakeThemes()->shouldReceive('handle')->andThrow(new RuntimeException('Ollama fora do ar'));
+        $this->fakeDoctrines()->shouldReceive('handle')->andThrow(new RuntimeException('504 Gateway Timeout'));
 
         $this->actingAs($owner)
             ->post(route('legal-cases.forensic-review.research', $case))
             ->assertRedirect()
-            ->assertSessionHasErrors(['theses', 'themes']);
+            ->assertSessionHasErrors(['theses', 'themes', 'doctrines']);
 
         $case->refresh();
 
         $this->assertCount(0, $case->theses);
         $this->assertCount(0, $case->themes);
+        $this->assertCount(0, $case->doctrines);
         $this->assertNull($case->research_findings);
         $this->assertNull($case->theme_findings);
+        $this->assertNull($case->doctrine_findings);
     }
 
     /**
@@ -310,6 +372,7 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
 
         $this->fakeResearch()->shouldNotReceive('handle');
         $this->fakeThemes()->shouldReceive('handle')->once()->andReturn($this->selected($theme));
+        $this->fakeDoctrines()->shouldNotReceive('handle');
 
         $this->actingAs($owner)
             ->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['themes']])
@@ -345,6 +408,84 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
         $this->assertSame([$second->id], $case->refresh()->themes->pluck('id')->all());
     }
 
+    /**
+     * O caso de toda peça que já existia quando a aba de doutrina chegou: teses
+     * e temas curados, e o marcador da doutrina nulo. Abrir a etapa pede só ela.
+     */
+    #[Test]
+    public function researching_only_the_doctrines_leaves_the_theses_and_the_themes_alone(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $case = $this->pleading($account);
+        $case->update([
+            'research_findings' => ['legal_question' => 'Já pesquisada.', 'researched_at' => '2026-09-01T10:00:00-03:00'],
+            'theme_findings' => ['considered' => 20, 'researched_at' => '2026-09-01T10:00:00-03:00'],
+        ]);
+        $thesis = LegalThesis::factory()->forLegalCase($case)->create();
+
+        $this->fakeResearch()->shouldNotReceive('handle');
+        $this->fakeThemes()->shouldNotReceive('handle');
+        $this->fakeDoctrines()->shouldReceive('handle')->once()->andReturn($this->doctrines());
+
+        $this->actingAs($owner)
+            ->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['doctrines']])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $case->refresh();
+
+        $this->assertSame([$thesis->id], $case->theses->pluck('id')->all());
+        $this->assertSame('Já pesquisada.', $case->research_findings['legal_question'] ?? null);
+        $this->assertSame(20, $case->theme_findings['considered'] ?? null);
+        $this->assertCount(1, $case->doctrines);
+    }
+
+    /**
+     * "Pesquisar novamente" na aba de doutrina substitui as obras: a gravação é
+     * um diff, e a obra que a segunda rodada não trouxe sai da peça.
+     */
+    #[Test]
+    public function researching_the_doctrines_again_replaces_the_previous_works(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $case = $this->pleading($account);
+
+        $this->fakeDoctrines()
+            ->shouldReceive('handle')
+            ->twice()
+            ->andReturn(
+                $this->doctrines(),
+                $this->doctrines(author: 'Almeida, Carlos Alberto Neves', urn: 'urn:lex:br:rede.virtual.bibliotecas:livro:2010;000884424'),
+            );
+
+        $this->actingAs($owner)->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['doctrines']]);
+        $this->actingAs($owner)->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['doctrines']]);
+
+        $this->assertSame(['Almeida, Carlos Alberto Neves'], $case->refresh()->doctrines->pluck('author')->all());
+    }
+
+    /**
+     * A guarda da gravação: uma obra sem autor não se cita, e não vira linha
+     * nem quando chega pela pesquisa.
+     */
+    #[Test]
+    public function a_work_without_an_author_is_never_written(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $case = $this->pleading($account);
+
+        $this->fakeDoctrines()->shouldReceive('handle')->once()->andReturn($this->doctrines(author: ''));
+
+        $this->actingAs($owner)
+            ->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['doctrines']])
+            ->assertSessionHasNoErrors();
+
+        $case->refresh();
+
+        $this->assertCount(0, $case->doctrines);
+        $this->assertIsArray($case->doctrine_findings);
+    }
+
     #[Test]
     public function an_unknown_tab_is_refused(): void
     {
@@ -353,6 +494,7 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
 
         $this->fakeResearch()->shouldNotReceive('handle');
         $this->fakeThemes()->shouldNotReceive('handle');
+        $this->fakeDoctrines()->shouldNotReceive('handle');
 
         $this->actingAs($owner)
             ->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['precedents']])
@@ -370,6 +512,7 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
 
         $this->fakeResearch()->shouldNotReceive('handle');
         $this->fakeThemes()->shouldNotReceive('handle');
+        $this->fakeDoctrines()->shouldNotReceive('handle');
 
         $this->actingAs($owner)
             ->post(route('legal-cases.forensic-review.research', $case))
@@ -377,6 +520,7 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
 
         $this->assertNull($case->refresh()->research_findings);
         $this->assertNull($case->theme_findings);
+        $this->assertNull($case->doctrine_findings);
     }
 
     #[Test]
@@ -389,6 +533,7 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
 
         $this->fakeResearch()->shouldNotReceive('handle');
         $this->fakeThemes()->shouldNotReceive('handle');
+        $this->fakeDoctrines()->shouldNotReceive('handle');
 
         $this->actingAs($owner)
             ->post(route('legal-cases.forensic-review.research', $case))
@@ -432,6 +577,38 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
         app()->instance('LaravelActions:AsFake:'.ResearchLegalCaseThemes::class, $fake);
 
         return $fake;
+    }
+
+    private function fakeDoctrines(): MockInterface
+    {
+        $fake = Mockery::mock(app(ResearchLegalCaseDoctrines::class));
+
+        app()->instance('LaravelActions:AsFake:'.ResearchLegalCaseDoctrines::class, $fake);
+
+        return $fake;
+    }
+
+    /**
+     * Uma rodada com uma obra, como `ResearchLegalCaseDoctrines` a devolve:
+     * já lida do registro, com a nota do agente ao lado.
+     */
+    private function doctrines(
+        string $author = 'Tupinambá, Carolina',
+        string $urn = 'urn:lex:br:rede.virtual.bibliotecas:artigo.revista:2015;2001031582',
+    ): DoctrineResearchData {
+        return new DoctrineResearchData(
+            searchTerms: ['responsabilidade civil assalto empregado'],
+            doctrines: [DoctrineData::fromArray([
+                'kind' => 'Artigo de revista',
+                'author' => $author,
+                'title' => 'A responsabilidade do empregador em decorrência de assaltos',
+                'published_in' => '2015',
+                'publication' => 'Revista Magister de direito do trabalho. Porto Alegre, Magister, 2011.',
+                'relevance' => 'Trata da responsabilidade por assalto ao empregado.',
+                'source_url' => 'https://www.lexml.gov.br/urn/'.$urn,
+                'urn' => $urn,
+            ])],
+        );
     }
 
     /**

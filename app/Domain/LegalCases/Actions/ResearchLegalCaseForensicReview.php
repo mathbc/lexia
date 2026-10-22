@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\LegalCases\Actions;
 
+use App\Domain\Doctrines\Data\DoctrineListData;
+use App\Domain\LegalCases\Data\DoctrineResearchData;
 use App\Domain\LegalCases\Data\ForensicReviewData;
 use App\Domain\LegalCases\Data\LegalResearchData;
 use App\Domain\LegalCases\Data\LegalThemeResearchData;
@@ -26,15 +28,17 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Researches what a saved pleading can lean on, and writes it down — both tabs
- * of the fifth step.
+ * Researches what a saved pleading can lean on, and writes it down — the three
+ * tabs of the fifth step.
  *
- * Two halves, run in parallel: the **theses** (ResearchLegalCaseTheses, the
- * portal research and its transcriber) and the **themes**
- * (ResearchLegalCaseThemes, the RAG over the STJ catalogue). They read the
- * same pleading and depend on nothing the other finds, so they are two tasks
- * of one `Concurrency::run` and the wait is the longer of the two — which is
- * the thesis research, by minutes.
+ * Three halves — the word stuck when there were two —, run in parallel: the
+ * **theses** (ResearchLegalCaseTheses, the portal research and its
+ * transcriber), the **themes** (ResearchLegalCaseThemes, the RAG over the STJ
+ * catalogue) and the **doctrine** (ResearchLegalCaseDoctrines, the LexML
+ * library records and their reader). They read the same pleading and depend on
+ * nothing the others find, so they are tasks of one `Concurrency::run` and the
+ * wait is the longest of them — the thesis research, usually, with the doctrine
+ * close behind: both leave the machine and search before answering.
  *
  * ## Why this exists rather than living in ClassifyLegalCase
  *
@@ -57,8 +61,9 @@ use Throwable;
  *
  * The screen fires this when step 5 opens and sends, in `tabs`, **only the
  * halves that were never researched**: `research_findings` null for the theses,
- * `theme_findings` null for the themes. A pleading researched before the themes
- * tab existed asks for the themes alone; one where both landed asks for nothing.
+ * `theme_findings` null for the themes, `doctrine_findings` null for the
+ * doctrine. A pleading researched before a tab existed asks for that tab alone;
+ * one where every half landed asks for nothing.
  * "Pesquisar novamente" sends the one tab it sits on.
  *
  * The guard is those columns and **not** the lists, which is the trap worth
@@ -67,8 +72,9 @@ use Throwable;
  * visit. And firing again is not merely wasteful — both saves reconcile by
  * diff, so a silent re-run would quietly replace what the lawyer had already
  * curated. The one thing even a deliberate re-run keeps is the theses the lawyer
- * wrote by hand: they are theirs and not the research's — see `writeTheses()`. That is also why the markers are two and not one: keyed on a shared
- * column, retrying the half that failed would re-run the half that landed.
+ * wrote by hand: they are theirs and not the research's — see `writeTheses()`.
+ * That is also why there is a marker per half and not one: keyed on a shared
+ * column, retrying the half that failed would re-run the halves that landed.
  *
  * ## What the parallelism costs, and where it lives
  *
@@ -78,14 +84,18 @@ use Throwable;
  * leave `Concurrency::run` and take the other half with it. What no closure
  * can catch — the child killed by its clock, a fatal error — belongs to
  * IsolatedProcessDriver, which settles that task as the same null. Either way
- * a theme selection that fell does not take the theses with it, nor the
- * reverse, and each half has `concurrency.timeout` of its own.
+ * a half that fell does not take the others with it, and each half has
+ * `concurrency.timeout` of its own.
+ *
+ * Two of the three halves are Gemini searches running at once. That is the
+ * quota CLAUDE.md warns about for the smart fill, and the answer is the same:
+ * `CONCURRENCY_DRIVER=sync` runs them in series without touching code.
  *
  * The closures are static and capture two strings, the pleading's id and
  * account: a child process has no session and no authenticated user, so it
  * reloads the pleading under `TenantContext::actingAs()`, which is explicit
  * where a scope silently left open would not be. And what comes back crosses
- * `serialize()`: both results are readonly DTOs of strings and ids, no model.
+ * `serialize()`: every result is a readonly DTO of strings and ids, no model.
  *
  * ## The two effects, and why only one of them is a transaction
  *
@@ -124,6 +134,7 @@ final class ResearchLegalCaseForensicReview
         DB::transaction(function () use ($legalCase, $found): void {
             $this->writeTheses($legalCase, $found[ForensicReviewTab::Theses->value] ?? null);
             $this->writeThemes($legalCase, $found[ForensicReviewTab::Themes->value] ?? null);
+            $this->writeDoctrines($legalCase, $found[ForensicReviewTab::Doctrines->value] ?? null);
         });
 
         return array_values(array_filter(
@@ -136,7 +147,7 @@ final class ResearchLegalCaseForensicReview
      * The halves that were asked for, each one a task of its own.
      *
      * @param  list<ForensicReviewTab>  $tabs
-     * @return array<string, LegalResearchData|LegalThemeResearchData|null>
+     * @return array<string, LegalResearchData|LegalThemeResearchData|DoctrineResearchData|null>
      */
     private function research(LegalCase $legalCase, array $tabs): array
     {
@@ -152,9 +163,13 @@ final class ResearchLegalCaseForensicReview
                 $accountId,
                 static fn (): LegalThemeResearchData => ResearchLegalCaseThemes::run(self::reload($id)),
             ),
+            ForensicReviewTab::Doctrines->value => static fn (): ?DoctrineResearchData => self::attempt(
+                $accountId,
+                static fn (): DoctrineResearchData => ResearchLegalCaseDoctrines::run(self::reload($id)),
+            ),
         ];
 
-        /** @var array<string, LegalResearchData|LegalThemeResearchData|null> */
+        /** @var array<string, LegalResearchData|LegalThemeResearchData|DoctrineResearchData|null> */
         return Concurrency::run(Arr::only($tasks, array_map(
             static fn (ForensicReviewTab $tab): string => $tab->value,
             $tabs,
@@ -258,6 +273,17 @@ final class ResearchLegalCaseForensicReview
         $legalCase->update(['theme_findings' => $research->findings()]);
     }
 
+    private function writeDoctrines(LegalCase $legalCase, mixed $research): void
+    {
+        if (! $research instanceof DoctrineResearchData) {
+            return;
+        }
+
+        SaveLegalCaseDoctrines::run($legalCase, DoctrineListData::of($research->doctrines));
+
+        $legalCase->update(['doctrine_findings' => $research->findings()]);
+    }
+
     /**
      * The one thing neither half can run without.
      *
@@ -286,8 +312,8 @@ final class ResearchLegalCaseForensicReview
     }
 
     /**
-     * Absent means both halves — a caller that predates the tabs gets what it
-     * always got, plus the themes.
+     * Absent means every half — a caller that predates the tabs gets what it
+     * always got, plus the themes and the doctrine.
      *
      * @return array<string, mixed>
      */

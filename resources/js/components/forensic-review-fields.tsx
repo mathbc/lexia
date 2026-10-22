@@ -8,6 +8,7 @@ import {
     ShieldAlert,
 } from "lucide-react";
 import { useId, useState } from "react";
+import { DoctrinesPanel } from "@/components/doctrine-fields";
 import { LegalThemesPanel } from "@/components/legal-theme-fields";
 import { LegalThesisDialog } from "@/components/legal-thesis-dialog";
 import { RowActions } from "@/components/row-actions";
@@ -32,9 +33,11 @@ import {
     namedCitations,
     type ThesisDraft,
 } from "@/lib/forensic-review";
+import { keptDoctrines, type DoctrineDraft } from "@/lib/doctrines";
 import { keptLegalThemes, type LegalThemeDraft } from "@/lib/legal-themes";
 import { cn } from "@/lib/utils";
 import type {
+    DoctrineFindings,
     ForensicReviewTab,
     LegalResearchFindings,
     LegalThemeFindings,
@@ -57,6 +60,8 @@ interface Props {
     research: LegalResearchFindings | null;
     /** O mesmo para a aba de temas, com marcador próprio. */
     themeResearch: LegalThemeFindings | null;
+    /** E para a aba de doutrina, com o seu. */
+    doctrineResearch: DoctrineFindings | null;
     /** As abas cuja pesquisa está em voo agora. */
     researching: ForensicReviewTab[];
     /** As abas cuja última rodada falhou sem gravar nada. */
@@ -69,6 +74,9 @@ interface Props {
     /** Os temas com a decisão do advogado ao lado — ver `@/lib/legal-themes`. */
     themes: LegalThemeDraft[];
     onToggleTheme: (id: string, keep: boolean) => void;
+    /** As obras de doutrina com a decisão do advogado ao lado — ver `@/lib/doctrines`. */
+    doctrines: DoctrineDraft[];
+    onToggleDoctrine: (id: string, keep: boolean) => void;
     /** `LegalThesisType::options()`: o português dos rótulos vem do enum. */
     thesisTypes: Option[];
     /** `LegalPrecedentType::options()`, pelo mesmo motivo. */
@@ -80,17 +88,17 @@ interface Props {
 }
 
 /**
- * A quinta etapa, em duas abas: **Teses** — o que a peça argumenta e os julgados
- * que o sustentam — e **Temas** — os precedentes qualificados do STJ em que ela
- * se apoia.
+ * A quinta etapa, em três abas: **Teses** — o que a peça argumenta e os julgados
+ * que o sustentam —, **Temas** — os precedentes qualificados do STJ em que ela
+ * se apoia — e **Doutrinas** — as obras de juristas que tratam da questão.
  *
- * As duas abas abrem **preenchidas por uma pesquisa**, e as duas pesquisas
- * correm juntas: abrir a etapa dispara `ResearchLegalCaseForensicReview`, que
- * roda a pesquisa de teses nos portais e a seleção de temas no catálogo como
- * duas tasks do mesmo `Concurrency::run`. Cada aba tem marcador próprio, então
- * elas também falham e se repetem cada uma por si — a aba que falhou mostra o
- * alerta e um ícone no gatilho, e o "Pesquisar novamente" de uma não toca a
- * outra.
+ * As três abas abrem **preenchidas por uma pesquisa**, e as pesquisas correm
+ * juntas: abrir a etapa dispara `ResearchLegalCaseForensicReview`, que roda a
+ * pesquisa de teses nos portais, a seleção de temas no catálogo e a pesquisa de
+ * doutrina no acervo do LexML como tasks do mesmo `Concurrency::run`. Cada aba
+ * tem marcador próprio, então elas também falham e se repetem cada uma por si —
+ * a aba que falhou mostra o alerta e um ícone no gatilho, e o "Pesquisar
+ * novamente" de uma não toca as outras.
  *
  * As abas são o primitivo do Radix, e não links: o que a etapa decide (o `keep`
  * de cada linha) já vive em estado local até o "Concluir", e trocar de aba não
@@ -100,6 +108,7 @@ export function ForensicReviewFields({
     legalCaseId,
     research,
     themeResearch,
+    doctrineResearch,
     researching,
     failed,
     onResearch,
@@ -107,6 +116,8 @@ export function ForensicReviewFields({
     onToggle,
     themes,
     onToggleTheme,
+    doctrines,
+    onToggleDoctrine,
     thesisTypes,
     precedentTypes,
     thesisOrigins,
@@ -117,8 +128,9 @@ export function ForensicReviewFields({
             <CardHeader>
                 <CardTitle>Revisão forense</CardTitle>
                 <CardDescription>
-                    As teses que a peça sustenta e os temas do STJ em que ela se
-                    apoia. Tudo chega marcado: desmarque o que não serve.
+                    As teses que a peça sustenta, os temas do STJ e a doutrina
+                    em que ela se apoia. Tudo chega marcado: desmarque o que não
+                    serve.
                 </CardDescription>
             </CardHeader>
 
@@ -145,6 +157,17 @@ export function ForensicReviewFields({
                             <Count
                                 value={keptLegalThemes(themes).length}
                                 total={themes.length}
+                            />
+                        </TabsTrigger>
+                        <TabsTrigger value="doctrines">
+                            <TabState
+                                researching={researching.includes("doctrines")}
+                                failed={failed.includes("doctrines")}
+                            />
+                            Doutrinas
+                            <Count
+                                value={keptDoctrines(doctrines).length}
+                                total={doctrines.length}
                             />
                         </TabsTrigger>
                     </TabsList>
@@ -174,6 +197,17 @@ export function ForensicReviewFields({
                             onResearch={() => onResearch("themes")}
                             themes={themes}
                             onToggle={onToggleTheme}
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="doctrines">
+                        <DoctrinesPanel
+                            research={doctrineResearch}
+                            researching={researching.includes("doctrines")}
+                            failed={failed.includes("doctrines")}
+                            onResearch={() => onResearch("doctrines")}
+                            doctrines={doctrines}
+                            onToggle={onToggleDoctrine}
                         />
                     </TabsContent>
                 </Tabs>

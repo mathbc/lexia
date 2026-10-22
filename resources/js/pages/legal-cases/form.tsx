@@ -36,6 +36,11 @@ import {
     toCourtDecisionPayload,
     type CourtDecisionDraft,
 } from "@/lib/court-decisions";
+import {
+    toDoctrineDrafts,
+    toDoctrinePayload,
+    type DoctrineDraft,
+} from "@/lib/doctrines";
 import { toDocumentDrafts, type DocumentDraft } from "@/lib/documents";
 import { formatDocument } from "@/lib/format";
 import {
@@ -64,6 +69,7 @@ import type {
     Option,
     ProceduralClassOption,
     ResearchedCourtDecision,
+    ResearchedDoctrine,
     ResearchedPrecedent,
     ResearchedThesis,
 } from "@/types";
@@ -96,7 +102,7 @@ const STEP_DESCRIPTIONS: Record<LegalCaseStepValue, string> = {
     requirements:
         "O que se pede ao juízo, e quanto vale cada pedido que tem cifra",
     documents: "Os anexos que instruem a peça",
-    review: "As teses que a peça sustenta e os julgados que as fundamentam",
+    review: "As teses que a peça sustenta, os temas do STJ e a doutrina em que ela se apoia",
     "court-decisions": "O que os tribunais já decidiram em casos como este",
 };
 
@@ -119,6 +125,7 @@ const RESEARCH_STEPS = [
     "Descartando o que não se confirmou em fonte oficial.",
     "Transcrevendo as teses, a fundamentação e os julgados que as sustentam.",
     "Em paralelo, consultando o catálogo de temas do STJ pela proximidade com o relato.",
+    "Também em paralelo, procurando no acervo do LexML a doutrina sobre a questão.",
 ] as const;
 
 /**
@@ -132,6 +139,22 @@ const THEME_STEPS = [
     "Separando os temas mais próximos da questão que os fatos levantam.",
     "Lendo a questão submetida a julgamento e a tese firmada de cada um.",
     "Ficando só com os temas que de fato se aplicam ao caso.",
+] as const;
+
+/**
+ * A pesquisa de doutrina sozinha — quando a aba de doutrina é a mais longa que
+ * está rodando: numa peça pesquisada antes de a aba existir, ou no botão dela.
+ *
+ * Sai da máquina como a de teses: um agente condensa o caso em termos curtos,
+ * busca as obras no acervo da Rede Virtual de Bibliotecas e o sistema lê o
+ * registro de cada uma.
+ */
+const DOCTRINE_STEPS = [
+    "Lendo a área de atuação, a classe processual e a descrição dela.",
+    "Condensando o caso em poucos termos de busca sobre o instituto em questão.",
+    "Procurando no acervo do LexML livros e artigos sobre esses termos.",
+    "Descartando o registro do periódico inteiro e a obra sem autor.",
+    "Abrindo o registro de cada obra para copiar autor, título e publicação.",
 ] as const;
 
 /**
@@ -159,7 +182,7 @@ const COURT_DECISION_STEPS = [
  * manda o agente redigir a minuta inteira. Ver `FinalizeLegalCase`.
  */
 const FINALISING_STEPS = [
-    "Gravando as teses, os temas, os precedentes e a jurisprudência…",
+    "Gravando as teses, os temas, a doutrina, os precedentes e a jurisprudência…",
     "Registrando a peça…",
     "Redigindo a qualificação das partes…",
     "Escrevendo a narrativa dos fatos…",
@@ -507,6 +530,28 @@ export default function LegalCaseForm({
     }, [themeSignature]);
 
     /**
+     * A doutrina, a terceira aba da etapa 5 — o mesmo arranjo dos temas e dos
+     * julgados: a assinatura de ids impede que um re-render remarque o que o
+     * advogado desmarcou, e só uma rodada nova redesenha a lista.
+     */
+    const [doctrines, setDoctrines] = useState<DoctrineDraft[]>(() =>
+        toDoctrineDrafts(legalCase?.doctrines),
+    );
+
+    const doctrineSignature = (legalCase?.doctrines ?? [])
+        .map((doctrine) => doctrine.id)
+        .join(",");
+
+    useEffect(() => {
+        if (!legalCase) {
+            return;
+        }
+
+        setDoctrines(toDoctrineDrafts(legalCase.doctrines));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [doctrineSignature]);
+
+    /**
      * A conclusão é um `useForm` como as três etapas que gravam, e não um
      * `router.post` solto: é ele que dá o `processing` que tranca o botão, e é
      * ele que aceita as três listas sem que cada tese precise de uma assinatura
@@ -516,8 +561,15 @@ export default function LegalCaseForm({
         theses: ResearchedThesis[];
         precedents: ResearchedPrecedent[];
         themes: { legal_theme_id: string; reason: string | null }[];
+        doctrines: ResearchedDoctrine[];
         court_decisions: ResearchedCourtDecision[];
-    }>({ theses: [], precedents: [], themes: [], court_decisions: [] });
+    }>({
+        theses: [],
+        precedents: [],
+        themes: [],
+        doctrines: [],
+        court_decisions: [],
+    });
 
     const trail: StepItem[] = steps.map((option) => ({
         label: option.label,
@@ -639,12 +691,13 @@ export default function LegalCaseForm({
      * chega registrada na aba da minuta, que oferece tentar de novo.
      */
     const finalise = () => {
-        // As três decisões vivem em estado local, então o payload é montado na
-        // hora do envio, pelo `transform`. O que não estiver nestas listas é
-        // apagado pelo diff do servidor: é assim que desmarcar vira remoção.
+        // As decisões vivem em estado local, então o payload é montado na hora
+        // do envio, pelo `transform`. O que não estiver nestas listas é apagado
+        // pelo diff do servidor: é assim que desmarcar vira remoção.
         review.transform(() => ({
             ...toForensicReviewPayload(theses),
             themes: toLegalThemePayload(legalThemes),
+            doctrines: toDoctrinePayload(doctrines),
             court_decisions: toCourtDecisionPayload(courtDecisions),
         }));
 
@@ -664,9 +717,9 @@ export default function LegalCaseForm({
      * etapa 5 não pode impedir a etapa 6 de tentar, nem o contrário.
      *
      * Na etapa 5 o estado é **por aba**, pelo mesmo motivo um nível abaixo: as
-     * teses e os temas correm juntos no servidor, mas cada metade tem marcador
-     * próprio e falha por si — a pesquisa de teses pode cair com o STJ enquanto
-     * a de temas volta.
+     * teses, os temas e a doutrina correm juntos no servidor, mas cada metade
+     * tem marcador próprio e falha por si — a pesquisa de teses pode cair com o
+     * STJ enquanto as outras voltam.
      */
     const [researching, setResearching] = useState<ForensicReviewTab[]>([]);
     const [researchFailed, setResearchFailed] = useState<ForensicReviewTab[]>(
@@ -677,14 +730,15 @@ export default function LegalCaseForm({
     const [decisionResearchFailed, setDecisionResearchFailed] = useState(false);
 
     /**
-     * Pede as abas dadas — as duas ao abrir uma peça nova, uma só no botão de
-     * cada aba ou quando só uma nunca foi pesquisada.
+     * Pede as abas dadas — todas ao abrir uma peça nova, uma só no botão de
+     * cada aba ou as que nunca foram pesquisadas.
      *
      * A falha de uma metade volta como erro de validação sob a chave da aba
-     * (`errors.theses`, `errors.themes`), e é isso que o `onError` lê: a metade
-     * que voltou já está gravada e chega nas props. O `onHttpException` cobre o
-     * que não é de uma aba só — a peça sem fatos, um 500 qualquer — e marca as
-     * duas, senão o efeito de abertura tentaria de novo sem parar.
+     * (`errors.theses`, `errors.themes`, `errors.doctrines`), e é isso que o
+     * `onError` lê: as metades que voltaram já estão gravadas e chegam nas
+     * props. O `onHttpException` cobre o que não é de uma aba só — a peça sem
+     * fatos, um 500 qualquer — e marca todas as pedidas, senão o efeito de
+     * abertura tentaria de novo sem parar.
      */
     const research = (tabs: ForensicReviewTab[]) => {
         if (!id || researching.length > 0 || tabs.length === 0) {
@@ -742,10 +796,11 @@ export default function LegalCaseForm({
      * Uma vez por aba, ao abrir a etapa, e nunca mais sozinha.
      *
      * O gatilho é o marcador de cada aba ser nulo — `legalCase.research` para as
-     * teses, `legalCase.theme_research` para os temas —, que é "nunca se
+     * teses, `legalCase.theme_research` para os temas,
+     * `legalCase.doctrine_research` para a doutrina —, que é "nunca se
      * pesquisou", e **não** a lista estar vazia. O efeito pede só as abas que
-     * faltam: uma peça pesquisada antes de a aba de temas existir pede só os
-     * temas, e as teses que o advogado já curou não são tocadas.
+     * faltam: uma peça pesquisada antes de a aba de doutrina existir pede só a
+     * doutrina, e as teses e os temas que o advogado já curou não são tocados.
      *
      * A diferença entre marcador e lista é a que decide: uma pesquisa
      * que abriu os portais e nada confirmou é uma resposta legítima e cara que
@@ -777,6 +832,10 @@ export default function LegalCaseForm({
             missing.push("themes");
         }
 
+        if (legalCase?.doctrine_research == null) {
+            missing.push("doctrines");
+        }
+
         research(missing.filter((tab) => !researchFailed.includes(tab)));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
@@ -784,6 +843,7 @@ export default function LegalCaseForm({
         id,
         legalCase?.research,
         legalCase?.theme_research,
+        legalCase?.doctrine_research,
         researchFailed.join(","),
     ]);
 
@@ -1190,6 +1250,9 @@ export default function LegalCaseForm({
                             legalCaseId={legalCase.id}
                             research={legalCase?.research ?? null}
                             themeResearch={legalCase?.theme_research ?? null}
+                            doctrineResearch={
+                                legalCase?.doctrine_research ?? null
+                            }
                             researching={researching}
                             failed={researchFailed}
                             onResearch={(tab) => research([tab])}
@@ -1205,6 +1268,16 @@ export default function LegalCaseForm({
                                 setLegalThemes((current) =>
                                     current.map((draft) =>
                                         draft.id === themeId
+                                            ? { ...draft, keep }
+                                            : draft,
+                                    ),
+                                )
+                            }
+                            doctrines={doctrines}
+                            onToggleDoctrine={(doctrineId, keep) =>
+                                setDoctrines((current) =>
+                                    current.map((draft) =>
+                                        draft.id === doctrineId
                                             ? { ...draft, keep }
                                             : draft,
                                     ),
@@ -1302,8 +1375,22 @@ export default function LegalCaseForm({
             <AnalysisDialog
                 open={researching.includes("theses")}
                 title="Pesquisando as teses — leva alguns minutos"
-                hint="É a etapa mais demorada da peça, e a espera é normal: o agente consulta o Planalto, o STJ e o STF e lê cada página antes de responder, o que costuma levar alguns minutos. Os temas do STJ são selecionados ao mesmo tempo. Mantenha esta aba aberta e não recarregue a página — ao terminar, tudo fica gravado na peça e a pesquisa não se repete."
+                hint="É a etapa mais demorada da peça, e a espera é normal: o agente consulta o Planalto, o STJ e o STF e lê cada página antes de responder, o que costuma levar alguns minutos. Os temas do STJ e a doutrina do LexML são pesquisados ao mesmo tempo. Mantenha esta aba aberta e não recarregue a página — ao terminar, tudo fica gravado na peça e a pesquisa não se repete."
                 messages={RESEARCH_STEPS}
+                interval={6500}
+            />
+
+            {/* A doutrina sem as teses: a de uma peça pesquisada antes de a
+                aba existir, ou a do botão da aba. Sai da máquina como a de
+                teses, então o diálogo diz que demora. */}
+            <AnalysisDialog
+                open={
+                    researching.includes("doctrines") &&
+                    !researching.includes("theses")
+                }
+                title="Pesquisando a doutrina — leva alguns minutos"
+                hint="O agente condensa o caso em termos de busca, procura no acervo do LexML os livros e artigos sobre a questão e abre o registro de cada obra para copiar autor, título e publicação. Mantenha esta aba aberta e não recarregue a página — ao terminar, as obras ficam gravadas na peça."
+                messages={DOCTRINE_STEPS}
                 interval={6500}
             />
 
@@ -1313,7 +1400,8 @@ export default function LegalCaseForm({
             <AnalysisDialog
                 open={
                     researching.includes("themes") &&
-                    !researching.includes("theses")
+                    !researching.includes("theses") &&
+                    !researching.includes("doctrines")
                 }
                 title="Selecionando os temas do STJ"
                 hint="O agente compara o relato com o catálogo de temas repetitivos do STJ e fica com os que se aplicam ao caso. Mantenha esta aba aberta — ao terminar, os temas ficam gravados na peça."

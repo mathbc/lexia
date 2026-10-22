@@ -366,6 +366,21 @@ export interface LegalCaseDraft {
      */
     theme_research: LegalThemeFindings | null;
     /**
+     * A doutrina da peça — a terceira aba da etapa 5, na ordem do agente.
+     *
+     * Vazia numa peça cuja pesquisa nunca rodou e vazia numa em que ela rodou e
+     * nenhuma obra se confirmou: quem distingue é o campo abaixo.
+     */
+    doctrines: ResearchedDoctrine[];
+    /**
+     * O relato da pesquisa de doutrina, ou nulo se ela nunca rodou nesta peça.
+     *
+     * Marcador próprio, como o dos temas: uma peça pesquisada antes de a aba de
+     * doutrina existir tem os outros dois e não tem este, e a etapa pede só a
+     * doutrina.
+     */
+    doctrine_research: DoctrineFindings | null;
+    /**
      * A jurisprudência já gravada — a sexta etapa, com os ids reais.
      *
      * Vazia numa peça que ainda não chegou à etapa 6, e vazia também numa em
@@ -763,12 +778,55 @@ export interface LegalThemeFindings {
 }
 
 /**
- * As duas metades da revisão forense — espelha o enum `ForensicReviewTab`.
+ * Uma obra de doutrina — espelha `LegalCaseFormProps::doctrines()`.
+ *
+ * É o registro da Rede Virtual de Bibliotecas no LexML, lido da página: tipo,
+ * autor, título, ano, sumário (quando a biblioteca escreveu um) e a linha de
+ * publicação. `relevance` é a única coisa que um modelo escreveu — a nota de
+ * por que o **assunto** da obra toca o caso — e a tela a rotula assim. Nada
+ * aqui diz o que o autor defende: ninguém leu a obra.
+ *
+ * `published_in` é texto cru do catálogo ("2015", ou "1996, 1994" num registro
+ * que agrega edições), nunca uma data.
+ */
+export interface ResearchedDoctrine {
+    id: string | null;
+    kind: string | null;
+    author: string;
+    title: string;
+    published_in: string | null;
+    summary: string | null;
+    subject: string | null;
+    publication: string | null;
+    relevance: string | null;
+    source_url: string | null;
+    urn: string | null;
+}
+
+/**
+ * O relato de uma rodada de doutrina — espelha
+ * `DoctrineResearchData::findings()`, o que `legal_cases.doctrine_findings`
+ * guarda.
+ *
+ * `search_terms` são os termos curtos em que o agente condensou o caso, e a
+ * aba os mostra como links para a busca de doutrina do LexML; `unverified_citations`
+ * são as obras que caíram por falta de registro ou de autor.
+ */
+export interface DoctrineFindings {
+    search_terms: string[];
+    sources: string[];
+    pending: string[];
+    unverified_citations: string[];
+    researched_at: string;
+}
+
+/**
+ * As três abas da revisão forense — espelha o enum `ForensicReviewTab`.
  *
  * É o valor que viaja em `tabs[]` ao pedir a pesquisa e a chave do erro que
  * volta quando uma metade falha.
  */
-export type ForensicReviewTab = 'theses' | 'themes';
+export type ForensicReviewTab = 'theses' | 'themes' | 'doctrines';
 
 /**
  * O relato mais as duas listas, que é a forma que a pesquisa publica antes de

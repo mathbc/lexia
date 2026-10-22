@@ -5,8 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\CourtDecisions\Support;
 
 use App\Domain\CourtDecisions\Data\CourtDecisionData;
-use Illuminate\Support\Facades\Http;
-use Throwable;
+use App\Domain\Shared\Support\LexmlPage;
 
 /**
  * Reads one LexML record and returns what the page actually says.
@@ -63,20 +62,13 @@ use Throwable;
  * close. Everything else — a timeout, a 404, a page whose labels moved — comes
  * back as `null`, and the ruling is dropped and reported rather than kept with
  * a field nobody read.
+ *
+ * The fetch and the reading of the labelled rows are LexmlPage's, shared with
+ * DoctrineRecordReader: the two pages are one template. What is this class's
+ * own is which labels a ruling has and what they become.
  */
 final class LexmlRecordReader
 {
-    /**
-     * Short on purpose.
-     *
-     * Several records are read per research run, in series, inside a request a
-     * browser is already waiting on — and the expensive part of that wait is
-     * the two inferences ahead of this. A record that does not answer in ten
-     * seconds is dropped, which costs one ruling; waiting on each of six would
-     * cost the step.
-     */
-    private const TIMEOUT = 10;
-
     /**
      * The labels the page prints, mapped to the columns they fill.
      *
@@ -104,13 +96,13 @@ final class LexmlRecordReader
             return null;
         }
 
-        $html = $this->fetch($url);
+        $html = LexmlPage::fetch($url);
 
         if ($html === null) {
             return null;
         }
 
-        $fields = $this->parse($html);
+        $fields = LexmlPage::fields($html, self::LABELS);
 
         if ($fields === []) {
             return null;
@@ -119,86 +111,5 @@ final class LexmlRecordReader
         $decision = CourtDecisionData::fromArray([...$fields, 'source_url' => $url]);
 
         return $decision->isWritten() ? $decision : null;
-    }
-
-    /**
-     * The page, or null for anything that is not a page.
-     *
-     * A browser's User-Agent, because the portal sits behind a filter that
-     * answers a bare client with a challenge; on `/urn/` it does not fire, and
-     * asking politely is what keeps it that way. Every failure — DNS, timeout,
-     * 404, a 200 carrying the challenge instead of the record — folds into
-     * null, because the caller does the same thing with all of them.
-     */
-    private function fetch(string $url): ?string
-    {
-        try {
-            $response = Http::timeout(self::TIMEOUT)
-                ->withHeaders(['User-Agent' => 'Mozilla/5.0 (compatible; LexIA/1.0)'])
-                ->get($url);
-        } catch (Throwable) {
-            return null;
-        }
-
-        if (! $response->successful()) {
-            return null;
-        }
-
-        $html = $response->body();
-
-        // A página de desafio responde 200 e não é um registro. Reconhecê-la
-        // pelo título é mais barato e mais estável que pelo corpo, que é
-        // JavaScript.
-        return str_contains($html, 'Verificação de segurança') ? null : $html;
-    }
-
-    /**
-     * The labelled fields of the record, as the page prints them.
-     *
-     * The markup is a Bootstrap list whose every row is a `<strong>` label
-     * followed by the value in the next cell, so one expression reads them all.
-     * A label the page omits — Assuntos, often — simply does not match, and the
-     * key stays absent, which `CourtDecisionData::fromArray()` already reads as
-     * null.
-     *
-     * @return array<string, string>
-     */
-    private function parse(string $html): array
-    {
-        $pattern = '#<strong>\s*([^<]+?)\s*</strong>\s*</div>\s*'
-            .'<div[^>]*class="[^"]*text-left[^"]*"[^>]*>(.*?)</div>#su';
-
-        if (preg_match_all($pattern, $html, $matches, PREG_SET_ORDER) === false) {
-            return [];
-        }
-
-        $fields = [];
-
-        foreach ($matches as $match) {
-            $label = $this->text($match[1]);
-            $column = self::LABELS[$label] ?? null;
-
-            if ($column !== null && ! isset($fields[$column])) {
-                $fields[$column] = $this->text($match[2]);
-            }
-        }
-
-        return array_filter($fields, static fn (string $value): bool => $value !== '');
-    }
-
-    /**
-     * One cell as plain text.
-     *
-     * The portal writes `&#150;` for the en dash its ementas are full of, so
-     * decoding runs before the tags come out. `menos [x]` is the collapse link
-     * the Assuntos row carries, and it is markup pretending to be content.
-     */
-    private function text(string $html): string
-    {
-        $decoded = html_entity_decode($html, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $stripped = strip_tags(preg_replace('#<br\s*/?>#i', ' ', $decoded) ?? $decoded);
-        $collapsed = preg_replace('/\s+/u', ' ', $stripped) ?? $stripped;
-
-        return trim(str_replace(['menos [x]', 'mais [+]'], '', $collapsed));
     }
 }

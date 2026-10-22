@@ -21,6 +21,8 @@ geram em `app/Ai/Agents` e `app/Ai/Tools`. O conhecimento que os agentes leem fi
 | `ForensicReviewTranscriptionAgent` | Transcreve a ficha da pesquisa para a estrutura aninhada de teses e precedentes |
 | `LegalQuestionFormulationAgent` | Reescreve o relato como as questões de direito que ele levanta, na redação com que o STJ afeta um tema — são elas, e não o relato, que consultam o catálogo |
 | `LegalThemeSelectionAgent` | Entre os temas do STJ que a busca trouxe para essas questões, ordena por relevância os que pesam sobre o caso — sempre alguns, nunca a lista vazia —, cada um com a razão |
+| `DoctrineResearchAgent` | Condensa o caso em 2 a 4 termos curtos sobre o instituto, busca no acervo da Rede Virtual de Bibliotecas do LexML as obras de doutrina sobre eles e devolve uma ficha rotulada — endereço do registro e uma nota sobre o assunto de cada obra, nunca o que o autor defende |
+| `DoctrineTranscriptionAgent` | Transcreve a ficha de doutrina para a estrutura plana; autor, título e publicação são depois relidos do registro em PHP |
 | `PleadingDraftingAgent` | Redige a petição inicial inteira a partir do dossiê, pondo cada julgado por marcador e escolhendo os trechos da ementa que a citação leva |
 | `PleadingGroundsReinforcementAgent` | Reescreve o corpo do DO DIREITO da minuta a partir das teses da revisão forense — espécie, argumento, garantia e fundamentos —, fazendo a subsunção de cada tese ao relato |
 
@@ -45,9 +47,18 @@ expõe é `ResearchLegalCaseTheses`, que chama os dois em série — a seção a
 não podem ser um só. Os dois de temas são a outra aba, expostos por
 `ResearchLegalCaseThemes` — o formulador escreve as questões, a busca vetorial traz os
 temas de cada uma, e o seletor os ordena —, e correm **ao lado** do par: `ResearchLegalCaseForensicReview`
-roda as duas metades como duas tasks do mesmo `Concurrency::run`, cada uma com marcador
+roda as metades como tasks do mesmo `Concurrency::run`, cada uma com marcador
 próprio, de modo que uma falha, uma repetição ou uma peça antiga sem temas afeta só a sua
-aba.
+aba. O par de doutrina é a terceira aba e a terceira task: `ResearchLegalCaseDoctrines`
+chama o pesquisador (Gemini, busca) e o transcritor (Ollama, schema) em série, e depois
+`DoctrineRecordReader` lê cada registro `/urn/` — a divisão da jurisprudência, contra o
+acervo de bibliotecas em vez dos acórdãos. A busca de doutrina do próprio portal
+(`/busca/search?…&f1-tipoDocumento=Doutrina`) é proibida no `robots.txt` e responde com o
+desafio anti-bot do Senado, por isso a busca é fundamentada. Uma diferença medida: o
+pesquisador inventa o número de cadastro de toda URN de biblioteca que escreve, então os
+endereços lidos são os `groundingChunks` da resposta crua, seguidos um salto por
+`GroundingRedirect`, e as obras da ficha são casadas com eles por título e autor — e, quando
+a busca só trouxe o periódico, procuradas no índice de artigos dele.
 
 O endereçamento é outro par em série, e a ordem é imposta pelo mesmo motivo que separa
 área e classe: os sistemas candidatos só existem depois que se sabe a UF do foro. Quem o

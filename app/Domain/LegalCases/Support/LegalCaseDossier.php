@@ -130,6 +130,32 @@ final class LegalCaseDossier
     }
 
     /**
+     * The framing, with the class written out, for the agent that searches the
+     * doctrine.
+     *
+     * The one projection that carries the class's **description**, and that is
+     * the whole reason it is a method of its own. The doctrine research has to
+     * turn the case into a few short search terms on the substantive institute,
+     * and the class name alone is too often too wide for that — "[7]
+     * Procedimento Comum Cível" names every civil matter. Its operational
+     * description and statutes (`ProceduralClass::promptLine()`) are what point
+     * at the institute; the agent condenses them, it does not search with them.
+     *
+     * No parties and no requests, like every projection that leaves the office —
+     * a work of doctrine is matched to the question, not to who is asking. The
+     * facts are the prompt.
+     */
+    public static function forDoctrines(LegalCase $legalCase): string
+    {
+        $class = $legalCase->getRelationValue('proceduralClass');
+
+        return self::section('O enquadramento', self::written([
+            'Área de atuação' => $legalCase->practiceArea->label,
+            'Classe processual' => $class instanceof ProceduralClass ? $class->promptLine() : null,
+        ]));
+    }
+
+    /**
      * The whole pleading, for the agent that writes the document.
      *
      * The third projection, and the widest — where `forResearch()` narrows

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\LegalCases\Actions;
 
 use App\Domain\CourtDecisions\Data\CourtDecisionListData;
+use App\Domain\Doctrines\Data\DoctrineListData;
 use App\Domain\LegalCases\Data\ForensicReviewData;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalThemes\Data\LegalCaseThemeListData;
@@ -50,17 +51,19 @@ use Throwable;
  * ## The sixth step travels with it
  *
  * Since "Análise de Jurisprudência" arrived, the button that finishes a pleading
- * sits on *that* step rather than on the forensic review, and it carries three
- * lists rather than one: the theses the lawyer kept, the STJ themes they kept
- * (the forensic review's second tab), and the rulings they kept. All three are
- * already rows — the research runs wrote them — and what the conclusion posts
- * is the reading, so every save is a diff and every untick is a removal. They
- * share the transaction for the reason the first two effects share it: it is
- * one statement about the pleading, and a conclusion that pruned the theses but
- * not the case law would be half a decision.
+ * sits on *that* step rather than on the forensic review, and it carries four
+ * lists rather than one: the theses the lawyer kept, the STJ themes and the
+ * doctrine they kept (the forensic review's second and third tabs), and the
+ * rulings they kept. All four are already rows — the research runs wrote
+ * them — and what the conclusion posts is the reading, so every save is a diff
+ * and every untick is a removal. They share the transaction for the reason the
+ * first two effects share it: it is one statement about the pleading, and a
+ * conclusion that pruned the theses but not the case law would be half a
+ * decision.
  *
- * The themes stop there for now: `forDrafting()` does not carry them, so the
- * document is drafted from the theses and the rulings exactly as before.
+ * The themes and the doctrine stop there for now: `forDrafting()` carries
+ * neither, so the document is drafted from the theses and the rulings exactly
+ * as before.
  *
  * The order matters for the document too: the drafting runs after the
  * transaction, on a refreshed pleading, so the rulings the document quotes are
@@ -77,9 +80,10 @@ final class FinalizeLegalCase
         ForensicReviewData $data,
         CourtDecisionListData $decisions,
         LegalCaseThemeListData $themes,
+        DoctrineListData $doctrines,
         ?User $author = null,
     ): LegalCase {
-        DB::transaction(function () use ($legalCase, $data, $decisions, $themes): void {
+        DB::transaction(function () use ($legalCase, $data, $decisions, $themes, $doctrines): void {
             // A Action irmã, e não uma cópia dela: é ela que guarda o mapa do id
             // postado para o id persistido, sem o qual um precedente aponta para
             // uma tese que ainda não tinha chave.
@@ -88,6 +92,10 @@ final class FinalizeLegalCase
             // A outra aba da etapa 5: os temas que o advogado manteve. O que ele
             // desmarcou é desvinculado aqui, pelo `sync()` da Action irmã.
             SaveLegalCaseThemes::run($legalCase, $themes);
+
+            // E a terceira aba, a doutrina: a obra desmarcada é apagada pelo
+            // diff da Action irmã, como o julgado.
+            SaveLegalCaseDoctrines::run($legalCase, $doctrines);
 
             // E a da etapa 6, pelo mesmo motivo: o diff que apaga o que o
             // advogado desmarcou mora lá, com a marca d'água que ele move.
@@ -113,8 +121,8 @@ final class FinalizeLegalCase
     }
 
     /**
-     * The fifth and sixth steps' payloads — both tabs of the fifth, and the
-     * sixth — unchanged.
+     * The fifth and sixth steps' payloads — the three tabs of the fifth, and
+     * the sixth — unchanged.
      *
      * Delegated to the Actions that save them rather than restated, so the
      * routes cannot drift into disagreeing about what a thesis or a ruling looks
@@ -133,6 +141,7 @@ final class FinalizeLegalCase
         return [
             ...SaveLegalCaseForensicReview::make()->rules(),
             ...SaveLegalCaseThemes::make()->rules(),
+            ...SaveLegalCaseDoctrines::make()->rules(),
             ...SaveLegalCaseCourtDecisions::make()->rules(),
         ];
     }
@@ -145,6 +154,7 @@ final class FinalizeLegalCase
         return [
             ...SaveLegalCaseForensicReview::make()->getValidationAttributes(),
             ...SaveLegalCaseThemes::make()->getValidationAttributes(),
+            ...SaveLegalCaseDoctrines::make()->getValidationAttributes(),
             ...SaveLegalCaseCourtDecisions::make()->getValidationAttributes(),
         ];
     }
@@ -163,6 +173,7 @@ final class FinalizeLegalCase
             ForensicReviewData::fromArray($request->validated()),
             CourtDecisionListData::fromArray($request->validated()),
             LegalCaseThemeListData::fromArray($request->validated()),
+            DoctrineListData::fromArray($request->validated()),
             $request->user(),
         );
 

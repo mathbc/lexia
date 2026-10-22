@@ -6,6 +6,7 @@ namespace App\Domain\LegalCases\Support;
 
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\CourtDecisions\Models\CourtDecision;
+use App\Domain\Doctrines\Models\Doctrine;
 use App\Domain\LegalCases\Data\CourtAddressingSuggestionData;
 use App\Domain\LegalCases\Data\InjunctiveReliefSuggestionData;
 use App\Domain\LegalCases\Models\LegalCase;
@@ -67,6 +68,8 @@ final class LegalCaseFormProps
             'research' => self::research($legalCase),
             'themes' => self::themes($legalCase),
             'theme_research' => self::findings($legalCase->theme_findings),
+            'doctrines' => self::doctrines($legalCase),
+            'doctrine_research' => self::findings($legalCase->doctrine_findings),
             'court_decisions' => self::courtDecisions($legalCase),
             'court_decision_research' => self::findings($legalCase->court_decision_findings),
         ];
@@ -212,6 +215,33 @@ final class LegalCaseFormProps
                 'urn' => $decision->urn,
                 'decided_at' => $decision->decided_at?->toDateString(),
             ])
+            ->all();
+    }
+
+    /**
+     * The third tab of the fifth step, in the shape `DoctrineData::toArray()`
+     * publishes and `SaveLegalCaseDoctrines` accepts, with the persisted ids —
+     * the court decisions' arrangement, in the agent's order.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function doctrines(LegalCase $legalCase): array
+    {
+        return $legalCase->doctrines
+            ->map(static fn (Doctrine $doctrine): array => [
+                'id' => $doctrine->id,
+                'kind' => $doctrine->kind,
+                'author' => $doctrine->author,
+                'title' => $doctrine->title,
+                'published_in' => $doctrine->published_in,
+                'summary' => $doctrine->summary,
+                'subject' => $doctrine->subject,
+                'publication' => $doctrine->publication,
+                'relevance' => $doctrine->relevance,
+                'source_url' => $doctrine->source_url,
+                'urn' => $doctrine->urn,
+            ])
+            ->values()
             ->all();
     }
 

@@ -6,6 +6,7 @@ namespace Tests\Feature\LegalCases;
 
 use App\Domain\Accounts\Models\Account;
 use App\Domain\CourtDecisions\Models\CourtDecision;
+use App\Domain\Doctrines\Models\Doctrine;
 use App\Domain\LegalCases\Actions\DraftLegalPleading;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Models\LegalCase;
@@ -141,7 +142,7 @@ final class FinalizeLegalCaseTest extends TestCase
 
         $this->actingAs($owner)->post(
             route('legal-cases.finalize', $case),
-            ['theses' => [], 'precedents' => [], 'themes' => [], 'court_decisions' => []],
+            ['theses' => [], 'precedents' => [], 'themes' => [], 'doctrines' => [], 'court_decisions' => []],
         );
 
         $this->assertSame(0, $case->theses()->count());
@@ -203,6 +204,7 @@ final class FinalizeLegalCaseTest extends TestCase
             ]],
             'precedents' => [],
             'themes' => [],
+            'doctrines' => [],
             'court_decisions' => [],
         ])->assertRedirect(route('legal-cases.pleading', $case));
 
@@ -258,8 +260,46 @@ final class FinalizeLegalCaseTest extends TestCase
         [, $owner, $case] = $this->pleading();
 
         $this->actingAs($owner)
-            ->post(route('legal-cases.finalize', $case), ['theses' => [], 'precedents' => [], 'court_decisions' => []])
+            ->post(route('legal-cases.finalize', $case), ['theses' => [], 'precedents' => [], 'doctrines' => [], 'court_decisions' => []])
             ->assertSessionHasErrors('themes');
+
+        $this->assertTrue($case->refresh()->is_draft);
+    }
+
+    /**
+     * A terceira aba da etapa 5, no mesmo gesto: a obra desmarcada sai da peça.
+     *
+     * Como o julgado, a doutrina já é linha quando a aba a mostra, e desmarcar
+     * é apagar — pelo diff de `SaveLegalCaseDoctrines`. A ordem do que ficou é a
+     * do payload.
+     */
+    #[Test]
+    public function a_doctrine_the_lawyer_unticked_is_removed_when_the_pleading_closes(): void
+    {
+        [, $owner, $case] = $this->pleading();
+
+        $first = Doctrine::factory()->forLegalCase($case)->nth(0)->create();
+        $unticked = Doctrine::factory()->forLegalCase($case)->nth(1)->create();
+        $last = Doctrine::factory()->forLegalCase($case)->nth(2)->create();
+
+        $this->fakeDrafting()->shouldReceive('handle')->once()->andReturn($this->draft($case));
+
+        $this->finalize($owner, $case, doctrines: [$this->postedDoctrine($first), $this->postedDoctrine($last)])
+            ->assertRedirect(route('legal-cases.pleading', $case));
+
+        $this->assertSame([$first->id, $last->id], $case->doctrines()->pluck('id')->all());
+        $this->assertSoftDeleted($unticked);
+        $this->assertSame(1, $last->refresh()->position);
+    }
+
+    #[Test]
+    public function the_doctrines_list_must_be_present(): void
+    {
+        [, $owner, $case] = $this->pleading();
+
+        $this->actingAs($owner)
+            ->post(route('legal-cases.finalize', $case), ['theses' => [], 'precedents' => [], 'themes' => [], 'court_decisions' => []])
+            ->assertSessionHasErrors('doctrines');
 
         $this->assertTrue($case->refresh()->is_draft);
     }
@@ -329,6 +369,19 @@ final class FinalizeLegalCaseTest extends TestCase
         return $fake;
     }
 
+    /**
+     * Uma obra gravada, projetada como `LegalCaseFormProps` a manda para a tela.
+     *
+     * @return array<string, mixed>
+     */
+    private function postedDoctrine(Doctrine $doctrine): array
+    {
+        return $doctrine->only([
+            'id', 'kind', 'author', 'title', 'published_in', 'summary', 'subject',
+            'publication', 'relevance', 'source_url', 'urn',
+        ]);
+    }
+
     private function draft(LegalCase $case, int $version = 1): LegalPleading
     {
         return LegalPleading::factory()->forLegalCase($case)->version($version)->create();
@@ -356,14 +409,21 @@ final class FinalizeLegalCaseTest extends TestCase
      * `$decisions` is empty by default, which is what a pleading whose
      * jurisprudence run confirmed nothing posts — and what every test here that
      * is not about step 6 wants. The one that is about it passes rows. The
-     * same for `$themes`, the forensic review's second tab.
+     * same for `$themes` and `$doctrines`, the forensic review's second and
+     * third tabs.
      *
      * @param  list<array<string, mixed>>  $decisions
      * @param  list<array<string, mixed>>  $themes
+     * @param  list<array<string, mixed>>  $doctrines
      * @return TestResponse<Response>
      */
-    private function finalize(User $owner, LegalCase $case, array $decisions = [], array $themes = []): TestResponse
-    {
+    private function finalize(
+        User $owner,
+        LegalCase $case,
+        array $decisions = [],
+        array $themes = [],
+        array $doctrines = [],
+    ): TestResponse {
 
         return $this->actingAs($owner)->post(route('legal-cases.finalize', $case), [
             'theses' => [[
@@ -386,8 +446,10 @@ final class FinalizeLegalCaseTest extends TestCase
                 'grounding' => 'Fundamenta a contagem do prazo.',
                 'adherence' => '90',
             ]],
-            // A outra aba da etapa 5: os temas que o advogado manteve.
+            // As outras abas da etapa 5: os temas e as obras que o advogado
+            // manteve.
             'themes' => $themes,
+            'doctrines' => $doctrines,
             // A etapa 6 viaja junto: os julgados já são linhas, e o que a
             // conclusão posta é a leitura do advogado — ver `$decisions`.
             'court_decisions' => $decisions,

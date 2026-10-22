@@ -332,8 +332,17 @@ const SUMMARY_CLAMP = "line-clamp-6";
  * A medição só roda **recolhido**: aberta, a caixa cresce até o texto e
  * `scrollHeight` volta a igualar `clientHeight`, o que apagaria o "Ver menos"
  * no primeiro clique.
+ *
+ * Exportada porque a aba de doutrina da etapa 5 tem o mesmo problema com o
+ * sumário de uma obra, e o rótulo é o que muda entre as duas.
  */
-function DecisionSummary({ text }: { text: string }) {
+export function DecisionSummary({
+    text,
+    label = "Ementa",
+}: {
+    text: string;
+    label?: string;
+}) {
     const id = useId();
     const [expanded, setExpanded] = useState(false);
     const [clipped, setClipped] = useState(false);
@@ -359,7 +368,7 @@ function DecisionSummary({ text }: { text: string }) {
 
     return (
         <div>
-            <p className="text-xs font-medium">Ementa</p>
+            <p className="text-xs font-medium">{label}</p>
             <p
                 ref={ref}
                 id={id}

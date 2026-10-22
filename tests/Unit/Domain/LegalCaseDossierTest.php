@@ -365,6 +365,36 @@ final class LegalCaseDossierTest extends TestCase
     }
 
     /**
+     * O dossiê da doutrina é o único que leva a descrição da classe: é dela que
+     * o agente condensa os termos de busca quando o nome da classe é largo
+     * demais. E sai da máquina, então não leva partes nem pedidos.
+     */
+    #[Test]
+    public function the_doctrine_dossier_writes_the_class_out_and_names_nobody(): void
+    {
+        $dossier = LegalCaseDossier::forDoctrines($this->fullPleading());
+
+        $this->assertStringContainsString('- Área de atuação: Direito Tributário', $dossier);
+        $this->assertStringContainsString('- Classe processual: [7] Procedimento Comum Cível', $dossier);
+
+        $described = $this->pleading(new ProceduralClass([
+            'code' => 1118,
+            'name' => 'Embargos à Execução Fiscal',
+            'description' => 'Defesa do executado na execução fiscal, depois de garantido o juízo.',
+        ]));
+
+        $this->assertStringContainsString(
+            '- Classe processual: [1118] Embargos à Execução Fiscal — Defesa do executado na execução fiscal, depois de garantido o juízo.',
+            LegalCaseDossier::forDoctrines($described),
+        );
+
+        $this->assertStringNotContainsString('Joaquim', $dossier);
+        $this->assertStringNotContainsString('Construtora Muro', $dossier);
+        $this->assertStringNotContainsString('R$', $dossier);
+        $this->assertStringNotContainsString('derrubou o muro', $dossier);
+    }
+
+    /**
      * A descrição da tutela é texto livre do advogado, e um nome cabe nela tão
      * bem quanto um fato. Nenhuma outra projeção a leva — em especial a da
      * pesquisa, que sai da máquina, e a do reforço do DO DIREITO, que não deve
@@ -384,6 +414,7 @@ final class LegalCaseDossierTest extends TestCase
             LegalCaseDossier::forGrounds($pleading),
             LegalCaseDossier::forThemes($pleading),
             LegalCaseDossier::forCourtDecisions($pleading),
+            LegalCaseDossier::forDoctrines($pleading),
             LegalCaseDossier::of($pleading),
         ] as $dossier) {
             $this->assertStringNotContainsString('tutela', mb_strtolower($dossier));

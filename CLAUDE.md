@@ -267,8 +267,10 @@ ver "A tutela de urgência", abaixo; ele segue o `#[Provider]` dos irmãos da ca
 endereçamento trouxe mais dois, em série: `CourtAddressingSuggestionAgent`, que decide o
 foro competente, e `JudicialSystemSelectionAgent`, que escolhe o sistema quando o tribunal
 tem dois — ver "O endereçamento e o sistema judicial", abaixo; os dois seguem o mesmo
-`#[Provider('gemini')]`. Os embeddings do catálogo nunca saíram da máquina:
-`nomic-embed-text`, 768 dimensões.
+`#[Provider('gemini')]`. E a etapa 5 ganhou uma terceira aba com o seu par, em série:
+`DoctrineResearchAgent`, que busca no acervo do LexML (Gemini, como o de jurisprudência), e
+`DoctrineTranscriptionAgent`, que transcreve a ficha (Ollama) — ver "A doutrina", abaixo.
+Os embeddings do catálogo nunca saíram da máquina: `nomic-embed-text`, 768 dimensões.
 
 O **Gemini** responde por **um**: `LegalThesisResearchAgent`, que pesquisa nos portais
 oficiais. Ele não tem opção local, e a falha não seria graciosa —
@@ -553,10 +555,11 @@ composer test:agents
 
 ## A revisão forense
 
-A quinta etapa da peça (`LegalCaseStep::Review`) tem **duas abas**, e cada uma é
-preenchida por uma pesquisa: **Teses**, o que a peça argumenta, e **Temas**, os
-precedentes qualificados do STJ em que ela se apoia. As abas são o `Tabs` do
-Radix, em estado local — ver "O design system".
+A quinta etapa da peça (`LegalCaseStep::Review`) tem **três abas**, e cada uma é
+preenchida por uma pesquisa: **Teses**, o que a peça argumenta, **Temas**, os
+precedentes qualificados do STJ em que ela se apoia, e **Doutrinas**, as obras de
+juristas sobre a questão (ver "A doutrina"). As abas são o `Tabs` do Radix, em estado
+local — ver "O design system".
 
 A aba de teses tem duas entidades filhas de
 `LegalCase`, ambas 1-N: `LegalThesis` é o que a peça argumenta — nome, tipo
@@ -636,9 +639,9 @@ assinatura.
 
 ## A pesquisa de teses
 
-A segunda metade da etapa 5, e um dos dois lugares do projeto que **saem da máquina** — o
-outro é a pesquisa de jurisprudência da etapa 6, que é este mesmo desenho contra outro
-portal. Um agente
+A primeira aba da etapa 5, e um dos três lugares do projeto que **saem da máquina** — os
+outros são a pesquisa de jurisprudência da etapa 6 e a de doutrina da terceira aba, que são
+este mesmo desenho contra outro portal. Um agente
 de pesquisa que não consegue abrir o `stj.jus.br` é um modelo recitando súmula de memória,
 que é exatamente o que o prompt inteiro existe para impedir — e buscar e ler página são
 ferramentas do lado do provedor, que o `OllamaProvider` recusa antes de montar requisição.
@@ -688,27 +691,30 @@ resultado passou a ter onde ser gravado, porque ali a peça já tem chave primá
 inferência fica **fora** da transação: são minutos de rede, e segurar uma linha travada
 por eles seria um lock que ninguém quis.
 
-A Action pesquisa as **duas abas em paralelo**: a pesquisa de teses
-(`ResearchLegalCaseTheses`) e a seleção de temas (`ResearchLegalCaseThemes`) são duas
-tasks do mesmo `Concurrency::run`, com as regras que o docblock de `ClassifyLegalCase`
-fixa — o `try/catch` dentro de cada task, closures `static` que capturam só strings (o id
-e a conta da peça) e retorno em DTO sem model. O processo filho não tem usuário, então
-recarrega a peça sob `TenantContext::actingAs()`. A espera é a mais longa das duas, que
-é a das teses. Depois, numa transação, cada metade que voltou é gravada —
-`SaveLegalCaseForensicReview` (o mapa de ids, o diff, o `advanceTo`) mais o envelope, e
-`SaveLegalCaseThemes` mais o seu.
+A Action pesquisa as **três abas em paralelo**: a pesquisa de teses
+(`ResearchLegalCaseTheses`), a seleção de temas (`ResearchLegalCaseThemes`) e a pesquisa de
+doutrina (`ResearchLegalCaseDoctrines`) são tasks do mesmo `Concurrency::run`, com as
+regras que o docblock de `ClassifyLegalCase` fixa — o `try/catch` dentro de cada task,
+closures `static` que capturam só strings (o id e a conta da peça) e retorno em DTO sem
+model. O processo filho não tem usuário, então recarrega a peça sob
+`TenantContext::actingAs()`. A espera é a mais longa delas, que costuma ser a das teses,
+com a da doutrina perto. Depois, numa transação, cada metade que voltou é gravada —
+`SaveLegalCaseForensicReview` (o mapa de ids, o diff, o `advanceTo`) mais o envelope,
+`SaveLegalCaseThemes` mais o seu e `SaveLegalCaseDoctrines` mais o dela. Duas das três são
+buscas no Gemini ao mesmo tempo; se a cota reclamar, `CONCURRENCY_DRIVER=sync` as põe em
+série.
 
 **O gatilho é o marcador de cada aba ser nulo, e nunca a lista estar vazia** —
 `legal_cases.research_findings` para as teses, `legal_cases.theme_findings` para os
-temas. É a distinção que sustenta o desenho: uma rodada que abriu os portais e nada
+temas, `legal_cases.doctrine_findings` para a doutrina. É a distinção que sustenta o desenho: uma rodada que abriu os portais e nada
 confirmou é resposta legítima e cara que grava zero teses, então um gatilho pela lista
 dispararia de novo a cada visita à etapa, a cada troca de aba e a cada reload — gastando
 cota toda vez e, pior, substituindo em silêncio o que o advogado já curou, porque a
 gravação reconcilia por diff.
 
-Os marcadores são **dois** pelo mesmo motivo, um nível abaixo. A tela manda em `tabs[]`
-só as abas cujo marcador é nulo: uma peça pesquisada antes de a aba de temas existir pede
-só os temas, e as teses curadas não são tocadas. "Pesquisar novamente" é por aba e pede
+Os marcadores são **um por aba** pelo mesmo motivo, um nível abaixo. A tela manda em
+`tabs[]` só as abas cujo marcador é nulo: uma peça pesquisada antes de a aba de doutrina
+existir pede só a doutrina, e as teses e os temas curados não são tocados. "Pesquisar novamente" é por aba e pede
 só a sua. Uma metade que falha não grava nada e não impede a outra de ser gravada; ela
 volta como **erro de validação sob a chave da aba** (`withErrors(['themes' => …])`), e
 não como 500 — é o que dispara o `onError` do Inertia, mostra o alerta naquela aba e
@@ -785,6 +791,74 @@ O que ela repete de propósito é a guarda do portal: `CourtDecisionListData` de
 linha sem ementa e a que não aponta para um registro `/urn/`, porque no caminho de volta —
 o payload do navegador — não há ninguém a quem relatar a recusa, e `source_url` é a única
 razão pela qual uma ementa desta tabela pode ser conferida.
+
+## A doutrina
+
+A terceira aba da etapa 5. Doutrina é o que juristas escreveram sobre a norma e o
+instituto — fundamento **complementar**, que não é lei nem julgado —, e uma peça a cita
+pelo **autor, pela obra e pela referência**. A entidade é `Doctrine`
+(`app/Domain/Doctrines`), 1-N de `LegalCase` e no molde de `CourtDecision`: é o registro, e
+não um achado — nenhuma pontuação, nenhuma tese, e nenhuma frase sobre o que o autor
+defende, porque ninguém aqui leu a obra.
+
+**A busca do portal não é um caminho.** A tela de doutrina do LexML é
+`/busca/search?keyword=…&f1-tipoDocumento=Doutrina`, e foi medida em 2026-10-22: o
+`robots.txt` tem `Disallow: /busca/`, o primeiro GET de um cliente passou e todos os
+seguintes voltaram como o desafio em JavaScript do Senado (o `/sru` liberado no robots dá
+404; o `/busca/SRU`, o desafio). Contornar o desafio está fora de questão. O que é liberado
+e indexado é o registro `/urn/urn:lex:br:rede.virtual.bibliotecas:<tipo>:…`, então a
+mecânica é a da jurisprudência: `DoctrineResearchAgent` (Gemini, só `WebSearch`, sem schema)
+acha as obras e escreve uma ficha, `DoctrineTranscriptionAgent` (Ollama, schema) a copia, e
+`DoctrineRecordReader` lê cada registro — tipo, autor, título, ano, sumário e a linha de
+publicação vêm da página, nunca do modelo. A leitura da página (fetch, desafio, rótulos) é
+`LexmlPage`, compartilhada com `LexmlRecordReader`.
+
+**O endereço não é do modelo.** Medido na primeira rodada ao vivo: sete obras, sete URNs, e
+nenhuma existia — o modelo acerta o tipo e o ano e inventa o número de cadastro do fim da URN,
+que nada do que ele vê contém (no grounding do Gemini ele só enxerga o redirect do Vertex).
+Então os endereços lidos são os do **provedor**: todos os `groundingChunks` da resposta crua
+(`AgentResponse::$raw` — as citações do SDK são só os chunks que o texto referencia, e eram
+um), cada um seguido um salto por `GroundingRedirect`. A ficha contribui com título, autor,
+ordem e a nota, e cada obra dela só vale se casar com um registro lido —
+`DoctrineData::names()`, título inteiro ou principal e uma palavra do autor em comum, para que
+dois livros chamados "Responsabilidade civil" não troquem de nota. Registro que a busca trouxe
+e ninguém nomeou entra depois, sem nota; obra nomeada que nada confirma vai para
+`unverified_citations`.
+
+**O periódico é um índice.** A busca devolve mais o registro do periódico (`:revista:`, que
+não é doutrina e a guarda recusa) do que o do artigo. Mas a página do periódico lista cada
+artigo com link para o registro dele, e `DoctrineRecordReader::articlesIn()` lê essa lista:
+uma obra nomeada que não casou é procurada nos índices dos periódicos que o provedor devolveu
+(até `MAX_INDEXES`), e a entrada que a nomeia é lida como qualquer registro. Na rodada que
+validou o desenho, três das cinco obras vieram por aí.
+
+**A keyword é condensada pelo pesquisador.** O título da classe sozinho é largo demais
+("Procedimento Comum Cível" é toda causa cível) e a descrição, longa demais — o catálogo
+exige todas as palavras. Por isso `LegalCaseDossier::forDoctrines()` é a única projeção com
+a **descrição** da classe (`ProceduralClass::promptLine()`), e o agente a condensa em 2 a 4
+termos de 2 a 4 palavras sobre o instituto de direito material. Os termos vão para
+`doctrine_findings.search_terms`, e a aba mostra cada um como link para a busca do LexML — o
+navegador do advogado passa pelo desafio que o servidor não passa. Sem inferência extra.
+
+**Cinco, com duas de reserva.** O prompt pede `DoctrineResearchData::WANTED` (5) obras mais
+reservas, a gramática corta as candidatas em `CANDIDATES` (7), no máximo `MAX_READS`
+registros são lidos por rodada, e a lista para em cinco: as nomeadas primeiro, na ordem do
+agente. Menos de cinco é resposta, e nada as completa com obra que nenhum registro traz. A
+busca varia de rodada para rodada, e uma rodada sem chunk de biblioteca volta vazia —
+"Pesquisar novamente" é o remédio.
+
+**A guarda é o autor.** `DoctrineSources::isRecord()` aceita só registro da rede de
+bibliotecas e recusa o `:revista:` (o periódico inteiro, que é o que a busca mais devolve);
+`DoctrineData::isAttributable()` exige título e autor. `DoctrineListData` repete as duas
+peneiras na volta do navegador.
+`relevance` é a única frase de modelo, e o prompt a limita ao **assunto** da obra; a tela a
+rotula como nota da IA.
+
+O resto é o desenho das irmãs: marcador próprio (`doctrine_findings`), terceira task do
+`Concurrency::run`, erro sob `doctrines`, `SaveLegalCaseDoctrines` com diff e soft delete,
+tudo marcado e o "Concluir" apagando o desmarcado. A única coluna a mais que `court_decisions`
+é `position`: a ordem do agente importa, e as cinco linhas caem no mesmo segundo do
+`timestamp(0)`. **A minuta ainda não cita doutrina** — `forDrafting()` não a carrega.
 
 ## A tutela de urgência
 
@@ -1183,6 +1257,11 @@ O fallback da minuta sem endereçamento também ficou neutro: `PleadingDraftingA
 Os temas do STJ na minuta: a etapa 5 já grava os que o advogado manteve, falta
 `LegalCaseDossier::forDrafting()`/`forGrounds()` levá-los e a guarda do reforço aceitar
 "Tema N" só quando o dossiê o traz.
+
+A doutrina na minuta: a terceira aba já grava as obras mantidas, falta o dossiê levá-las
+(autor, obra, publicação) e o prompt de redação citá-las só pelo que o dossiê traz — sem
+atribuir entendimento ao autor, sem página — e a guarda do reforço recusar autor que o
+dossiê não escreve.
 
 O módulo de Jurisprudência: ingestão, chunking e busca vetorial sobre o corpus.
 O pgvector já está de pé e em uso no catálogo de classes, então o que falta é a

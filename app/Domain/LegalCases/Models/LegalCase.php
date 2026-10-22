@@ -9,6 +9,7 @@ use App\Domain\Accounts\Models\Account;
 use App\Domain\CourtDecisions\Models\CourtDecision;
 use App\Domain\Customers\Enums\CustomerType;
 use App\Domain\Customers\Models\Customer;
+use App\Domain\Doctrines\Models\Doctrine;
 use App\Domain\Documents\Models\Document;
 use App\Domain\JudicialSystems\Models\JudicialSystem;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
@@ -126,6 +127,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property array<string, mixed>|null $research_findings
  * @property array<string, mixed>|null $court_decision_findings
  * @property array<string, mixed>|null $theme_findings
+ * @property array<string, mixed>|null $doctrine_findings
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property CarbonImmutable|null $deleted_at
@@ -141,6 +143,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property-read Collection<int, LegalPrecedent> $precedents
  * @property-read Collection<int, CourtDecision> $courtDecisions
  * @property-read Collection<int, LegalTheme> $themes
+ * @property-read Collection<int, Doctrine> $doctrines
  * @property-read Collection<int, LegalPleading> $pleadings
  */
 #[UsePolicy(LegalCasePolicy::class)]
@@ -172,6 +175,7 @@ class LegalCase extends Model
             'research_findings' => 'array',
             'court_decision_findings' => 'array',
             'theme_findings' => 'array',
+            'doctrine_findings' => 'array',
         ];
     }
 
@@ -316,6 +320,22 @@ class LegalCase extends Model
             ->withTimestamps()
             ->orderByPivot('position')
             ->orderByPivot('created_at');
+    }
+
+    /**
+     * The legal scholarship the pleading leans on — the fifth step's third tab.
+     *
+     * A `HasMany` like the court decisions and not a link like the themes: a
+     * doctrine row is a reference the research found for *this* pleading, with
+     * the agent's note beside it, and there is no catalogue of works to point
+     * at. Ordered by `position`, the agent's ranking, because the rows of one
+     * run share a `created_at` second — see the migration.
+     *
+     * @return HasMany<Doctrine, $this>
+     */
+    public function doctrines(): HasMany
+    {
+        return $this->hasMany(Doctrine::class)->orderBy('position')->oldest();
     }
 
     /**
