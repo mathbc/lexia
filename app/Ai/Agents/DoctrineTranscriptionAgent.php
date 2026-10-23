@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Ai\Agents;
 
 use App\Ai\Concerns\ConfiguresOllamaRuntime;
+use App\Ai\Concerns\UsesDefaultAiModel;
 use App\Domain\LegalCases\Data\DoctrineResearchData;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\StringType;
 use Illuminate\JsonSchema\Types\Type;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
@@ -23,8 +23,8 @@ use Laravel\Ai\Promptable;
  * The second half of the pair, and CourtDecisionTranscriptionAgent for
  * scholarship: it copies what DoctrineResearchAgent wrote into the flat
  * structure and nothing else. It exists for the same reason — on Gemini a
- * schema switches the search off —, it is local for the same reason — it needs a
- * grammar and no tools —, and it has no tools for the same reason.
+ * schema switches the search off —, it runs on the default model like its twin,
+ * and it has no tools for the same reason.
  *
  * One difference, and it is deliberate: `Relevância` **has** a field here
  * (`relevance`). The rulings' transcriber throws it away, because a ruling is
@@ -40,17 +40,13 @@ use Laravel\Ai\Promptable;
  * page's own. There is no `sources_consulted`: the provider's metadata says
  * what was opened, and the sheet's list did not.
  */
-// Trocar as duas linhas de lugar manda a inferência para o Gemini — o bloco
-// `gemini` do config/ai.php já está ativo, então a troca mais um `config:clear`
-// bastam.
-// #[Provider('gemini')]
-#[Provider('ollama')]
 #[Timeout(360)]
 #[Temperature(0.1)]
 final class DoctrineTranscriptionAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use ConfiguresOllamaRuntime;
     use Promptable;
+    use UsesDefaultAiModel;
 
     public function instructions(): string
     {

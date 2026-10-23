@@ -14,9 +14,9 @@ use Lorisleiva\Actions\Concerns\AsAction;
  *
  * O texto embutido é o mesmo que o advogado leria — nome, descrição, matérias
  * típicas e a fundamentação —, porque é contra ele que o relato de fatos vai
- * ser comparado. O laço de lotes, o hash e o prefixo de tarefa do
- * `nomic-embed-text` moram no DocumentEmbedder, que os temas do STJ também
- * usam; o docblock dele explica por que o prefixo existe.
+ * ser comparado. O laço de lotes, o hash, o modelo padrão e a tarefa de
+ * cada pedido moram no DocumentEmbedder, que os temas do STJ também usam; o
+ * docblock dele explica o prefixo do nomic e o `taskType` do Gemini.
  *
  * A migration de recarga do catálogo zera os hashes justamente para forçar a
  * próxima passada.

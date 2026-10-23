@@ -12,6 +12,16 @@ use App\Domain\Accounts\Actions\ToggleAccountStatus;
 use App\Domain\Accounts\Actions\UpdateAccount;
 use App\Domain\Accounts\Enums\AccountType;
 use App\Domain\Accounts\Enums\BrazilianState;
+use App\Domain\AiModels\Actions\CreateAiModel;
+use App\Domain\AiModels\Actions\CreateEmbeddingModel;
+use App\Domain\AiModels\Actions\DeleteAiModel;
+use App\Domain\AiModels\Actions\DeleteEmbeddingModel;
+use App\Domain\AiModels\Actions\ListAiModels;
+use App\Domain\AiModels\Actions\ListEmbeddingModels;
+use App\Domain\AiModels\Actions\MakeAiModelDefault;
+use App\Domain\AiModels\Actions\MakeEmbeddingModelDefault;
+use App\Domain\AiModels\Actions\UpdateAiModel;
+use App\Domain\AiModels\Actions\UpdateEmbeddingModel;
 use App\Domain\Customers\Actions\CreateCustomer;
 use App\Domain\Customers\Actions\DeleteCustomer;
 use App\Domain\Customers\Actions\ListCustomers;
@@ -90,6 +100,26 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::get('/usuarios/{user}/editar', ShowUserForm::class)->name('users.edit');
         Route::put('/usuarios/{user}', UpdateUser::class)->name('users.update');
         Route::patch('/usuarios/{user}/status', ToggleUserStatus::class)->name('users.toggle');
+    });
+
+    // Os modelos que a plataforma roda — só a equipe LexIA. O cadastro e a
+    // edição são diálogos sobre a listagem, então não há rota de formulário.
+    Route::get('/modelos-de-ia', ListAiModels::class)->name('ai-models.index');
+    Route::post('/modelos-de-ia', CreateAiModel::class)->name('ai-models.store');
+
+    Route::prefix('/modelos-de-ia/{aiModel}')->whereUuid('aiModel')->group(function (): void {
+        Route::put('/', UpdateAiModel::class)->name('ai-models.update');
+        Route::delete('/', DeleteAiModel::class)->name('ai-models.destroy');
+        Route::patch('/padrao', MakeAiModelDefault::class)->name('ai-models.default');
+    });
+
+    Route::get('/modelos-de-embedding', ListEmbeddingModels::class)->name('embedding-models.index');
+    Route::post('/modelos-de-embedding', CreateEmbeddingModel::class)->name('embedding-models.store');
+
+    Route::prefix('/modelos-de-embedding/{embeddingModel}')->whereUuid('embeddingModel')->group(function (): void {
+        Route::put('/', UpdateEmbeddingModel::class)->name('embedding-models.update');
+        Route::delete('/', DeleteEmbeddingModel::class)->name('embedding-models.destroy');
+        Route::patch('/padrao', MakeEmbeddingModelDefault::class)->name('embedding-models.default');
     });
 
     // Os clientes da conta do próprio ator: não há conta na URL porque não há

@@ -6,8 +6,8 @@ namespace App\Domain\LegalThemes\Queries;
 
 use App\Domain\LegalThemes\Actions\EmbedLegalThemes;
 use App\Domain\LegalThemes\Models\LegalTheme;
+use App\Domain\Shared\Support\DocumentEmbedder;
 use Illuminate\Database\Eloquent\Collection;
-use Laravel\Ai\Embeddings;
 use RuntimeException;
 
 /**
@@ -43,6 +43,13 @@ use RuntimeException;
  * Os vetores vão **calculados**, como array. Uma string faria o framework
  * embuti-la por conta própria, sem o prefixo `search_query:` do nomic, e o
  * vetor cairia fora do espaço em que os documentos foram gravados.
+ *
+ * E só se compara com as linhas que o **modelo padrão** gerou
+ * (`embedding_model`). Logo depois de uma troca de modelo, enquanto
+ * EmbedCatalogs não terminou, isso pode ser nenhuma: a consulta volta vazia e
+ * a seleção falha alto, como num catálogo vazio — em vez de medir distância
+ * entre vetores de dois modelos, que tem as mesmas 768 posições e não
+ * significa nada.
  *
  * **Não degrada em silêncio**, ao contrário do ranking das classes. Lá a falha
  * do embedding devolve a ordem do pivot e a classificação segue um pouco pior;
@@ -112,6 +119,7 @@ final class LegalThemeCandidatesQuery
         /** @var list<string> */
         return LegalTheme::query()
             ->whereNotNull('embedding')
+            ->where('embedding_model', DocumentEmbedder::model()->key())
             ->whereNotIn('status', self::SUPERSEDED)
             ->orderByVectorDistance('embedding', $vector)
             ->limit($limit)
@@ -155,15 +163,12 @@ final class LegalThemeCandidatesQuery
             throw new RuntimeException('Não há questões de direito para consultar o catálogo de temas.');
         }
 
-        $vectors = Embeddings::for(array_map(EmbedLegalThemes::queryFor(...), $questions))
-            ->timeout(60)
-            ->generate()
-            ->embeddings;
+        $vectors = DocumentEmbedder::embedQueries(array_map(EmbedLegalThemes::queryFor(...), $questions), 60);
 
         if (count($vectors) !== count($questions) || in_array([], $vectors, true)) {
             throw new RuntimeException('As questões de direito não puderam ser vetorizadas para a busca de temas.');
         }
 
-        return array_map(array_values(...), array_values($vectors));
+        return $vectors;
     }
 }

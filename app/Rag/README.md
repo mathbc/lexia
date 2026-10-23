@@ -62,14 +62,21 @@ Três diferenças para o catálogo de classes, todas deliberadas:
 
 ## Como a vetorização funciona
 
-- Embeddings via Ollama com `nomic-embed-text`, 768 dimensões, em lotes de 64. O laço, o
-  hash e o prefixo moram em `DocumentEmbedder` (`app/Domain/Shared/Support`), que as duas
-  Actions usam (`EmbedProceduralClasses`, `EmbedLegalThemes`). Cada uma decide só o texto
-  de cada linha.
-- Os textos levam os prefixos de tarefa do nomic: `search_document:` no corpus e
-  `search_query:` na consulta (`DocumentEmbedder::document()` e `::query()`). O modelo
-  foi treinado com eles, e a similaridade entre um relato leigo e uma definição jurídica
-  piora visivelmente sem eles.
+- O modelo é o **padrão de `embedding_models`** (`gemini-embedding-001` depois do
+  `lexia:install`), sempre a 768 dimensões, em lotes de 64. O laço, o hash, o modelo e a
+  tarefa de cada pedido moram em `DocumentEmbedder` (`app/Domain/Shared/Support`), que é o
+  único lugar que pede um embedding e que as duas Actions usam (`EmbedProceduralClasses`,
+  `EmbedLegalThemes`). Cada uma decide só o texto de cada linha.
+- A tarefa — documento ou consulta — chega do jeito que o provedor a lê. O nomic do Ollama
+  foi treinado com prefixos: `search_document:` no corpus e `search_query:` na consulta
+  (`DocumentEmbedder::document()` e `::query()`), e a similaridade entre um relato leigo e
+  uma definição jurídica piora visivelmente sem eles. O Gemini não recebe prefixo, recebe
+  `taskType` (`RETRIEVAL_DOCUMENT`, `RETRIEVAL_QUERY`) nas opções do provedor.
+- `embedding_model` guarda a `key()` do modelo que gerou cada vetor
+  (`gemini:gemini-embedding-001`). Vetor de um modelo não se compara com vetor de outro,
+  então as buscas só comparam linhas do padrão e uma linha de outro modelo conta como
+  velha. Promover outro modelo em `/modelos-de-embedding` enfileira `EmbedCatalogs`, que
+  refaz os dois catálogos; até ele terminar, a busca de temas falha alto.
 - Coluna com os helpers nativos do core do Laravel 12
   (`Schema::ensureVectorExtensionExists()`, `$table->vector('embedding', 768)`).
 - `embedding_hash` guarda o sha256 do texto embutido: uma linha que não mudou não é
@@ -82,7 +89,7 @@ Três diferenças para o catálogo de classes, todas deliberadas:
   passa a valer quando Jurisprudência trouxer a própria tabela.
 
 ```bash
-php artisan lexia:embed-procedural-classes           # o que estiver desatualizado
+php artisan lexia:embed-procedural-classes           # o que estiver desatualizado (texto ou modelo)
 php artisan lexia:embed-procedural-classes --fresh   # tudo, ignorando o hash
 php artisan lexia:import-legal-themes                # baixa, importa e embute o que mudou
 ```

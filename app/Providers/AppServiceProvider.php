@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Domain\AiModels\Support\DefaultModels;
 use App\Domain\Shared\Concurrency\IsolatedProcessDriver;
 use App\Domain\Shared\Tenancy\TenantContext;
 use App\Rag\KnowledgeBase;
@@ -25,6 +26,10 @@ class AppServiceProvider extends ServiceProvider
         // The agents' knowledge documents are read from disk once per
         // process, not once per prompt.
         $this->app->singleton(KnowledgeBase::class);
+
+        // The default models, read once per request or job and forgotten
+        // between them, so a worker sees a change of default on its next job.
+        $this->app->scoped(DefaultModels::class);
     }
 
     public function boot(): void

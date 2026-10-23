@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Ai\Agents;
 
 use App\Ai\Concerns\ConfiguresOllamaRuntime;
+use App\Ai\Concerns\UsesDefaultAiModel;
 use App\Domain\LegalCases\Data\CourtDecisionResearchData;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\StringType;
 use Illuminate\JsonSchema\Types\Type;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
@@ -61,27 +61,24 @@ use Laravel\Ai\Promptable;
  * Adding any would reintroduce exactly the problem the pair exists to avoid.
  * The absence is load-bearing, not an omission.
  *
- * ## Local, unlike the half it transcribes
+ * ## On the default model, like every other agent
  *
- * The researcher has no choice about the cloud — it needs provider-side web
- * tools, and `OllamaGateway::mapTools()` throws on the first `ProviderTool` it
- * sees. This one has no tools at all, so the only thing it asks of a provider
- * is a schema, and Ollama imposes one as a grammar. The sheet crosses the
- * network; the structure is imposed at home.
+ * It used to run on the local daemon while the researcher ran on Gemini: it has
+ * no tools, so all it asks of a provider is a schema, which Ollama imposes as a
+ * grammar. Every agent now runs on the one default model, and the researcher
+ * refuses a default that cannot search — so in practice this one runs on Gemini
+ * too, with the schema sent as `response_json_schema`. What still holds is the
+ * split itself: search and schema never share a request.
  *
  * Reached through ResearchLegalCaseCourtDecisions, right after the researcher.
  */
-// Trocar as duas linhas de lugar manda a inferência para o Gemini — o bloco
-// `gemini` do config/ai.php já está ativo, então a troca mais um `config:clear`
-// bastam.
-// #[Provider('gemini')]
-#[Provider('ollama')]
 #[Timeout(360)]
 #[Temperature(0.1)]
 final class CourtDecisionTranscriptionAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use ConfiguresOllamaRuntime;
     use Promptable;
+    use UsesDefaultAiModel;
 
     public function instructions(): string
     {

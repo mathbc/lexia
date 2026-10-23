@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Ai\Agents;
 
 use App\Ai\Concerns\ConfiguresOllamaRuntime;
+use App\Ai\Concerns\UsesDefaultAiModel;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\StringType;
 use Illuminate\JsonSchema\Types\Type;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
@@ -53,12 +53,12 @@ use Laravel\Ai\Promptable;
  * agent's own prompt in another file.
  *
  * The traps the sibling agents document apply unchanged: never send
- * `think: false` to an Ollama that reasons — dormant while the attribute below
- * points at Gemini, live again on the swap back — and leave the model to
- * `config/ai.php` rather than naming one in a `#[Model]`. The
- * required-and-nullable pair above holds under either provider: Ollama's
- * grammar and a cloud `response_json_schema` both carry `required` beside a
- * nullable type.
+ * `think: false` to an Ollama that reasons — dormant while the default model is
+ * a cloud one, live again when an Ollama model is promoted — and leave the
+ * model to the default row in `ai_models` rather than naming one in a
+ * `#[Model]`. The required-and-nullable pair above holds under either provider:
+ * Ollama's grammar and a cloud `response_json_schema` both carry `required`
+ * beside a nullable type.
  *
  * Reached through ExtractLegalCaseDefendant, which ClassifyLegalCase calls
  * alongside the two framing agents rather than after them: the framing of a
@@ -66,16 +66,13 @@ use Laravel\Ai\Promptable;
  * needs no answer from the other two. What they share is only the facts and the
  * moment the lawyer asks for them.
  */
-// Trocar as duas linhas de lugar traz a inferência de volta para a máquina — a
-// troca mais um `config:clear` bastam, com o `gpt-oss:20b` baixado no daemon.
-#[Provider('gemini')]
-// #[Provider('ollama')]
 #[Timeout(360)]
 #[Temperature(0.1)]
 final class DefendantExtractionAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use ConfiguresOllamaRuntime;
     use Promptable;
+    use UsesDefaultAiModel;
 
     /**
      * @param  list<string>  $states  the UF sigla the answer may name

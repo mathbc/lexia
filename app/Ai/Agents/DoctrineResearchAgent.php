@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Ai\Agents;
 
 use App\Ai\Concerns\ConfiguresOllamaRuntime;
+use App\Ai\Concerns\UsesDefaultWebSearchModel;
 use App\Domain\CourtDecisions\Support\CourtDecisionSources;
 use App\Domain\LegalCases\Data\DoctrineResearchData;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
@@ -79,7 +79,6 @@ use Laravel\Ai\Providers\Tools\WebSearch;
  * `LegalCaseDossier::forDoctrines()` is what travels: the framing, no parties
  * and no requests, because this input leaves the office.
  */
-#[Provider('gemini')]
 #[Timeout(360)]
 #[Temperature(0.1)]
 final class DoctrineResearchAgent implements Agent, HasProviderOptions, HasTools
@@ -88,6 +87,7 @@ final class DoctrineResearchAgent implements Agent, HasProviderOptions, HasTools
         providerOptions as private ollamaRuntime;
     }
     use Promptable;
+    use UsesDefaultWebSearchModel;
 
     /**
      * A search per term and a few per work: two to four terms, seven works.

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Ai\Agents;
 
 use App\Ai\Concerns\ConfiguresOllamaRuntime;
+use App\Ai\Concerns\UsesDefaultAiModel;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
@@ -34,22 +34,19 @@ use Laravel\Ai\Promptable;
  * the model may or may not have — the instructions make it say which.
  *
  * `Temperature(0.1)`, the setting of the agents that choose from a list. The
- * provider pair, the timeout and the variables-at-the-end order are the
+ * default model, the timeout and the variables-at-the-end order are the
  * siblings', for the siblings' reasons.
  *
  * Reached through SelectJudicialSystem, which SuggestCourtAddressing calls
  * after the addressing agent has placed the forum.
  */
-// Trocar as duas linhas de lugar traz a inferência de volta para a máquina — a
-// troca mais um `config:clear` bastam, com o `gpt-oss:20b` baixado no daemon.
-#[Provider('gemini')]
-// #[Provider('ollama')]
 #[Timeout(360)]
 #[Temperature(0.1)]
 final class JudicialSystemSelectionAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use ConfiguresOllamaRuntime;
     use Promptable;
+    use UsesDefaultAiModel;
 
     /**
      * @param  string  $forum  the forum already placed, as "Juízo: …; Tribunal: TJSP; Comarca: …"

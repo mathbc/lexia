@@ -25,13 +25,6 @@ final class LegalThemeCandidatesQueryTest extends TestCase
 {
     use RefreshDatabase;
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-
-        config(['ai.default_for_embeddings' => 'ollama']);
-    }
-
     #[Test]
     public function it_returns_the_closest_themes_first_and_stops_at_the_limit(): void
     {
@@ -45,6 +38,24 @@ final class LegalThemeCandidatesQueryTest extends TestCase
 
         $this->assertSame([$closest->id, $near->id], $found->pluck('id')->all());
         $this->assertNotContains($far->id, $found->pluck('id')->all());
+    }
+
+    /**
+     * Logo depois de uma troca de modelo, o vetor do anterior continua na
+     * linha até EmbedCatalogs passar — e não pode entrar na comparação.
+     */
+    #[Test]
+    public function a_theme_embedded_by_another_model_is_never_retrieved(): void
+    {
+        $current = LegalTheme::factory()->embedded($this->axis(1))->create();
+        $stale = LegalTheme::factory()->embedded($this->axis(0))->create(['embedding_model' => 'gemini:gemini-embedding-001']);
+
+        Embeddings::fake([[$this->axis(0)]]);
+
+        $found = (new LegalThemeCandidatesQuery)->for(['Questão.'], 10);
+
+        $this->assertSame([$current->id], $found->pluck('id')->all());
+        $this->assertNotContains($stale->id, $found->pluck('id')->all());
     }
 
     /**

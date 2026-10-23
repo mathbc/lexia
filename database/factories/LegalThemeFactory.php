@@ -7,6 +7,7 @@ namespace Database\Factories;
 use App\Domain\LegalThemes\Enums\JudgingBody;
 use App\Domain\LegalThemes\Enums\LegalThemeType;
 use App\Domain\LegalThemes\Models\LegalTheme;
+use App\Domain\Shared\Support\DocumentEmbedder;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -93,7 +94,8 @@ class LegalThemeFactory extends Factory
     }
 
     /**
-     * With a vector, so the retrieval can reach it.
+     * With a vector made by the current default model, so the retrieval can
+     * reach it.
      *
      * @param  list<float>  $vector
      */
@@ -102,6 +104,7 @@ class LegalThemeFactory extends Factory
         return $this->state([
             'embedding' => $vector,
             'embedding_hash' => hash('sha256', json_encode($vector, JSON_THROW_ON_ERROR)),
+            'embedding_model' => DocumentEmbedder::model()->key(),
             'embedded_at' => now(),
         ]);
     }

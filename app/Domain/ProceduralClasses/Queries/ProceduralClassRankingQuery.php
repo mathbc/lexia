@@ -6,8 +6,8 @@ namespace App\Domain\ProceduralClasses\Queries;
 
 use App\Domain\ProceduralClasses\Actions\EmbedProceduralClasses;
 use App\Domain\ProceduralClasses\Models\ProceduralClass;
+use App\Domain\Shared\Support\DocumentEmbedder;
 use Illuminate\Support\Collection;
-use Laravel\Ai\Embeddings;
 use Throwable;
 
 /**
@@ -27,8 +27,9 @@ use Throwable;
  * da primeira, que é exatamente a garantia que o desenho evita perder. São 120
  * vetores no pior caso — o custo é irrelevante ao lado de duas inferências.
  *
- * Degrada com elegância: sem Ollama, sem vetores ou com qualquer falha na
- * geração do embedding da consulta, devolve a coleção na ordem em que chegou —
+ * Degrada com elegância: sem provedor, sem modelo padrão, sem vetores do modelo
+ * padrão ou com qualquer falha na geração do embedding da consulta, devolve a
+ * coleção na ordem em que chegou —
  * específicas antes das genéricas, que é a ordenação do pivot e era o critério
  * anterior. Uma classificação um pouco pior é melhor do que uma exceção.
  */
@@ -46,24 +47,27 @@ final class ProceduralClassRankingQuery
             return $candidates;
         }
 
-        $ranked = $candidates->filter(
-            static fn (ProceduralClass $class): bool => $class->embedding !== null
-        );
+        // Só se compara vetor do modelo que gerou a consulta: um vetor de outro
+        // modelo tem as mesmas 768 posições e uma distância que não significa
+        // nada.
+        $current = DocumentEmbedder::model()->key();
+        $comparable = static fn (ProceduralClass $class): bool => $class->embedding !== null
+            && $class->embedding_model === $current;
+
+        $ranked = $candidates->filter($comparable);
 
         if ($ranked->isEmpty()) {
             return $candidates;
         }
 
-        // As sem vetor vão para o fim preservando a ordem original, em vez de
-        // sumirem: elas continuam sendo respostas válidas do `enum`.
+        // As sem vetor comparável vão para o fim preservando a ordem original,
+        // em vez de sumirem: elas continuam sendo respostas válidas do `enum`.
         return $ranked
             ->sortBy(fn (ProceduralClass $class): float => $this->cosineDistance(
                 $query,
                 $class->embedding ?? [],
             ))
-            ->concat($candidates->filter(
-                static fn (ProceduralClass $class): bool => $class->embedding === null
-            ))
+            ->concat($candidates->reject($comparable))
             ->values();
     }
 
@@ -73,11 +77,7 @@ final class ProceduralClassRankingQuery
     private function embedFacts(string $facts): ?array
     {
         try {
-            $response = Embeddings::for([EmbedProceduralClasses::queryFor($facts)])
-                ->timeout(60)
-                ->generate();
-
-            return $response->first();
+            return DocumentEmbedder::embedQueries([EmbedProceduralClasses::queryFor($facts)], 60)[0] ?? null;
         } catch (Throwable) {
             // Silencioso de propósito: a classificação segue sem o ranking, e
             // quem quiser o diagnóstico roda o comando de embedding.

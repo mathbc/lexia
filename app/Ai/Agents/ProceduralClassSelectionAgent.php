@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Ai\Agents;
 
 use App\Ai\Concerns\ConfiguresOllamaRuntime;
+use App\Ai\Concerns\UsesDefaultAiModel;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
@@ -62,24 +62,21 @@ use Laravel\Ai\Promptable;
  * mesmo prefixo constante, e a volta para a máquina reencontra o arranjo certo.
  *
  * The traps the sibling agent documents apply here unchanged: never send
- * `think: false` to an Ollama that reasons — dormant while the attribute below
- * points at Gemini, live again on the swap back — never drop the
- * `description()` on the justification, and leave the model to `config/ai.php`
- * rather than naming one in a `#[Model]`. So does the note on where the `enum`
- * guarantee comes from: a cloud `response_json_schema` today, Ollama's grammar
- * under the commented provider, which matters here because this agent's `enum`
- * is a list of integers.
+ * `think: false` to an Ollama that reasons — dormant while the default model is
+ * a cloud one, live again when an Ollama model is promoted — never drop the
+ * `description()` on the justification, and leave the model to the default row
+ * in `ai_models` rather than naming one in a `#[Model]`. So does the note on
+ * where the `enum` guarantee comes from: a cloud `response_json_schema` under a
+ * Gemini default, Ollama's grammar under an Ollama one, which matters here
+ * because this agent's `enum` is a list of integers.
  */
-// Trocar as duas linhas de lugar traz a inferência de volta para a máquina — a
-// troca mais um `config:clear` bastam, com o `gpt-oss:20b` baixado no daemon.
-#[Provider('gemini')]
-// #[Provider('ollama')]
 #[Timeout(360)]
 #[Temperature(0.2)]
 final class ProceduralClassSelectionAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use ConfiguresOllamaRuntime;
     use Promptable;
+    use UsesDefaultAiModel;
 
     /**
      * @param  string  $areaLabel  the area already decided, in the lawyer's words

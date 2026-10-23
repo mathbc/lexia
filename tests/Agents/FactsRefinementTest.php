@@ -54,9 +54,9 @@ use Tests\TestCase;
  *   de, perfazendo"). On the longer narrative it still drops that embedded
  *   clause and still reaches for a total now and then.
  *
- * Neither is what `OLLAMA_TEXT_MODEL` names today: the text came back from
- * Gemini onto `gpt-oss:20b`, which has not been measured against these two
- * cases. Run this test and rewrite the two bullets above with what it does.
+ * Neither is the model this test runs on today — the default TestCase pins,
+ * `gemini-3.7-flash` —, which has not been measured against these two cases.
+ * Run this test and rewrite the two bullets above with what it does.
  *
  * So the money question is not asserted on the harder case: it lives in code
  * instead, as `RefinedFactsData::unsupportedAmounts`, which is model

@@ -1,6 +1,8 @@
 import { Link } from '@inertiajs/react'
 import {
+    Binary,
     BookUser,
+    Bot,
     Building2,
     ChevronRight,
     ChevronsUpDown,
@@ -71,6 +73,18 @@ function registrationsFor(user: AuthUser): NavItem[] {
                 icon: Building2,
                 // A staff member inside a tenant is still browsing the registry.
                 isActive: (path: string) => path.startsWith('/contas') && !path.startsWith(usersHref),
+            }, {
+                // Os modelos são infraestrutura da plataforma, não dado de uma
+                // conta: só a equipe LexIA os vê.
+                label: 'Modelos de IA',
+                href: '/modelos-de-ia',
+                icon: Bot,
+                isActive: (path: string) => path.startsWith('/modelos-de-ia'),
+            }, {
+                label: 'Modelos de embedding',
+                href: '/modelos-de-embedding',
+                icon: Binary,
+                isActive: (path: string) => path.startsWith('/modelos-de-embedding'),
             }]
             : []),
         ...(user.role !== 'lawyer'

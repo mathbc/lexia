@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Ai\Agents;
 
 use App\Ai\Concerns\ConfiguresOllamaRuntime;
+use App\Ai\Concerns\UsesDefaultAiModel;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
@@ -77,25 +77,21 @@ use Laravel\Ai\Promptable;
  * as invented, and it arrives in worse Portuguese.
  *
  * The traps the sibling agents document apply unchanged: never send
- * `think: false` to an Ollama that reasons, and leave the model to
- * `config/ai.php` rather than naming one in a `#[Model]`.
+ * `think: false` to an Ollama that reasons, and leave the model to the default
+ * row in `ai_models` rather than naming one in a `#[Model]`.
  *
  * Reached through RefineLegalCaseFacts. Deliberately **not** wired into
  * ClassifyLegalCase: that Action reads a narrative to fill the wizard, while
  * this one rewrites a narrative the lawyer is looking at, which is a second
  * gesture on a screen and not part of the first.
  */
-// Trocar as duas linhas de lugar manda a inferência para o Gemini — o bloco
-// `gemini` do config/ai.php já está ativo, então a troca mais um `config:clear`
-// bastam.
-// #[Provider('gemini')]
-#[Provider('ollama')]
 #[Timeout(360)]
 #[Temperature(0.3)]
 final class FactsRefinementAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use ConfiguresOllamaRuntime;
     use Promptable;
+    use UsesDefaultAiModel;
 
     /**
      * @param  string  $dossier  the pleading around the narrative, as LegalCaseDossier writes it

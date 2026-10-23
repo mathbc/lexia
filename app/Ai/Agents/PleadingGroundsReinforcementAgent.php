@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Ai\Agents;
 
 use App\Ai\Concerns\ConfiguresOllamaRuntime;
+use App\Ai\Concerns\UsesDefaultAiModel;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\Type;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
@@ -67,16 +67,13 @@ use Laravel\Ai\Promptable;
  * the drafting agent answers and before the rulings are quoted, the signature
  * appended and the version stored.
  */
-// Trocar as duas linhas de lugar traz a inferência de volta para a máquina — a
-// troca mais um `config:clear` bastam, com o `gpt-oss:20b` baixado no daemon.
-#[Provider('gemini')]
-// #[Provider('ollama')]
 #[Timeout(360)]
 #[Temperature(0.3)]
 final class PleadingGroundsReinforcementAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use ConfiguresOllamaRuntime;
     use Promptable;
+    use UsesDefaultAiModel;
 
     /**
      * @param  string  $dossier  the theses, requests and rulings, as LegalCaseDossier::forGrounds() writes them

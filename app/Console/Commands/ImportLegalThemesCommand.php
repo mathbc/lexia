@@ -21,8 +21,8 @@ use Throwable;
  * Duas etapas com fronteiras diferentes. A importação é uma transação: ou o
  * arquivo inteiro entra, ou nada muda. A vetorização vem depois e fora dela,
  * porque são minutos de inferência e cada lote é gravado ao terminar — se o
- * Ollama cair no meio, os temas já estão na tabela e rodar de novo só embute
- * o que falta, já que o hash pula o que está em dia.
+ * provedor cair no meio, os temas já estão na tabela e rodar de novo só embute
+ * o que falta, já que o hash e o modelo pulam o que está em dia.
  *
  * Em dia, a segunda execução baixa o arquivo, não cria nada e não embute nada.
  */

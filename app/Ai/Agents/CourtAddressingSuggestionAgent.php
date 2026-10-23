@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace App\Ai\Agents;
 
 use App\Ai\Concerns\ConfiguresOllamaRuntime;
+use App\Ai\Concerns\UsesDefaultAiModel;
 use App\Domain\LegalCases\Enums\CourtDivision;
 use App\Domain\LegalCases\Enums\ForumSource;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\StringType;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
@@ -57,16 +57,13 @@ use Laravel\Ai\Promptable;
  * Reached through SuggestCourtAddressing, which the first step's "Consultar
  * IA" calls on its own and ClassifyLegalCase calls after its concurrent block.
  */
-// Trocar as duas linhas de lugar traz a inferência de volta para a máquina — a
-// troca mais um `config:clear` bastam, com o `gpt-oss:20b` baixado no daemon.
-#[Provider('gemini')]
-// #[Provider('ollama')]
 #[Timeout(360)]
 #[Temperature(0.1)]
 final class CourtAddressingSuggestionAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use ConfiguresOllamaRuntime;
     use Promptable;
+    use UsesDefaultAiModel;
 
     /**
      * @param  string  $areaLabel  the area already decided, in the lawyer's words

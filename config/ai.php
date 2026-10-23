@@ -9,39 +9,23 @@ return [
     | Default AI Provider Names
     |--------------------------------------------------------------------------
     |
-    | Everything local again: text and embeddings both answer from the Ollama
-    | daemon on the office machine.
+    | Not where the platform's models are chosen any more. Which text model the
+    | agents run on and which embedding model vectorizes the catalogues are rows
+    | flagged `default` in `ai_models` and `embedding_models`, kept by LexIA
+    | staff in /modelos-de-ia and /modelos-de-embedding and seeded by
+    | `php artisan lexia:install`. Every agent answers `provider()` and
+    | `model()` from that row (UsesDefaultAiModel), and DocumentEmbedder passes
+    | provider, model and dimensions on every embedding request — so neither
+    | key below is ever reached by the application.
     |
-    | Text came back with `gpt-oss:20b`, and the price is the one the move to
-    | Gemini had bought off — latency. It is why every agent carries
-    | `#[Timeout(360)]` rather than the 180 the cloud was comfortable with: a
-    | 20B model answering on the office machine is slower than a flash model
-    | answering from a datacentre, and a timeout tuned for the second one turns
-    | a working local inference into an exception. `POST /pecas/classificar`
-    | runs its first four steps concurrently and then waits on the research,
-    | which is the debt the route's `asController()` documents and a queue is
-    | the way out of. What it buys back: the client's narrative leaves the
-    | office only for the thesis research, and there is almost no quota to pay.
+    | They stay, pointed at Gemini, because the package merges its own config
+    | shallowly: a key removed here comes back from the vendor file, which
+    | points embeddings at OpenAI, a provider this project has no key for.
     |
-    | Embeddings never left. The catalogue is 615 rows already vectorised with
-    | `nomic-embed-text`, a vector from one model is not comparable with a
-    | vector from another, and it is the width `procedural_classes.embedding`
-    | was declared with — and the width the Jurisprudência corpus will be
-    | declared with.
-    |
-    | The Gemini block below is no longer commented out, and that is not the
-    | move back to the cloud: `AI_PROVIDER` says `ollama`, and **one** agent
-    | asks otherwise. LegalThesisResearchAgent searches the official portals, so
-    | it needs provider-side web tools, and Ollama does not merely lack them —
-    | `OllamaGateway::mapTools()` throws a RuntimeException on the first
-    | `ProviderTool` it sees. That agent has no local option and the attribute
-    | says so; every other one, including the transcriber that reads its sheet,
-    | answers from the daemon.
-    |
-    | Moving the *text* back to the cloud wholesale is still the same two
-    | gestures it always was: put `AI_PROVIDER=gemini` in the `.env` and swap
-    | the `#[Provider('ollama')]` of the seven local agents for the line
-    | commented above each one.
+    | Every agent carries `#[Timeout(360)]`, sized for the slowest option the
+    | catalogue can hold — a 20B model answering from the office daemon — and
+    | not for a flash model answering from a datacentre: a timeout tuned for
+    | the second turns a working local inference into an exception.
     |
     | The keys for images, audio, transcription and reranking are deliberately
     | absent — the published default points each of them at a provider that
@@ -50,8 +34,8 @@ return [
     |
     */
 
-    'default' => env('AI_PROVIDER', 'ollama'),
-    'default_for_embeddings' => env('AI_EMBEDDINGS_PROVIDER', 'ollama'),
+    'default' => 'gemini',
+    'default_for_embeddings' => 'gemini',
 
     /*
     |--------------------------------------------------------------------------
@@ -88,10 +72,10 @@ return [
     | narrative and the answer, and 24k leaves real headroom where 16k left
     | almost none.
     |
-    | With text back on Ollama this is a setting again rather than documentation:
-    | `ConfiguresOllamaRuntime` emits `num_ctx`, which is Ollama's spelling,
-    | so the number now reaches the wire. It matters because Ollama truncates an
-    | overrunning prompt in silence, leaving an answer that still reads
+    | It only reaches the wire when the default model is an Ollama one:
+    | `ConfiguresOllamaRuntime` emits it as `num_ctx`, Ollama's spelling, and
+    | nothing for a cloud provider. It matters there because Ollama truncates
+    | an overrunning prompt in silence, leaving an answer that still reads
     | plausible on top of a system prompt that lost its tail.
     |
     */
@@ -104,7 +88,8 @@ return [
     |--------------------------------------------------------------------------
     |
     | Duas grafias que só o Ollama entende, emitidas por
-    | `App\Ai\Concerns\ConfiguresOllamaRuntime` ao lado do `num_ctx` acima.
+    | `App\Ai\Concerns\ConfiguresOllamaRuntime` ao lado do `num_ctx` acima —
+    | e só quando o modelo padrão é do Ollama.
     |
     | `keep_alive` é quanto tempo o modelo fica residente. O default do daemon é
     | cinco minutos, e toda pausa maior cobra da requisição seguinte a recarga
@@ -150,13 +135,13 @@ return [
     | consegue interromper um `curl_exec()` bloqueado, então o processo é
     | abatido em vez de lançar exceção — nada é gravado e nada é capturado.
     |
-    | Quem aplica é `App\Http\Middleware\AllowLongInference`, e só nas quatro
-    | rotas que de fato esperam por uma inferência. Ele nunca abaixa um limite:
+    | Quem aplica é `App\Http\Middleware\AllowLongInference`, e só nas rotas
+    | que de fato esperam por uma inferência. Ele nunca abaixa um limite:
     | zero é ilimitado, que é o que a CLI e o `artisan serve` entregam.
     |
     | 900 s é o pior caso com folga. A pesquisa de teses são **dois** agentes em
-    | série — o do Gemini abrindo os portais e o transcritor local —, cada um
-    | com 360 s de teto, mais o que a gravação custa. As demais rotas cabem
+    | série — o pesquisador abrindo os portais e o transcritor —, cada um com
+    | 360 s de teto, mais o que a gravação custa. As demais rotas cabem
     | numa fração disso e usam o mesmo número por não haver motivo para
     | distingui-las.
     |
@@ -187,8 +172,8 @@ return [
     | (ProceduralClassRankingQuery). O piso garante um mínimo de classes
     | descritas mesmo que as primeiras sejam anormalmente longas.
     |
-    | Com o texto de volta no Ollama o teto volta a ser também restrição física:
-    | 16 KB de descrições mais o guia de conhecimento têm de caber nos 24k de
+    | Com um modelo padrão do Ollama o teto é também restrição física: 16 KB de
+    | descrições mais o guia de conhecimento têm de caber nos 24k de
     | `context_window` acima, e não há janela de nuvem para absorver o excesso.
     | Continua valendo o motivo original — descrever 54 classes para escolher
     | uma dilui a atenção. Suba se o modelo errar por não ter visto a classe
@@ -218,98 +203,60 @@ return [
     | AI Providers
     |--------------------------------------------------------------------------
     |
-    | One provider, both jobs, and every other one removed: failover walks this
-    | list, so a provider left here without credentials is just a slower way to
-    | fail. `default` picks who answers in prose and `default_for_embeddings`
-    | who answers in vectors — hoje é o mesmo daemon respondendo às duas
-    | perguntas com modelos diferentes.
+    | Only how to reach each provider: the key and the URL, read from the
+    | environment. Which model runs is the database's (see the top of this
+    | file), so there is no `models` key — the SDK would only read it for a
+    | model nobody named, and every request here names one.
     |
-    | The `models` key is not decoration, and it is the *only* place a text
-    | model is named: no agent carries a `#[Model]` attribute, so every one of
-    | them resolves to its provider's `text.default` and a single env var swaps
-    | the model for the whole application. The three text entries all point at
-    | the same model because there is only one, and the SDK asks for a cheapest
-    | and a smartest by name.
+    | Each block's name is an `App\Domain\AiModels\Enums\AiProvider` value: a
+    | registered model is reached through the block of its provider, and a case
+    | in the enum without a block here is a model nothing can call.
     |
-    | 768 is what `nomic-embed-text` returns; it is the width
-    | `procedural_classes.embedding` was declared with, and the width the
-    | vector columns of the Jurisprudência module will be declared with.
+    | Every other provider is removed: failover walks this list, so a provider
+    | left here without credentials is just a slower way to fail.
     |
     */
 
     'providers' => [
 
         /*
-        | Ativo, e por um agente só. `AI_PROVIDER` continua `ollama`: sete dos
-        | oito seguem na máquina, e quem aponta para cá é o
-        | `#[Provider('gemini')]` de LegalThesisResearchAgent.
+        | O único que pesquisa: buscar e ler página na web são ferramentas do
+        | lado do provedor, e o gateway do Ollama lança exceção ao ver a
+        | primeira delas. Por isso os três agentes de pesquisa exigem um
+        | modelo padrão daqui (UsesDefaultWebSearchModel).
         |
-        | Ele não tem escolha: pesquisar exige buscar e ler página na web, que
-        | no pacote são ferramentas do lado do provedor, e o gateway do Ollama
-        | lança exceção ao ver a primeira delas. Consequência de fronteira: o
-        | relato do cliente só sai do escritório na pesquisa de teses, e ali
-        | `LegalCaseDossier::forResearch()` já corta o cliente e o réu inteiros.
-        |
-        | A chave `models` não é enfeite: sem ela o GeminiProvider cai num
-        | padrão que muda com a versão do pacote. Não há `embeddings` de
-        | propósito — quem embute é o Ollama abaixo. Se uma entrada de
-        | embeddings voltar, `dimensions` chega ao Gemini como
-        | `outputDimensionality` e precisa valer 768, ou a coluna vetorial
-        | precisa de migration no mesmo fôlego.
+        | Os embeddings chegam com `outputDimensionality` 768, a largura das
+        | colunas vetoriais, e com o `taskType` da tarefa (DocumentEmbedder).
         |
         | A armadilha desta escolha, medida no código do pacote e registrada
-        | por extenso no agente: `GeminiProvider::webSearchToolOptions()` e
-        | `webFetchToolOptions()` devolvem `[]`, então o `->allow([...])` que
-        | restringe a busca aos portais oficiais é descartado antes de virar
-        | requisição — e não há escape hatch, porque este provider também não
-        | lê o `providerOptions()` da ferramenta. A lista de domínios não é
-        | imposta aqui. Quem a impõe é LegalResearchData, na volta.
+        | por extenso no LegalThesisResearchAgent:
+        | `GeminiProvider::webSearchToolOptions()` e `webFetchToolOptions()`
+        | devolvem `[]`, então o `->allow([...])` que restringe a busca aos
+        | portais oficiais é descartado antes de virar requisição — e não há
+        | escape hatch, porque este provider também não lê o
+        | `providerOptions()` da ferramenta. A lista de domínios não é imposta
+        | aqui. Quem a impõe é LegalResearchData, na volta.
         */
 
         'gemini' => [
             'driver' => 'gemini',
             'key' => env('GEMINI_API_KEY'),
             'url' => env('GEMINI_URL', 'https://generativelanguage.googleapis.com/v1beta/'),
-
-            'models' => [
-                'text' => [
-                    'default' => env('GEMINI_TEXT_MODEL', 'gemini-3.6-flash'),
-                    'cheapest' => env('GEMINI_TEXT_MODEL', 'gemini-3.6-flash'),
-                    'smartest' => env('GEMINI_TEXT_MODEL', 'gemini-3.6-flash'),
-                ],
-            ],
         ],
+
+        /*
+        | O daemon local, para um modelo padrão do Ollama — em desenvolvimento,
+        | ou numa máquina do escritório. O `gpt-oss:20b` raciocina, e é
+        | exatamente o modelo que respondia com conteúdo vazio quando lhe
+        | mandavam `think: false` — a armadilha que o `providerOptions()` dos
+        | agentes não deve reintroduzir. Com o thinking ligado (o padrão) o
+        | Ollama separa o raciocínio em `message.thinking` e o JSON chega limpo.
+        */
 
         'ollama' => [
             'driver' => 'ollama',
             'key' => env('OLLAMA_API_KEY', ''),
             'url' => env('OLLAMA_URL', 'http://localhost:11434'),
-
-            'models' => [
-                /*
-                | Em uso pelos sete agentes locais. O `gpt-oss:20b` raciocina, e é
-                | exatamente o modelo que respondia com conteúdo vazio quando
-                | lhe mandavam `think: false` — a armadilha que o
-                | `providerOptions()` dos agentes não deve reintroduzir. Com o
-                | thinking ligado (o padrão) o Ollama separa o raciocínio em
-                | `message.thinking` e o JSON chega limpo.
-                |
-                | Nomear aqui é o que faz a troca de modelo ser uma linha de
-                | `.env`: sem este bloco o OllamaProvider cairia em `qwen3.5:4b`,
-                | que não é um modelo que este projeto baixe.
-                */
-                'text' => [
-                    'default' => env('OLLAMA_TEXT_MODEL', 'gpt-oss:20b'),
-                    'cheapest' => env('OLLAMA_TEXT_MODEL', 'gpt-oss:20b'),
-                    'smartest' => env('OLLAMA_TEXT_MODEL', 'gpt-oss:20b'),
-                ],
-
-                // É o que vetoriza o catálogo, e não mudou com a volta do texto.
-                'embeddings' => [
-                    'default' => env('OLLAMA_EMBEDDINGS_MODEL', 'nomic-embed-text'),
-                    'dimensions' => 768,
-                ],
-            ],
         ],
     ],
 

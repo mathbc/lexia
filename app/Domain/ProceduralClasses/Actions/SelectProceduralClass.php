@@ -100,8 +100,10 @@ final class SelectProceduralClass
             // stale to do, so it costs one query.
             EmbedProceduralClasses::run($candidates);
         } catch (Throwable) {
-            // Sem Ollama de embeddings a classificação ainda funciona: cai na
-            // ordem do pivot, específicas antes das genéricas.
+            // Sem provedor ou sem modelo de embeddings a classificação ainda
+            // funciona: cai na ordem do pivot, específicas antes das genéricas.
+            // É também aqui que uma troca de modelo se cura: as candidatas
+            // gravadas pelo modelo anterior estão velhas e são refeitas.
         }
 
         return $this->ranking->byRelevanceTo($candidates, $facts);

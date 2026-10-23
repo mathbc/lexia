@@ -22,7 +22,8 @@ PostgreSQL com pgvector, PHP 8.4+.
 ```bash
 docker compose up -d                 # Postgres + pgvector na porta 5442
 launchctl setenv OLLAMA_NUM_PARALLEL 4      # sem isto o daemon atende uma por vez
-php artisan migrate:fresh --seed     # senha de todos os usuários: password
+php artisan migrate:fresh            # o seeder está vazio de propósito
+php artisan lexia:install            # conta da LexIA, admin do sistema e modelos padrão (--name, --email, --password)
 composer dev                         # serve + queue + pail + vite
 php artisan test                     # PHPUnit contra o banco lexia_testing
 php artisan lexia:embed-procedural-classes  # vetores do catálogo (após mexer nas descrições)
@@ -75,6 +76,29 @@ edição de conta trabalham com `AccountType::customerCases()`, e a conta da
 plataforma não pode ser desativada nem excluída (desativá-la reprovaria
 `canAccessPlatform()` de toda a equipe). Testes que contam contas precisam
 descontá-la — os do painel, somá-la (ver "Os indicadores").
+
+## A instalação
+
+**Não há seeder.** O `DatabaseSeeder` está vazio de propósito: o Laravel Cloud recusa
+`db:seed`, e as factories precisam do faker, que é `require-dev`. Os dados de
+demonstração (os dois escritórios, os `@lexia.test`) saíram junto. O que um banco novo
+precisa antes de alguém entrar é `php artisan lexia:install`:
+
+1. `EnsurePlatformAccount` garante a conta da LexIA — a migration continua sendo quem a
+   cria; isto é a rede para um banco que a perdeu, e restaura uma excluída logicamente.
+2. `CreatePlatformAdmin` cria o primeiro `PlatformAdmin`, o único usuário que nenhuma tela
+   cria: senha escolhida ali (não convite, porque um banco novo pode não ter e-mail) e
+   e-mail já verificado. Os dados vêm de `--name`, `--email` e `--password`; com terminal,
+   o que faltar é perguntado; sem terminal, a opção que falta reprova o comando.
+3. `RegisterDefaultModels` cadastra `gemini-3.7-flash` e `gemini-embedding-001` (ver "Os
+   modelos", em "Os agentes").
+
+Cada passo é idempotente, então o comando pode rodar em todo deploy: o admin é pulado
+quando já existe um `PlatformAdmin` e nenhuma opção pede outro (um e-mail já cadastrado
+também é pulado, sem trocar a senha), e um modelo só vira padrão num catálogo sem padrão —
+rodar de novo nunca desfaz a escolha feita na tela. Em produção a ordem é `migrate
+--force`, `lexia:install`, `lexia:import-legal-themes`, com um **worker de fila** de pé:
+promover um modelo de embedding enfileira a vetorização dos catálogos.
 
 ## O design system
 
@@ -256,72 +280,65 @@ a cada tentativa). O estouro chega ao formulário como erro de validação sob
 - **Nunca mande `think: false`** a um modelo que raciocina: o `gpt-oss:20b`
   respondia com conteúdo vazio e a linha qwen3 pensa por padrão. O padrão
   (thinking ligado) já entrega JSON limpo, porque o Ollama separa o raciocínio
-  em `message.thinking`. A armadilha está **viva**, e no pior arranjo possível:
-  o modelo de texto configurado é exatamente aquele em que ela foi medida.
+  em `message.thinking`. A armadilha fica **dormente** com um padrão do Gemini e
+  acorda no instante em que um modelo do Ollama é promovido — o `gpt-oss:20b`
+  primeiro, que é aquele em que ela foi medida.
 - `sebastian/complexity` está vendorizado mas **quebra em enums** — por isso a
   skill de complexidade usa `nikic/php-parser` direto.
 
 ## Os agentes
 
-`laravel/ai` com **dois providers**, e a divisão responde a uma pergunta só: quem precisa
-da internet? São **oito agentes**; sete rodam no Ollama com `gpt-oss:20b`, e o oitavo é
-`PleadingDraftingAgent`, que redige a minuta — ver "A minuta", abaixo. A minuta tem ainda
-um segundo agente, `PleadingGroundsReinforcementAgent`, que reforça o DO DIREITO e segue o
-provider do de redação. A etapa 5 ganhou mais dois fora da conta original, em série:
-`LegalQuestionFormulationAgent`, que reescreve o relato como as questões de direito que ele
-levanta, e `LegalThemeSelectionAgent`, que ordena por relevância os temas do STJ que a busca
-trouxe para elas — ver "Os temas do STJ", abaixo; os dois seguem o `#[Provider('gemini')]`
-dos seletores, com a linha do Ollama comentada acima. E o enquadramento ganhou um terceiro
-elo, `InjunctiveReliefSuggestionAgent`, que diz se a inicial deve pedir tutela de urgência —
-ver "A tutela de urgência", abaixo; ele segue o `#[Provider]` dos irmãos da cadeia. E o
-endereçamento trouxe mais dois, em série: `CourtAddressingSuggestionAgent`, que decide o
-foro competente, e `JudicialSystemSelectionAgent`, que escolhe o sistema quando o tribunal
-tem dois — ver "O endereçamento e o sistema judicial", abaixo; os dois seguem o mesmo
-`#[Provider('gemini')]`. E a etapa 5 ganhou uma terceira aba com o seu par, em série:
-`DoctrineResearchAgent`, que busca no acervo do LexML (Gemini, como o de jurisprudência), e
-`DoctrineTranscriptionAgent`, que transcreve a ficha (Ollama) — ver "A doutrina", abaixo.
-Os embeddings do catálogo nunca saíram da máquina: `nomic-embed-text`, 768 dimensões.
+`laravel/ai` com dois providers configurados, Gemini e Ollama, e **dezenove agentes**, todos
+no mesmo modelo: o **modelo de IA padrão** da plataforma. A lista e o papel de cada um
+estão em `app/Ai/README.md`; as seções abaixo contam a cadeia de cada etapa — o
+enquadramento, a revisão forense, a jurisprudência, a doutrina, a tutela, o endereçamento e
+a minuta.
 
-O **Gemini** responde por **um**: `LegalThesisResearchAgent`, que pesquisa nos portais
-oficiais. Ele não tem opção local, e a falha não seria graciosa —
-`OllamaGateway::mapTools()` lança `RuntimeException` no primeiro `ProviderTool` que vê, de
-modo que apontá-lo para o daemon não degrada a pesquisa, apaga-a (ver "A pesquisa de
-teses", abaixo). O transcritor que lê a ficha dele **é** local: transcrever pede um
-schema, e schema o Ollama impõe como gramática.
+### Os modelos
 
-`PracticeAreaClassificationAgent` chegou a apontar para a nuvem, trocando cota por
-latência já que a área abre a cadeia mais longa de `POST /pecas/classificar`, e voltou. A
-consequência de fronteira que essa ida trazia junto era grande: o relato inteiro do
-cliente saía do escritório no enquadramento, sem o estreitamento que
-`LegalCaseDossier::forResearch()` faz na pesquisa. Hoje o relato só sai na pesquisa, e ali
-já sai cortado.
+Os modelos moram no **banco**, não no `.env`, em dois catálogos globais mantidos pela equipe
+LexIA (`app/Domain/AiModels`, telas `/modelos-de-ia` e `/modelos-de-embedding`, só para o
+`PlatformAdmin`): `AiModel` para o texto e `EmbeddingModel` para os vetores. Cada tabela tem
+uma coluna `default`, e um índice único parcial (`WHERE "default"`) garante que haja no
+máximo uma — `default` é palavra reservada no Postgres, então SQL cru a põe entre aspas. O
+`.env` ficou só com o que é segredo ou endereço: `GEMINI_API_KEY`, `OLLAMA_URL`.
 
-`AI_PROVIDER` é `ollama`; quem aponta para a nuvem é o `#[Provider('gemini')]` de um
-agente só, e mandar qualquer outro para lá é trocar o atributo pela linha comentada logo
-acima. O preço da volta está no atributo vizinho: **todo agente carrega
-`#[Timeout(360)]`**, o dobro do que bastava quando um flash respondia de um datacenter —
-um timeout calibrado para a nuvem transforma uma inferência local que funciona numa
-exceção. Os embeddings nunca saíram: as 615 classes já estão vetorizadas com o nomic,
-vetor de um modelo não se compara com vetor de outro, e mover custaria uma reembutida
-inteira para comprar nada.
+- **Nenhum agente nomeia provider nem modelo.** O SDK pergunta `provider()` e `model()` ao
+  agente antes de olhar atributo, e o trait `UsesDefaultAiModel` responde as duas pelo
+  `DefaultModels`. Trocar o modelo de todos é "Definir como padrão" numa linha da tela.
+- **`DefaultModels` é `scoped`**: lido uma vez por request ou job e esquecido entre eles, de
+  modo que um worker vê a troca no job seguinte. Sem padrão cadastrado ele lança
+  `MissingDefaultModelException` mandando rodar `lexia:install` — não há volta ao `.env`.
+- **Os três pesquisadores exigem Gemini.** `LegalThesisResearchAgent`,
+  `CourtDecisionResearchAgent` e `DoctrineResearchAgent` buscam e leem página por
+  ferramentas do lado do provedor, e `OllamaGateway::mapTools()` lança no primeiro
+  `ProviderTool` que vê. Eles usam `UsesDefaultWebSearchModel`, que recusa um padrão sem
+  busca na web antes de montar o prompt. Um padrão do Ollama continua possível em
+  desenvolvimento: tudo o mais roda local, e só a pesquisa para.
+- **Trocar o modelo de embedding não é de graça.** Vetor de um modelo não se compara com
+  vetor de outro, e os dois têm as mesmas 768 posições — a distância sai e não significa
+  nada. Por isso cada linha vetorizada guarda em `embedding_model` a `key()` do modelo que a
+  gerou, as buscas só comparam linhas do padrão, e promover outro modelo (ou renomear o
+  padrão) enfileira `EmbedCatalogs`, que refaz os dois catálogos. Até ele terminar, a busca
+  de temas falha alto, como num catálogo vazio. `DocumentEmbedder` é o único lugar que pede
+  embedding: sempre a 768 dimensões (`EmbeddingModel::DIMENSIONS`), com os prefixos do nomic
+  no Ollama e com `taskType` no Gemini.
+- **Nos testes**, o `TestCase` fixa os padrões em memória (`gemini-3.7-flash` e o
+  `nomic-embed-text`, cujos prefixos as buscas afirmam): agente falso não precisa de linha
+  no banco. `usingDefaultModels()` troca o par; `readDefaultModelsFromDatabase()` volta à
+  resolução de verdade.
 
-Consequência operacional: **o Ollama é dependência de desenvolvimento inteira** —
-`ollama pull gpt-oss:20b` e `ollama pull nomic-embed-text` antes de começar. Sem o
-daemon de pé nada infere, e a degradação não é uniforme: o texto falha alto, e
-`ProceduralClassRankingQuery` degrada em **silêncio** para a ordem do pivot, com as
-classificações piorando sem erro nenhum.
+O preço de um padrão local está no atributo: **todo agente carrega `#[Timeout(360)]`**,
+dimensionado para o `gpt-oss:20b` respondendo do daemon e não para um flash respondendo de
+um datacenter — um timeout calibrado para a nuvem transforma uma inferência local que
+funciona numa exceção. Com um padrão do Ollama, o daemon vira dependência de
+desenvolvimento inteira (`ollama pull` do modelo antes de começar), e a degradação não é
+uniforme: o texto falha alto, e `ProceduralClassRankingQuery` degrada em **silêncio** para a
+ordem do pivot, com as classificações piorando sem erro nenhum.
 
-O bloco `gemini` do `config/ai.php` já está ativo — a pesquisa de teses depende dele —,
-então mandar **todo** o texto para a nuvem são dois gestos: pôr `AI_PROVIDER=gemini` no
-`.env` e trocar o `#[Provider('ollama')]` dos sete agentes ainda locais pela linha
-comentada logo acima de cada um, mais `config:clear`. A chave `models` no bloco não é enfeite: sem
-ela o `GeminiProvider` cai num default que muda com a versão do pacote.
-
-Nem o modelo nem as opções de runtime pertencem a um agente. Nenhum deles carrega
-`#[Model]` — o nome do modelo vive em `OLLAMA_TEXT_MODEL` e o SDK resolve cada agente por
-`defaultTextModel()` —, e as três grafias do Ollama saem de `config/ai.php` pelo trait
-`ConfiguresOllamaRuntime`. Fora do Ollama ele devolve `[]`, então é documentação no dia
-em que um agente apontar para a nuvem.
+As opções de runtime também não pertencem a um agente: as três grafias do Ollama saem de
+`config/ai.php` pelo trait `ConfiguresOllamaRuntime`, e só quando o padrão é do Ollama —
+fora dele o trait devolve `[]`.
 
 - **`num_ctx`** (`ai.context_window`, 24576) é a janela que o prompt pode encher. Sem ele
   o daemon truncaria em silêncio um prompt grande, e o maior prompt de classe tem 10.946
@@ -545,12 +562,10 @@ medido contra essa tabela, e é por isso que a saída deste agente é uma minuta
 advogado aceitar, nunca um campo que se preenche sozinho.
 
 Testes de agente ficam em `tests/Agents`, no grupo `agents`, **fora** do
-`php artisan test` padrão porque gastam inferência de verdade. Para quase todos a conta
-é só o tempo da máquina — Ollama de pé com `gpt-oss:20b` e `nomic-embed-text` baixados —,
-e com os agentes locais e `#[Timeout(360)]` esse tempo é real: conte minutos, não segundos.
-`LegalCaseClassificationTest` voltou a custar só o daemon: as quatro etapas são locais, e
-a pesquisa saiu da cadeia. Com `think: low` esse tempo caiu de minutos para dezenas de
-segundos.
+`php artisan test` padrão porque gastam inferência de verdade. Eles herdam os padrões que o
+`TestCase` fixa: o texto no `gemini-3.7-flash`, então custam **cota do Gemini**, e os
+embeddings no `nomic-embed-text`, então pedem o Ollama de pé com o modelo baixado. Para
+rodá-los num modelo local, `usingDefaultModels()` no `setUp`.
 `LegalThesisResearchTest` é o extremo e custa **cota do Gemini** mais rede: ele pesquisa
 nos portais de verdade, leva minutos e pode ficar vermelho porque o STJ está fora do ar,
 e não porque o prompt regrediu. Tudo o que nele não depende do modelo — a guarda de
@@ -649,13 +664,13 @@ assinatura.
 
 ## A pesquisa de teses
 
-A primeira aba da etapa 5, e um dos três lugares do projeto que **saem da máquina** — os
+A primeira aba da etapa 5, e um dos três lugares do projeto que **abrem a web** — os
 outros são a pesquisa de jurisprudência da etapa 6 e a de doutrina da terceira aba, que são
 este mesmo desenho contra outro portal. Um agente
 de pesquisa que não consegue abrir o `stj.jus.br` é um modelo recitando súmula de memória,
 que é exatamente o que o prompt inteiro existe para impedir — e buscar e ler página são
-ferramentas do lado do provedor, que o `OllamaProvider` recusa antes de montar requisição.
-O que viaja é estreitado para compensar: `LegalCaseDossier::forResearch()` corta o cliente
+ferramentas do lado do provedor, que o `OllamaProvider` recusa antes de montar requisição —
+daí os três exigirem um modelo padrão do Gemini (ver "Os modelos"). O que viaja é estreitado para compensar: `LegalCaseDossier::forResearch()` corta o cliente
 e o réu inteiros. O relato vai, porque não se pesquisa tese sem os fatos que a levantam;
 os nomes não vão.
 
@@ -668,9 +683,10 @@ Súmula 430 e citou a capa do STJ como onde a leu, porque não leu nada. Então
 estrutura aninhada. `ResearchLegalCaseTheses` chama os dois em série. O custo é o inverso
 do usual: o que a ficha não escrever, o transcritor não inventa — e também não recupera.
 
-Note que o par está dividido entre os dois providers: só o pesquisador é do Gemini. O
-transcritor não pede rede, pede schema, e schema o Ollama impõe como gramática — então ele
-é local como os outros seis, e a ficha é a única coisa que atravessa a fronteira.
+O par já esteve dividido entre os dois providers — o pesquisador no Gemini, o transcritor
+no Ollama, que impõe schema como gramática. Hoje os dois rodam no modelo padrão, e como o
+pesquisador exige Gemini, o transcritor também roda lá; o que continua valendo é a divisão
+em si: busca e schema nunca dividem um pedido.
 
 Três armadilhas medidas, todas do Gemini e todas silenciosas:
 
@@ -818,7 +834,7 @@ seguintes voltaram como o desafio em JavaScript do Senado (o `/sru` liberado no 
 404; o `/busca/SRU`, o desafio). Contornar o desafio está fora de questão. O que é liberado
 e indexado é o registro `/urn/urn:lex:br:rede.virtual.bibliotecas:<tipo>:…`, então a
 mecânica é a da jurisprudência: `DoctrineResearchAgent` (Gemini, só `WebSearch`, sem schema)
-acha as obras e escreve uma ficha, `DoctrineTranscriptionAgent` (Ollama, schema) a copia, e
+acha as obras e escreve uma ficha, `DoctrineTranscriptionAgent` (schema, sem busca) a copia, e
 `DoctrineRecordReader` lê cada registro — tipo, autor, título, ano, sumário e a linha de
 publicação vêm da página, nunca do modelo. A leitura da página (fetch, desafio, rótulos) é
 `LexmlPage`, compartilhada com `LexmlRecordReader`.
@@ -921,7 +937,7 @@ redigir a petição inteira.
 A fronteira entre esses efeitos é o desenho. As três gravações e a bandeira são **uma
 transação**, porque são uma afirmação só sobre a peça: são estes os argumentos, estes os
 temas e estes os julgados, e ela está pronta. A redação fica **fora**, com `try/catch` e `report()` — é a
-única parte que sai da máquina e a única que uma cota esgotada pode levar embora.
+única parte que chama um provedor e a única que uma cota esgotada pode levar embora.
 Falhando, a peça continua registrada e a aba Minuta abre vazia oferecendo o botão de
 gerar. Com uma versão na mão, o mesmo `GenerateLegalPleading` é o **"Gerar novamente"**:
 redige sobre a peça como ela está agora e grava a versão seguinte. Ele já foi recusado
@@ -1102,7 +1118,7 @@ Quatro fatos do arquivo decidem o desenho, todos medidos nele:
    um sumiço é mais provavelmente exportação com defeito.
 
 A vetorização vem depois da transação e fora dela, e usa o `DocumentEmbedder` do
-catálogo de classes — mesmo modelo, mesmo prefixo do nomic, mesmo hash. O texto embutido
+catálogo de classes — mesmo modelo padrão, mesma tarefa de documento, mesmo hash. O texto embutido
 é questão, tese, delimitação e assuntos; situação, datas e órgão ficam de fora porque são
 filtro de SQL, e dentro do texto uma mudança de situação trocaria o hash e reembutiria um
 tema que não mudou. O comando itera em `chunkById(256)`: os 2,4 mil vetores hidratados
@@ -1128,9 +1144,10 @@ cada uma (934, 924, 1144, 1205, 1434, 1441).
    lembrado de memória não ajuda a busca. As questões vão para `theme_findings` e a aba as
    lista, para que o advogado veja que ângulo do caso nunca foi perguntado.
 2. **A recuperação** é `LegalThemeCandidatesQuery`: cada questão vira um vetor pelo
-   `EmbedLegalThemes::queryFor()` — o `search_query:` do nomic, par do `search_document:`
-   da gravação, sem a área na frente, porque a questão já nomeia o instituto — e o
-   Postgres devolve os mais próximos pelo `<=>`. As listas são **intercaladas por
+   `EmbedLegalThemes::queryFor()` — o lado de consulta do par (o `search_query:` do nomic,
+   ou o `RETRIEVAL_QUERY` do Gemini), sem a área na frente, porque a questão já nomeia o
+   instituto — e o Postgres devolve os mais próximos pelo `<=>`, só entre as linhas do
+   modelo de embedding padrão. As listas são **intercaladas por
    posição** até `ai.retrieval.theme_candidates` (20): o primeiro de cada questão entra
    antes do segundo de qualquer uma, para que três questões sobre o furto não empurrem
    para fora a única sobre a busca pessoal. É **top-k de verdade**, ao contrário do

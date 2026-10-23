@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Ai\Agents;
 
 use App\Ai\Concerns\ConfiguresOllamaRuntime;
+use App\Ai\Concerns\UsesDefaultAiModel;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
@@ -39,16 +39,17 @@ use Laravel\Ai\Promptable;
  *
  * 1. Never send `think: false` to a thinking model. `gpt-oss:20b` came back
  *    with empty content when told to skip it, and the qwen3 line reasons by
- *    default too. Dormant for this agent while the attribute below points at
- *    Gemini — `ConfiguresOllamaRuntime` emits nothing outside the daemon — and
- *    live again the moment the two provider lines are swapped back, because
- *    `gpt-oss:20b` is the configured local model and the one that measured it.
+ *    default too. Dormant while the default model is a cloud one —
+ *    `ConfiguresOllamaRuntime` emits nothing outside the daemon — and live
+ *    again the moment an Ollama model is promoted, `gpt-oss:20b` first among
+ *    them, the one that measured it.
  * 2. The justification needs its `description()`. Without one the model
  *    answers with a slug-shaped fragment instead of a sentence. True under
  *    either provider — both read per-property descriptions out of the schema.
  *
- * No `#[Model]` here on purpose: the model is `config/ai.php`'s to name, so a
- * swap is an env change rather than an edit to every agent.
+ * No `#[Model]` and no `#[Provider]` here on purpose: both are the default
+ * row's in `ai_models`, so a swap is a click in /modelos-de-ia rather than an
+ * edit to every agent.
  *
  * The schema is not repeated in the instructions, under either provider, but
  * for different reasons: the Ollama gateway appends it to the system prompt
@@ -60,18 +61,13 @@ use Laravel\Ai\Promptable;
  * here. It cannot be one call: the classes it chooses between are the ones this
  * answer selects.
  */
-// Trocar as duas linhas de lugar traz a inferência de volta para a máquina — a
-// troca mais um `config:clear` bastam, com o `gpt-oss:20b` baixado no daemon.
-// Esta é a primeira inferência da cadeia de `POST /pecas/classificar`, e é por
-// ela que se paga em cota o que se ganha em latência.
-#[Provider('gemini')]
-// #[Provider('ollama')]
 #[Timeout(360)]
 #[Temperature(0.2)]
 final class PracticeAreaClassificationAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use ConfiguresOllamaRuntime;
     use Promptable;
+    use UsesDefaultAiModel;
 
     /**
      * @param  list<array{slug: string, label: string}>  $areas  every area the answer may name

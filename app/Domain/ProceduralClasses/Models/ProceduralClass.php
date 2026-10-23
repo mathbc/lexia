@@ -41,6 +41,7 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
  * @property list<string> $jurisdictions
  * @property list<float>|null $embedding
  * @property string|null $embedding_hash
+ * @property string|null $embedding_model the `EmbeddingModel::key()` that made the vector
  * @property CarbonImmutable|null $embedded_at
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at

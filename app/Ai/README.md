@@ -50,7 +50,7 @@ temas de cada uma, e o seletor os ordena —, e correm **ao lado** do par: `Rese
 roda as metades como tasks do mesmo `Concurrency::run`, cada uma com marcador
 próprio, de modo que uma falha, uma repetição ou uma peça antiga sem temas afeta só a sua
 aba. O par de doutrina é a terceira aba e a terceira task: `ResearchLegalCaseDoctrines`
-chama o pesquisador (Gemini, busca) e o transcritor (Ollama, schema) em série, e depois
+chama o pesquisador (busca, sem schema) e o transcritor (schema, sem busca) em série, e depois
 `DoctrineRecordReader` lê cada registro `/urn/` — a divisão da jurisprudência, contra o
 acervo de bibliotecas em vez dos acórdãos. A busca de doutrina do próprio portal
 (`/busca/search?…&f1-tipoDocumento=Doutrina`) é proibida no `robots.txt` e responde com o
@@ -88,26 +88,27 @@ súmula, tema ou cifra que o dossiê não escreve), a minuta sai com a seção d
 
 ## Quem sai da máquina
 
-Sete agentes rodam no Ollama e **um** no Gemini, e a assimetria é a resposta a uma
-pergunta só: quem precisa da internet?
+Hoje, todos. Os agentes não escolhem provider: rodam no **modelo de IA padrão** da
+plataforma, a linha marcada `default` em `ai_models` (ver "Provider e modelo"), e o padrão
+que `lexia:install` registra é o `gemini-3.7-flash`. Com ele, todo relato que entra num
+agente sai do escritório.
 
-`LegalThesisResearchAgent` precisa, e não tem escolha: um agente de pesquisa que não
+A única assimetria que sobrou é uma pergunta só: quem precisa da internet? Os três
+pesquisadores — `LegalThesisResearchAgent`, `CourtDecisionResearchAgent` e
+`DoctrineResearchAgent` — precisam, e não têm escolha: um agente de pesquisa que não
 consegue abrir o `stj.jus.br` é um modelo recitando súmula de memória, que é exatamente a
 falha que o prompt inteiro existe para impedir. Buscar e ler página são ferramentas do
 lado do provedor neste SDK, e o `OllamaProvider` não implementa nenhuma das duas —
 `Gateway/Ollama/Concerns/MapsTools.php` lança `RuntimeException` antes de montar
-requisição, então apontá-lo para a máquina não degrada a pesquisa, apaga-a.
+requisição, então apontá-los para a máquina não degrada a pesquisa, apaga-a. Por isso eles
+usam `UsesDefaultWebSearchModel`, que **recusa** um padrão sem busca na web antes de montar
+o prompt, com uma mensagem que diz o que fazer.
 
-Os outros sete não precisam, inclusive o transcritor que lê a ficha dele: transcrever pede
-um schema, e schema o Ollama impõe como gramática. `PracticeAreaClassificationAgent`
-chegou a apontar para a nuvem por latência — é a primeira inferência da cadeia mais longa
-de `POST /pecas/classificar` —, e voltou: a troca era cota por segundos, e mandava o
-relato inteiro do cliente para fora do escritório no enquadramento, sem o estreitamento
-descrito abaixo. Hoje o relato só sai na pesquisa, e ali já sai cortado.
-
-O que a volta custou foi tempo de parede, e está no atributo: todo agente carrega
-`#[Timeout(360)]`, o dobro do que bastava quando um flash respondia de um datacenter. Um
-timeout calibrado para a nuvem transforma uma inferência local que funciona numa exceção.
+Um padrão do Ollama continua possível — em desenvolvimento, ou numa máquina do escritório
+—, e aí todo o resto roda local e só a pesquisa para. O preço está no atributo: todo agente
+carrega `#[Timeout(360)]`, dimensionado para o `gpt-oss:20b` respondendo do daemon e não
+para um flash respondendo de um datacenter. Um timeout calibrado para a nuvem transforma
+uma inferência local que funciona numa exceção.
 
 O que viaja na pesquisa é estreitado para compensar: `LegalCaseDossier::forResearch()` corta
 o cliente e o réu inteiros. O relato vai, porque não se pesquisa uma tese sem os fatos que a
@@ -345,8 +346,8 @@ alguém rodar `composer test:agents` e reescrever as colunas.
 
 É por isso que a saída deste agente é uma **minuta para o advogado aceitar**, e não um
 campo que se preenche sozinho. A tela que expuser isto deve mostrar os dois textos lado a
-lado; `RefineLegalCaseFacts` diz o mesmo no docblock. E trocar `OLLAMA_TEXT_MODEL` é uma
-linha de `.env`: é o agente que mais ganha com um modelo maior.
+lado; `RefineLegalCaseFacts` diz o mesmo no docblock. E trocar de modelo é promover outra
+linha em `/modelos-de-ia`: é o agente que mais ganha com um modelo maior.
 
 ## Contexto: `AI_CONTEXT_WINDOW`, e por que ele é explícito
 
@@ -440,45 +441,41 @@ foram medidas terminando em degraus de 0,75 s — enfileiradas, com o `Concurren
 
 ## Provider e modelo
 
-**Dois providers**, e o Ollama com os dois trabalhos locais:
+**Os modelos moram no banco**, não no `.env`. São dois catálogos globais, mantidos pela
+equipe LexIA em `/modelos-de-ia` e `/modelos-de-embedding` (`app/Domain/AiModels`), cada um
+com uma linha marcada `default` — e um índice único parcial garante que nunca haja duas:
 
-| | provider | modelo | env |
+| | tabela | padrão do `lexia:install` | quem lê |
 |---|---|---|---|
-| Texto (os sete agentes locais) | `ollama` | `gpt-oss:20b` | `OLLAMA_URL`, `OLLAMA_TEXT_MODEL` |
-| Texto (só a pesquisa de teses) | `gemini` | `gemini-3.6-flash` | `GEMINI_API_KEY`, `GEMINI_TEXT_MODEL` |
-| Embeddings (o catálogo) | `ollama` | `nomic-embed-text`, 768 dim. | `OLLAMA_URL`, `OLLAMA_EMBEDDINGS_MODEL` |
+| Texto (os 19 agentes) | `ai_models` | `gemini` / `gemini-3.7-flash` | `UsesDefaultAiModel` |
+| Embeddings (os dois catálogos) | `embedding_models` | `gemini` / `gemini-embedding-001`, 768 dim. | `DocumentEmbedder` |
 
-O texto **voltou** para a máquina do escritório com o `gpt-oss:20b`, e o preço de volta é
-o que a ida ao Gemini tinha comprado: latência — daí os `#[Timeout(360)]`.
-`POST /pecas/classificar` corre as quatro etapas num `Concurrency::run` e não espera mais
-nada: a pesquisa de teses saiu da rota e hoje roda ao abrir a etapa 5, por
-`ResearchLegalCaseForensicReview`, sobre uma peça gravada. O navegador ainda espera as
-quatro — a dívida que o `asController()` da rota documenta e que uma fila resolve —, mas
-já não espera a rede. O que se compra de volta: quase nenhuma cota para pagar, e o relato
-do cliente saindo do escritório só na pesquisa de teses, já cortado por
-`LegalCaseDossier::forResearch()`.
+O `.env` guarda só o que é segredo ou endereço: `GEMINI_API_KEY`, `OLLAMA_URL`. O provider
+de cada linha é um `AiProvider` cujo valor é o nome do bloco em `config('ai.providers')`.
 
-Os embeddings **nunca saíram**, e de propósito. Não havia o que ganhar movendo-os: o
-catálogo são 615 linhas já vetorizadas com `nomic-embed-text`, e vetor de um modelo não se
-compara com vetor de outro — a mudança custaria uma reembutida inteira para comprar nada.
+**Como um agente chega ao modelo.** O SDK pergunta `provider()` e `model()` ao agente antes
+de olhar `#[Provider]` e `#[Model]` (`Promptable::getProvidersAndModels()`), e o trait
+`UsesDefaultAiModel` responde as duas pelo `DefaultModels`. Nenhum agente nomeia provider
+nem modelo; trocar o de todos é "Definir como padrão" numa linha da tela, e vale a partir da
+requisição seguinte. `DefaultModels` é `scoped`: lido uma vez por request ou job e esquecido
+entre eles, então um worker de fila vê a troca no job seguinte, e os processos filhos do
+`Concurrency::run` leem o banco por conta própria. Sem padrão cadastrado, ele lança
+`MissingDefaultModelException` dizendo para rodar `lexia:install` — não há volta ao `.env`.
 
-Isso significa que o Ollama **é dependência de desenvolvimento inteira**, e que
-`docker compose up -d` não basta: sem o daemon de pé nenhum agente responde, e a
-degradação não é uniforme. O texto falha alto — a Action reporta e a chave volta `null`.
-O ranking falha **em silêncio**: `ProceduralClassRankingQuery` cai para a ordem do pivot
-(é o desenho dela) e as classificações pioram sem erro nenhum. Antes de começar,
-`ollama pull gpt-oss:20b` e `ollama pull nomic-embed-text`.
+**Trocar o modelo de embedding não é de graça.** Vetor de um modelo não se compara com vetor
+de outro, e os dois têm as mesmas 768 posições — a distância sai, e não significa nada. Por
+isso cada linha vetorizada guarda em `embedding_model` a `key()` do modelo que a gerou
+(`gemini:gemini-embedding-001`), as buscas só comparam linhas do padrão, e promover outro
+modelo enfileira `EmbedCatalogs`, que refaz os dois catálogos. Enquanto ele roda, a busca de
+temas falha alto, como num catálogo vazio, e o ranking de classes se cura sozinho com as
+candidatas que precisa. **A fila precisa de worker** — em desenvolvimento o `composer dev`
+já sobe um.
 
-**Nenhum agente carrega `#[Model]`.** O modelo é nomeado por provider, em
-`ai.providers.{ollama,gemini}.models.text` (env `OLLAMA_TEXT_MODEL` e `GEMINI_TEXT_MODEL`),
-e sem o atributo o SDK resolve cada agente pelo `defaultTextModel()` do provider que ele
-nomeia. Trocar de modelo é editar o `.env` e rodar `php artisan config:clear`.
-
-**Mandar todo o texto para a nuvem** são dois gestos, agora que o bloco `gemini` já está
-ativo e a chave já está no `.env`: pôr `AI_PROVIDER=gemini` e trocar o
-`#[Provider('ollama')]` dos sete agentes ainda locais pela linha comentada logo acima de
-cada um — mais `php artisan config:clear`. A chave `models` do bloco não é enfeite: sem
-ela o `GeminiProvider` cai num default que muda com a versão do pacote.
+Um padrão do Ollama faz do daemon **dependência de desenvolvimento**: `ollama pull` do
+modelo antes de começar, e a degradação não é uniforme. O texto falha alto — a Action
+reporta e a chave volta `null`. O ranking falha **em silêncio**:
+`ProceduralClassRankingQuery` cai para a ordem do pivot (é o desenho dela) e as
+classificações pioram sem erro nenhum.
 
 ## Armadilhas
 
@@ -487,19 +484,18 @@ ela o `GeminiProvider` cai num default que muda com a versão do pacote.
    em `message.thinking` e o JSON chega limpo em `message.content`, que é o que a saída
    estruturada consome. **Esta armadilha está viva de novo**, e no pior arranjo possível:
    o modelo configurado é exatamente aquele em que ela foi medida.
-2. **A chave `models` no `config/ai.php` é obrigatória**, e vale também para o bloco
-   comentado. Sem ela o `OllamaProvider` cai no default do pacote, `qwen3.5:4b`, que este
-   projeto não baixa, e o `GeminiProvider` cai num default que muda com a versão.
+2. **Um modelo cadastrado precisa ser alcançável.** O provider da linha é o nome do bloco
+   em `config('ai.providers')`, e o nome vai como está para a API — na URL do Gemini, no
+   corpo do Ollama. O cadastro recusa espaço no nome, mas não confere se o modelo existe:
+   um id errado só aparece na primeira inferência.
 3. **O modelo de texto precisa suportar saída estruturada.** No Ollama o `format` vira
    gramática e um modelo sem essa capacidade devolve JSON só por boa vontade — confira
    com `ollama show <modelo>`. Num provedor de nuvem o schema viaja como
    `response_json_schema` e é imposto do lado do servidor.
-4. **As dimensões do embedding são a largura da coluna.** `procedural_classes.embedding`
-   é `vector(768)`; trocar o modelo de embeddings por um de outra largura exige migration,
-   e trocar por um de mesma largura já exige
-   `php artisan lexia:embed-procedural-classes --fresh` — o hash é do texto, e o texto não
-   muda quando só o modelo muda. Sem isso, os vetores velhos ficam, e a distância entre
-   um relato novo e um catálogo antigo é lixo silencioso.
+4. **As dimensões do embedding são a largura da coluna.** As colunas são `vector(768)`, e
+   `DocumentEmbedder` pede 768 em todo pedido (`EmbeddingModel::DIMENSIONS`): o Gemini
+   trunca por `outputDimensionality`, o nomic responde nativo. Um modelo que não saiba
+   responder em 768 não serve sem migration, qualquer que seja o cadastro.
 
 ## Busca vetorial no catálogo
 

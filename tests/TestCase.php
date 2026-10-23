@@ -5,12 +5,46 @@ declare(strict_types=1);
 namespace Tests;
 
 use App\Domain\Accounts\Models\Account;
+use App\Domain\AiModels\Enums\AiProvider;
+use App\Domain\AiModels\Models\AiModel;
+use App\Domain\AiModels\Models\EmbeddingModel;
+use App\Domain\AiModels\Support\DefaultModels;
 use App\Domain\Shared\Tenancy\TenantContext;
 use App\Domain\Users\Models\User;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
 abstract class TestCase extends BaseTestCase
 {
+    /**
+     * Every test starts on fixed default models, held in memory.
+     *
+     * The agents and the embedders ask DefaultModels on every call, faked or
+     * not, and a test that fakes an agent should not need a row in
+     * `ai_models` to do it. The embedding default is the local nomic because
+     * the retrieval tests assert its task prefixes; a test that needs another
+     * pair calls usingDefaultModels(), and one that exercises the database
+     * resolution calls readDefaultModelsFromDatabase().
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->usingDefaultModels(
+            new AiModel(['provider' => AiProvider::Gemini, 'name' => 'gemini-3.7-flash']),
+            new EmbeddingModel(['provider' => AiProvider::Ollama, 'name' => 'nomic-embed-text']),
+        );
+    }
+
+    protected function usingDefaultModels(?AiModel $text = null, ?EmbeddingModel $embedding = null): void
+    {
+        $this->app->singleton(DefaultModels::class, static fn (): DefaultModels => DefaultModels::using($text, $embedding));
+    }
+
+    protected function readDefaultModelsFromDatabase(): void
+    {
+        $this->app->singleton(DefaultModels::class, static fn (): DefaultModels => new DefaultModels);
+    }
+
     /**
      * Sign in and pin the tenant, the way BindTenantContext does per request.
      *

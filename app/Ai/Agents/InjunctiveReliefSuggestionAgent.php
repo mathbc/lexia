@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace App\Ai\Agents;
 
 use App\Ai\Concerns\ConfiguresOllamaRuntime;
+use App\Ai\Concerns\UsesDefaultAiModel;
 use App\Domain\LegalCases\Enums\InjunctiveReliefKind;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\Types\StringType;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
@@ -66,24 +66,22 @@ use Laravel\Ai\Promptable;
  * Variables go at the end, as in the class selection agent: the knowledge guide
  * is constant and long, and a variable above it would re-prefill it on every
  * call under Ollama. The traps the siblings document apply unchanged: never
- * send `think: false` to an Ollama that reasons — dormant while the attribute
- * below points at Gemini, live again on the swap back — and leave the model to
- * `config/ai.php` rather than naming one in a `#[Model]`.
+ * send `think: false` to an Ollama that reasons — dormant while the default
+ * model is a cloud one, live again when an Ollama model is promoted — and leave
+ * the model to the default row in `ai_models` rather than naming one in a
+ * `#[Model]`.
  *
  * Reached through SuggestInjunctiveRelief, which ClassifyLegalCase calls as the
  * third link of the framing chain and the first step's "Consultar IA" calls on
  * its own.
  */
-// Trocar as duas linhas de lugar traz a inferência de volta para a máquina — a
-// troca mais um `config:clear` bastam, com o `gpt-oss:20b` baixado no daemon.
-#[Provider('gemini')]
-// #[Provider('ollama')]
 #[Timeout(360)]
 #[Temperature(0.2)]
 final class InjunctiveReliefSuggestionAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use ConfiguresOllamaRuntime;
     use Promptable;
+    use UsesDefaultAiModel;
 
     /**
      * Mais documentos do que um pedido de urgência se instrui — o mesmo teto

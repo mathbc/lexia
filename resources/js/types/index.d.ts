@@ -113,6 +113,25 @@ export interface AccountAbilities {
     manage_users: boolean;
 }
 
+/** Mirrors ModelCatalogPageProps::for() — what the actor may do to one row. */
+export interface CatalogModelAbilities {
+    update: boolean;
+    make_default: boolean;
+    delete: boolean;
+}
+
+/** One row of either model catalogue: `ai_models` or `embedding_models`. */
+export interface CatalogModel {
+    id: string;
+    /** AiProvider value. */
+    provider: string;
+    provider_label: string;
+    /** The model id the provider's API speaks, as `gemini-3.7-flash`. */
+    name: string;
+    default: boolean;
+    can: CatalogModelAbilities;
+}
+
 /** The clients table, as the Customer model serialises. */
 export interface Customer {
     id: string;

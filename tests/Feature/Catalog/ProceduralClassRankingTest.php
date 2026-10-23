@@ -27,6 +27,11 @@ final class ProceduralClassRankingTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * The key of the embedding model TestCase pins as the default.
+     */
+    private const string MODEL = 'ollama:nomic-embed-text';
+
     #[Test]
     public function it_orders_candidates_by_distance_to_the_facts(): void
     {
@@ -36,9 +41,9 @@ final class ProceduralClassRankingTest extends TestCase
         $area = PracticeArea::query()->where('slug', 'civil')->sole();
         $candidates = (new ProceduralClassCandidatesQuery)->forArea($area)->take(3)->values();
 
-        $candidates[0]->forceFill(['embedding' => $this->axis(0, -1.0)])->save();
-        $candidates[1]->forceFill(['embedding' => $this->axis(1)])->save();
-        $candidates[2]->forceFill(['embedding' => $this->axis(0)])->save();
+        $candidates[0]->forceFill(['embedding' => $this->axis(0, -1.0), 'embedding_model' => self::MODEL])->save();
+        $candidates[1]->forceFill(['embedding' => $this->axis(1), 'embedding_model' => self::MODEL])->save();
+        $candidates[2]->forceFill(['embedding' => $this->axis(0), 'embedding_model' => self::MODEL])->save();
 
         Embeddings::fake([[$this->axis(0)]]);
 
@@ -58,8 +63,8 @@ final class ProceduralClassRankingTest extends TestCase
         $area = PracticeArea::query()->where('slug', 'civil')->sole();
         $candidates = (new ProceduralClassCandidatesQuery)->forArea($area)->take(3)->values();
 
-        $candidates[0]->forceFill(['embedding' => $this->axis(1)])->save();
-        $candidates[2]->forceFill(['embedding' => $this->axis(0)])->save();
+        $candidates[0]->forceFill(['embedding' => $this->axis(1), 'embedding_model' => self::MODEL])->save();
+        $candidates[2]->forceFill(['embedding' => $this->axis(0), 'embedding_model' => self::MODEL])->save();
 
         Embeddings::fake([[$this->axis(0)]]);
 
@@ -67,6 +72,31 @@ final class ProceduralClassRankingTest extends TestCase
 
         $this->assertCount(3, $ranked);
         $this->assertSame($candidates[1]->code, $ranked->last()?->code);
+    }
+
+    /**
+     * A vector from another model has the same 768 positions and a distance
+     * that means nothing; it is ranked as if the class had no vector at all.
+     */
+    #[Test]
+    public function a_vector_made_by_another_model_is_never_compared(): void
+    {
+        $area = PracticeArea::query()->where('slug', 'civil')->sole();
+        $candidates = (new ProceduralClassCandidatesQuery)->forArea($area)->take(3)->values();
+
+        $candidates[0]->forceFill(['embedding' => $this->axis(0), 'embedding_model' => 'gemini:gemini-embedding-001'])->save();
+        $candidates[1]->forceFill(['embedding' => $this->axis(1), 'embedding_model' => self::MODEL])->save();
+
+        Embeddings::fake([[$this->axis(0)]]);
+
+        $ranked = (new ProceduralClassRankingQuery)->byRelevanceTo($candidates, 'Fatos do caso.');
+
+        // The stale one is identical to the query and still goes behind the
+        // orthogonal one, in its original place among the incomparable.
+        $this->assertSame(
+            [$candidates[1]->code, $candidates[0]->code, $candidates[2]->code],
+            $ranked->pluck('code')->all(),
+        );
     }
 
     #[Test]
@@ -91,7 +121,7 @@ final class ProceduralClassRankingTest extends TestCase
         $area = PracticeArea::query()->where('slug', 'civil')->sole();
         $candidates = (new ProceduralClassCandidatesQuery)->forArea($area);
 
-        $candidates->first()?->forceFill(['embedding' => $this->axis(0)])->save();
+        $candidates->first()?->forceFill(['embedding' => $this->axis(0), 'embedding_model' => self::MODEL])->save();
 
         Embeddings::fake(fn () => throw new RuntimeException('Ollama fora do ar'));
 
@@ -161,7 +191,7 @@ final class ProceduralClassRankingTest extends TestCase
         // precisa sobreviver é a dimensão e a ordem, não o bit a bit.
         $class = ProceduralClass::query()->where('code', 7)->sole();
 
-        $class->forceFill(['embedding' => $this->axis(3)])->save();
+        $class->forceFill(['embedding' => $this->axis(3), 'embedding_model' => self::MODEL])->save();
 
         $stored = ProceduralClass::query()->where('code', 7)->sole()->embedding;
 

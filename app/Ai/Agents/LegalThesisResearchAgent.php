@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Ai\Agents;
 
 use App\Ai\Concerns\ConfiguresOllamaRuntime;
+use App\Ai\Concerns\UsesDefaultWebSearchModel;
 use App\Domain\LegalCases\Data\LegalResearchData;
 use App\Domain\Shared\Support\OfficialLegalSources;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
@@ -95,10 +95,10 @@ use Laravel\Ai\Providers\Tools\WebSearch;
  * most. A clumsy sentence is visible; a fabricated Súmula 393 reads exactly
  * like a real one.
  *
- * `ConfiguresOllamaRuntime` returns `[]` for anything that is not Ollama,
- * so here it is documentation — exactly what CLAUDE.md predicted it would
- * become the day an agent pointed at the cloud. `#[Model]` stays absent: the
- * model is named in `config/ai.php` and nowhere else.
+ * `ConfiguresOllamaRuntime` returns `[]` for anything that is not Ollama, so
+ * here it is documentation: UsesDefaultWebSearchModel refuses a default this
+ * agent could not research on before any option is built. Neither the provider
+ * nor the model is named here — both are the default row's in `ai_models`.
  *
  * Reached through ResearchLegalCaseTheses, which calls this one and then the
  * transcriber — and, since the forensic review was wired in, also through
@@ -111,13 +111,13 @@ use Laravel\Ai\Providers\Tools\WebSearch;
  * exactly those three. A pleading not yet in the database is still a pleading;
  * what this agent needs is the framing, not a primary key.
  */
-#[Provider('gemini')]
 #[Timeout(360)]
 #[Temperature(0.1)]
 final class LegalThesisResearchAgent implements Agent, HasProviderOptions, HasTools
 {
     use ConfiguresOllamaRuntime;
     use Promptable;
+    use UsesDefaultWebSearchModel;
 
     /**
      * A budget generous enough to confirm, small enough to end.

@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Ai\Agents;
 
 use App\Ai\Concerns\ConfiguresOllamaRuntime;
+use App\Ai\Concerns\UsesDefaultAiModel;
 use App\Domain\LegalThemes\Data\LegalCaseThemeListData;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
@@ -44,9 +44,9 @@ use Laravel\Ai\Promptable;
  * those keys, so a theme that was not retrieved is not something the model can
  * emit: the same guarantee the procedural class selection gets from the CNJ
  * code, enforced by `response_json_schema` in the cloud and by the grammar
- * under the commented provider. The uuid never enters the prompt. The only
- * text the agent composes is `reason`, one or two sentences tying the theme to
- * a fact of the narrative, which the screen shows beside the theme.
+ * under an Ollama default. The uuid never enters the prompt. The only text the
+ * agent composes is `reason`, one or two sentences tying the theme to a fact of
+ * the narrative, which the screen shows beside the theme.
  *
  * ## Why the variable blocks are at the bottom
  *
@@ -58,16 +58,13 @@ use Laravel\Ai\Promptable;
  * `Concurrency::run` in ResearchLegalCaseForensicReview, and it depends on
  * nothing that research finds.
  */
-// Trocar as duas linhas de lugar traz a inferência de volta para a máquina — a
-// troca mais um `config:clear` bastam, com o `gpt-oss:20b` baixado no daemon.
-#[Provider('gemini')]
-// #[Provider('ollama')]
 #[Timeout(360)]
 #[Temperature(0.1)]
 final class LegalThemeSelectionAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
     use ConfiguresOllamaRuntime;
     use Promptable;
+    use UsesDefaultAiModel;
 
     /**
      * @param  string  $framing  LegalCaseDossier::forThemes() — the area and the class

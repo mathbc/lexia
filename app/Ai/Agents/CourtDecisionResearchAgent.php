@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Ai\Agents;
 
 use App\Ai\Concerns\ConfiguresOllamaRuntime;
+use App\Ai\Concerns\UsesDefaultWebSearchModel;
 use App\Domain\CourtDecisions\Support\CourtDecisionSources;
 use App\Domain\LegalCases\Data\CourtDecisionResearchData;
-use Laravel\Ai\Attributes\Provider;
 use Laravel\Ai\Attributes\Temperature;
 use Laravel\Ai\Attributes\Timeout;
 use Laravel\Ai\Contracts\Agent;
@@ -121,14 +121,13 @@ use Laravel\Ai\Providers\Tools\WebSearch;
  * composed, and this is where copying matters most.
  *
  * `ConfiguresOllamaRuntime` returns `[]` for anything that is not Ollama, so
- * here it is documentation — exactly what CLAUDE.md predicted it would become
- * the day an agent pointed at the cloud. `#[Model]` stays absent: the model is
- * named in `config/ai.php` and nowhere else.
+ * here it is documentation: UsesDefaultWebSearchModel refuses a default this
+ * agent could not research on before any option is built. Neither the provider
+ * nor the model is named here — both are the default row's in `ai_models`.
  *
  * Reached through ResearchLegalCaseCourtDecisions, which calls this one and
  * then the transcriber.
  */
-#[Provider('gemini')]
 #[Timeout(360)]
 #[Temperature(0.1)]
 final class CourtDecisionResearchAgent implements Agent, HasProviderOptions, HasTools
@@ -137,6 +136,7 @@ final class CourtDecisionResearchAgent implements Agent, HasProviderOptions, Has
         providerOptions as private ollamaRuntime;
     }
     use Promptable;
+    use UsesDefaultWebSearchModel;
 
     /**
      * A budget generous enough to find, small enough to end.

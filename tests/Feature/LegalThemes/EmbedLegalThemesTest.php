@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Feature\LegalThemes;
 
+use App\Domain\AiModels\Enums\AiProvider;
+use App\Domain\AiModels\Models\EmbeddingModel;
 use App\Domain\LegalThemes\Actions\EmbedLegalThemes;
 use App\Domain\LegalThemes\Actions\ImportLegalThemes;
 use App\Domain\LegalThemes\Models\LegalTheme;
@@ -28,7 +30,6 @@ final class EmbedLegalThemesTest extends TestCase
     {
         parent::setUp();
 
-        config(['ai.default_for_embeddings' => 'ollama']);
         ImportLegalThemes::run(ImportLegalThemesTest::FIXTURE);
         Embeddings::fake();
     }
@@ -86,12 +87,56 @@ final class EmbedLegalThemesTest extends TestCase
     #[Test]
     public function a_provider_that_does_not_read_the_prefix_gets_none(): void
     {
-        config(['ai.default_for_embeddings' => 'openai']);
+        $this->usingDefaultModels(embedding: $this->gemini());
 
         $this->assertStringStartsWith(
             'Tema Repetitivo 952 do STJ.',
             (new EmbedLegalThemes)->documentFor($this->theme(1301)),
         );
+    }
+
+    #[Test]
+    public function each_vector_records_the_model_that_made_it(): void
+    {
+        EmbedLegalThemes::run(LegalTheme::all());
+
+        $this->assertSame(
+            ['ollama:nomic-embed-text'],
+            LegalTheme::query()->distinct()->pluck('embedding_model')->all(),
+        );
+
+        Embeddings::assertGenerated(static fn (EmbeddingsPrompt $prompt): bool => $prompt->model === 'nomic-embed-text'
+            && $prompt->dimensions === EmbeddingModel::DIMENSIONS
+            && $prompt->providerOptions === []);
+    }
+
+    /**
+     * O hash cobre o texto, e o texto não mudou; o que torna a linha velha é o
+     * modelo. Sem isso, a troca de padrão deixaria vetores do nomic sendo
+     * comparados com consultas do Gemini.
+     */
+    #[Test]
+    public function a_change_of_default_model_embeds_everything_again(): void
+    {
+        EmbedLegalThemes::run(LegalTheme::all());
+
+        $this->usingDefaultModels(embedding: $this->gemini());
+
+        $this->assertSame(7, EmbedLegalThemes::run(LegalTheme::all()));
+        $this->assertSame(
+            ['gemini:gemini-embedding-001'],
+            LegalTheme::query()->distinct()->pluck('embedding_model')->all(),
+        );
+
+        Embeddings::assertGenerated(static fn (EmbeddingsPrompt $prompt): bool => $prompt->model === 'gemini-embedding-001'
+            && $prompt->dimensions === EmbeddingModel::DIMENSIONS
+            && $prompt->providerOptions === ['taskType' => 'RETRIEVAL_DOCUMENT']
+            && ! $prompt->contains('search_document:'));
+    }
+
+    private function gemini(): EmbeddingModel
+    {
+        return new EmbeddingModel(['provider' => AiProvider::Gemini, 'name' => 'gemini-embedding-001']);
     }
 
     private function theme(int $sequentialNumber): LegalTheme
