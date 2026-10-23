@@ -55,14 +55,18 @@ use Inertia\Inertia;
 
 Route::get('/', fn () => Inertia::render('welcome'))->name('home');
 
-Route::middleware('guest')->group(function (): void {
-    Route::get('/cadastro', fn () => Inertia::render('auth/register', [
-        'accountTypes' => AccountType::customerOptions(),
-        'states' => BrazilianState::options(),
-        'userTypes' => UserType::options(),
-    ]))->name('register');
-    Route::post('/cadastro', RegisterAccountWithOwner::class);
-});
+// O cadastro público está desligado: contas novas só nascem por /contas/nova,
+// pela equipe LexIA. Reabrir é descomentar o bloco — a tela, a Action e os
+// testes continuam no lugar —, devolver os links "Criar conta" do login e da
+// landing e apagar `the_public_sign_up_is_closed`.
+// Route::middleware('guest')->group(function (): void {
+//     Route::get('/cadastro', fn () => Inertia::render('auth/register', [
+//         'accountTypes' => AccountType::customerOptions(),
+//         'states' => BrazilianState::options(),
+//         'userTypes' => UserType::options(),
+//     ]))->name('register');
+//     Route::post('/cadastro', RegisterAccountWithOwner::class);
+// });
 
 Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::get('/painel', ShowDashboard::class)->name('dashboard');

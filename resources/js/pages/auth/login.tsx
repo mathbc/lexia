@@ -18,14 +18,15 @@ export default function Login() {
         <AuthLayout
             title="Acesse sua conta"
             description="Entre com o e-mail cadastrado."
-            footer={
-                <>
-                    Não tem conta?{' '}
-                    <Link href="/cadastro" className="font-medium text-foreground underline-offset-4 hover:underline">
-                        Criar conta
-                    </Link>
-                </>
-            }
+            // O cadastro público está desligado — ver routes/web.php.
+            // footer={
+            //     <>
+            //         Não tem conta?{' '}
+            //         <Link href="/cadastro" className="font-medium text-foreground underline-offset-4 hover:underline">
+            //             Criar conta
+            //         </Link>
+            //     </>
+            // }
         >
             <Head title="Entrar" />
 

@@ -37,9 +37,10 @@ export function HeroSection() {
                     <Button asChild size="lg">
                         <Link href="/login">Entrar</Link>
                     </Button>
+                    {/* O cadastro público está desligado — ver routes/web.php.
                     <Button asChild size="lg" variant="outline">
                         <Link href="/cadastro">Criar conta</Link>
-                    </Button>
+                    </Button> */}
                 </div>
             </div>
 

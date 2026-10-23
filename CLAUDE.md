@@ -227,8 +227,18 @@ em POST), e o Inertia 3 promove o enviado a padrão depois do sucesso: por isso 
 Fortify com telas Inertia próprias, registradas em `FortifyServiceProvider`.
 As regras de negócio do login (usuário desabilitado, conta suspensa) vivem em
 `Fortify::authenticateUsing()`, para que um login recusado nunca chegue a criar
-sessão. O `/register` do Fortify está desligado: o cadastro público é
-`RegisterAccountWithOwner`, que cria conta e primeiro usuário numa transação.
+sessão. O `/register` do Fortify está desligado, e o cadastro público
+(`/cadastro`, `RegisterAccountWithOwner`, que cria conta e primeiro usuário numa
+transação) **também**: as rotas estão comentadas em `routes/web.php`, junto dos
+links "Criar conta" do login e da landing, e conta nova só nasce por `/contas/nova`.
+A tela, a Action e `RegisterAccountTest` continuam no lugar — os testes se pulam
+enquanto `Route::has('register')` for falso —, e `the_public_sign_up_is_closed`
+é o teste a apagar no dia em que reabrir.
+
+O `POST /login` aceita **10 tentativas por minuto por IP**, qualquer que seja o
+e-mail (o padrão do Fortify chaveia por e-mail + IP, o que deixa trocar de endereço
+a cada tentativa). O estouro chega ao formulário como erro de validação sob
+`email`, com status 429, e não como o 429 cru que o Inertia desenharia num modal.
 
 ## Armadilhas de versão
 

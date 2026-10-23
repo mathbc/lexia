@@ -10,6 +10,7 @@ use App\Domain\Users\Actions\ToggleUserStatus;
 use App\Domain\Users\Enums\UserRole;
 use App\Domain\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -152,6 +153,10 @@ final class PlatformAccountTest extends TestCase
     #[Test]
     public function sign_up_cannot_create_a_platform_account(): void
     {
+        if (! Route::has('register')) {
+            $this->markTestSkipped('O cadastro público (/cadastro) está desligado em routes/web.php.');
+        }
+
         $this->post('/cadastro', [
             'type' => AccountType::Platform->value,
             'name' => 'Falsa Plataforma',

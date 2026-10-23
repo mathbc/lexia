@@ -99,6 +99,46 @@ final class LoginTest extends TestCase
         $this->assertGuest();
     }
 
+    /**
+     * Keyed by IP alone: a client that changes the e-mail on every attempt is
+     * throttled all the same. The lockout reaches the form as an error under
+     * the e-mail, not as Inertia's modal around a bare 429.
+     */
+    #[Test]
+    public function the_login_form_takes_ten_attempts_a_minute_per_ip(): void
+    {
+        $this->freezeTime();
+        $user = User::factory()->create(['email' => 'ana@lexia.test']);
+
+        foreach (range(1, 10) as $attempt) {
+            $this->post('/login', ['email' => "tentativa{$attempt}@lexia.test", 'password' => 'errada'])
+                ->assertSessionHasErrors(['email' => __('auth.failed')]);
+        }
+
+        $this->from('/login')
+            ->post('/login', ['email' => 'ana@lexia.test', 'password' => 'password'])
+            ->assertStatus(302)
+            ->assertRedirect('/login')
+            ->assertSessionHasErrors(['email' => __('auth.throttle', ['seconds' => 60])]);
+        $this->assertGuest();
+
+        $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.2'])
+            ->post('/login', ['email' => 'ana@lexia.test', 'password' => 'password'])
+            ->assertRedirect('/painel');
+        $this->assertAuthenticatedAs($user);
+    }
+
+    /**
+     * The public sign-up is switched off on purpose. Reopening it is a
+     * decision, and this test is the one to delete when it is taken.
+     */
+    #[Test]
+    public function the_public_sign_up_is_closed(): void
+    {
+        $this->get('/cadastro')->assertNotFound();
+        $this->post('/cadastro')->assertNotFound();
+    }
+
     #[Test]
     public function guests_are_redirected_away_from_the_panel(): void
     {

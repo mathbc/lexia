@@ -137,9 +137,10 @@ function PanelActions({ user, className }: { user: AuthUser | null; className?: 
             <Button asChild variant="ghost" className={className}>
                 <Link href="/login">Entrar</Link>
             </Button>
+            {/* O cadastro público está desligado — ver routes/web.php.
             <Button asChild className={className}>
                 <Link href="/cadastro">Criar conta</Link>
-            </Button>
+            </Button> */}
         </>
     )
 }

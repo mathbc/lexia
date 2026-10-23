@@ -14,12 +14,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Laravel\Fortify\Actions\RedirectIfTwoFactorAuthenticatable;
 use Laravel\Fortify\Fortify;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class FortifyServiceProvider extends ServiceProvider
 {
@@ -45,11 +45,7 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
         Fortify::redirectUserForTwoFactorAuthenticationUsing(RedirectIfTwoFactorAuthenticatable::class);
 
-        RateLimiter::for('login', function (Request $request) {
-            $throttleKey = Str::transliterate(Str::lower($request->input(Fortify::username())).'|'.$request->ip());
-
-            return Limit::perMinute(5)->by($throttleKey);
-        });
+        $this->registerLoginRateLimiter();
 
         RateLimiter::for('two-factor', function (Request $request) {
             return Limit::perMinute(5)->by($request->session()->get('login.id'));
@@ -96,6 +92,27 @@ class FortifyServiceProvider extends ServiceProvider
     private function withStatus(Response $page, mixed $status): Response
     {
         return is_string($status) && $status !== '' ? $page->flash('success', $status) : $page;
+    }
+
+    /**
+     * Ten login attempts a minute per IP, whatever the e-mail. Keying by the
+     * e-mail too, as Fortify's default does, would let one client try a new
+     * address on every request and never be throttled.
+     *
+     * Fortify applies the limiter as `throttle:login`, whose bare 429 Inertia
+     * would draw as a modal holding an error page. It is raised here as the
+     * same lockout Fortify's own limiter produces: a validation error under
+     * the e-mail, still with the 429 status.
+     */
+    private function registerLoginRateLimiter(): void
+    {
+        RateLimiter::for('login', fn (Request $request) => Limit::perMinute(10)
+            ->by((string) $request->ip())
+            ->response(function (Request $request, array $headers): never {
+                throw ValidationException::withMessages([
+                    Fortify::username() => trans('auth.throttle', ['seconds' => $headers['Retry-After']]),
+                ])->status(SymfonyResponse::HTTP_TOO_MANY_REQUESTS);
+            }));
     }
 
     /**

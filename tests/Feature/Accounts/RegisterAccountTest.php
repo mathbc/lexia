@@ -10,12 +10,26 @@ use App\Domain\Users\Enums\UserRole;
 use App\Domain\Users\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 final class RegisterAccountTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * The public sign-up is switched off in routes/web.php. These tests come
+     * back on their own the day the route does.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        if (! Route::has('register')) {
+            $this->markTestSkipped('O cadastro público (/cadastro) está desligado em routes/web.php.');
+        }
+    }
 
     /**
      * @param  array<string, string>  $overrides
