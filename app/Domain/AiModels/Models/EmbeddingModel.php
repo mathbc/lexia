@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\AiModels\Models;
 
 use App\Domain\AiModels\Concerns\HasPlatformDefault;
+use App\Domain\AiModels\Concerns\HoldsApiKey;
 use App\Domain\AiModels\Enums\AiProvider;
 use App\Domain\AiModels\Policies\ModelCatalogPolicy;
 use Carbon\CarbonImmutable;
@@ -27,6 +28,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $id
  * @property AiProvider $provider
  * @property string $name
+ * @property string|null $api_key
  * @property bool $default
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
@@ -40,6 +42,7 @@ class EmbeddingModel extends Model
 
     use HasPlatformDefault;
     use HasUuids;
+    use HoldsApiKey;
 
     /**
      * The width of the `vector(768)` columns, asked of every model.
@@ -51,6 +54,11 @@ class EmbeddingModel extends Model
     public const int DIMENSIONS = 768;
 
     protected $guarded = ['id'];
+
+    /**
+     * @var list<string>
+     */
+    protected $hidden = ['api_key'];
 
     /**
      * @var array<string, mixed>
@@ -66,6 +74,7 @@ class EmbeddingModel extends Model
     {
         return [
             'provider' => AiProvider::class,
+            'api_key' => 'encrypted',
             'default' => 'boolean',
         ];
     }

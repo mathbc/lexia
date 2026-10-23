@@ -136,7 +136,7 @@ final class EmbedLegalThemesTest extends TestCase
 
     private function gemini(): EmbeddingModel
     {
-        return new EmbeddingModel(['provider' => AiProvider::Gemini, 'name' => 'gemini-embedding-001']);
+        return new EmbeddingModel(['provider' => AiProvider::Gemini, 'name' => 'gemini-embedding-001', 'api_key' => 'test-key']);
     }
 
     private function theme(int $sequentialNumber): LegalTheme

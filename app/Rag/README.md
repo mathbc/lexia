@@ -91,7 +91,7 @@ Três diferenças para o catálogo de classes, todas deliberadas:
 ```bash
 php artisan lexia:embed-procedural-classes           # o que estiver desatualizado (texto ou modelo)
 php artisan lexia:embed-procedural-classes --fresh   # tudo, ignorando o hash
-php artisan lexia:import-legal-themes                # baixa, importa e embute o que mudou
+php artisan lexia:import-legal-themes                # baixa (portal, senão o espelho), importa e embute o que mudou
 ```
 
 Não é obrigatório rodar: `SelectProceduralClass` embute as candidatas que faltarem antes

@@ -30,9 +30,26 @@ abstract class TestCase extends BaseTestCase
         parent::setUp();
 
         $this->usingDefaultModels(
-            new AiModel(['provider' => AiProvider::Gemini, 'name' => 'gemini-3.7-flash']),
+            new AiModel(['provider' => AiProvider::Gemini, 'name' => 'gemini-3.7-flash', 'api_key' => self::geminiKey()]),
             new EmbeddingModel(['provider' => AiProvider::Ollama, 'name' => 'nomic-embed-text']),
         );
+    }
+
+    /**
+     * The key an in-memory Gemini model carries.
+     *
+     * A faked agent never sends it, and any non-empty string gets it past
+     * ProviderInstance. The agents suite does send it, and the testing database
+     * has no catalogue to read one from, so it comes from the shell:
+     * `GEMINI_API_KEY=… composer test:agents`. getenv() and not env() — this is
+     * the process environment on purpose, not a configuration value, and the
+     * `.env` no longer holds a key.
+     */
+    protected static function geminiKey(): string
+    {
+        $key = getenv('GEMINI_API_KEY');
+
+        return is_string($key) && $key !== '' ? $key : 'test-key';
     }
 
     protected function usingDefaultModels(?AiModel $text = null, ?EmbeddingModel $embedding = null): void

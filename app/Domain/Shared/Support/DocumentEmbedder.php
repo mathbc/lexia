@@ -7,6 +7,7 @@ namespace App\Domain\Shared\Support;
 use App\Domain\AiModels\Enums\AiProvider;
 use App\Domain\AiModels\Models\EmbeddingModel;
 use App\Domain\AiModels\Support\DefaultModels;
+use App\Domain\AiModels\Support\ProviderInstance;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -138,7 +139,8 @@ final class DocumentEmbedder
      * Um pedido ao provedor do modelo padrão, sempre na largura da coluna.
      *
      * As dimensões vão explícitas: sem elas o SDK cai nas do bloco do provedor
-     * no config, e o padrão do Gemini é 3072.
+     * no config, e o padrão do Gemini é 3072. E o provedor vai pela instância
+     * de ProviderInstance, que é quem leva a chave de API da linha do modelo.
      *
      * @param  list<string>  $inputs
      * @return list<list<float>>
@@ -155,7 +157,7 @@ final class DocumentEmbedder
             $pending->withProviderOptions(['taskType' => $task]);
         }
 
-        return array_values($pending->generate($model->provider->value, $model->name)->embeddings);
+        return array_values($pending->generate(ProviderInstance::for($model), $model->name)->embeddings);
     }
 
     /**

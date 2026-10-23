@@ -14,8 +14,8 @@ use RuntimeException;
 use Tests\TestCase;
 
 /**
- * O comando `lexia:import-legal-themes`: download, importação e vetorização,
- * e as duas fronteiras entre eles.
+ * O comando `lexia:import-legal-themes`: download (do portal ou do espelho),
+ * importação e vetorização, e as duas fronteiras entre eles.
  */
 final class ImportLegalThemesCommandTest extends TestCase
 {
@@ -74,12 +74,65 @@ final class ImportLegalThemesCommandTest extends TestCase
     }
 
     #[Test]
-    public function a_failed_download_writes_nothing(): void
+    public function the_mirror_serves_when_the_portal_is_down(): void
     {
-        Http::fake([StjLegalThemesFeed::URL => Http::response('Service Unavailable', 503)]);
+        Http::fake([
+            StjLegalThemesFeed::URL => Http::response('Service Unavailable', 503),
+            StjLegalThemesFeed::MIRROR_URL => static fn () => Http::response((string) file_get_contents(ImportLegalThemesTest::FIXTURE), 200, [
+                'Content-Type' => 'application/octet-stream',
+            ]),
+        ]);
+        Embeddings::fake();
 
         $this->artisan('lexia:import-legal-themes')
             ->expectsOutputToContain('Falha ao baixar o arquivo de temas')
+            ->expectsOutputToContain('Baixando '.StjLegalThemesFeed::MIRROR_URL)
+            ->expectsOutputToContain('7 precedentes (7 novos)')
+            ->assertSuccessful();
+
+        Http::assertSentInOrder([StjLegalThemesFeed::URL, StjLegalThemesFeed::MIRROR_URL]);
+    }
+
+    #[Test]
+    public function a_healthy_portal_never_reaches_the_mirror(): void
+    {
+        $this->fakePortal();
+        Embeddings::fake();
+
+        $this->artisan('lexia:import-legal-themes', ['--skip-embeddings' => true])->assertSuccessful();
+
+        Http::assertNotSent(static fn ($request): bool => $request->url() === StjLegalThemesFeed::MIRROR_URL);
+    }
+
+    #[Test]
+    public function a_page_from_the_mirror_is_not_the_file(): void
+    {
+        // O que o Drive devolve quando o arquivo deixa de ser público.
+        Http::fake([
+            StjLegalThemesFeed::URL => Http::response('Service Unavailable', 503),
+            StjLegalThemesFeed::MIRROR_URL => Http::response('<!DOCTYPE html><html>Google Drive</html>', 200, [
+                'Content-Type' => 'text/html; charset=utf-8',
+            ]),
+        ]);
+
+        $this->artisan('lexia:import-legal-themes')
+            ->expectsOutputToContain('página HTML')
+            ->expectsOutputToContain('Nenhuma fonte entregou o arquivo de temas')
+            ->assertFailed();
+
+        $this->assertSame(0, LegalTheme::query()->count());
+    }
+
+    #[Test]
+    public function a_failed_download_writes_nothing(): void
+    {
+        Http::fake([
+            StjLegalThemesFeed::URL => Http::response('Service Unavailable', 503),
+            StjLegalThemesFeed::MIRROR_URL => Http::response('Service Unavailable', 503),
+        ]);
+
+        $this->artisan('lexia:import-legal-themes')
+            ->expectsOutputToContain('Nenhuma fonte entregou o arquivo de temas')
             ->assertFailed();
 
         $this->assertSame(0, LegalTheme::query()->count());

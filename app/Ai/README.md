@@ -450,8 +450,12 @@ com uma linha marcada `default` — e um índice único parcial garante que nunc
 | Texto (os 19 agentes) | `ai_models` | `gemini` / `gemini-3.7-flash` | `UsesDefaultAiModel` |
 | Embeddings (os dois catálogos) | `embedding_models` | `gemini` / `gemini-embedding-001`, 768 dim. | `DocumentEmbedder` |
 
-O `.env` guarda só o que é segredo ou endereço: `GEMINI_API_KEY`, `OLLAMA_URL`. O provider
-de cada linha é um `AiProvider` cujo valor é o nome do bloco em `config('ai.providers')`.
+O `.env` guarda só o endereço do daemon, `OLLAMA_URL`. A chave de API é da linha (`api_key`,
+criptografada com a APP_KEY e nunca devolvida à tela), e o provider de cada linha é um
+`AiProvider` cujo valor é o nome do bloco em `config('ai.providers')` — um molde:
+`ProviderInstance::for()` copia o bloco, acrescenta a chave e o registra sob um nome derivado
+dela, porque o SDK guarda a instância pelo nome e uma chave escrita por cima do bloco
+`gemini` serviria a mesma chave a texto e embeddings, e a chave velha a um worker.
 
 **Como um agente chega ao modelo.** O SDK pergunta `provider()` e `model()` ao agente antes
 de olhar `#[Provider]` e `#[Model]` (`Promptable::getProvidersAndModels()`), e o trait
@@ -486,8 +490,9 @@ classificações pioram sem erro nenhum.
    o modelo configurado é exatamente aquele em que ela foi medida.
 2. **Um modelo cadastrado precisa ser alcançável.** O provider da linha é o nome do bloco
    em `config('ai.providers')`, e o nome vai como está para a API — na URL do Gemini, no
-   corpo do Ollama. O cadastro recusa espaço no nome, mas não confere se o modelo existe:
-   um id errado só aparece na primeira inferência.
+   corpo do Ollama. O cadastro recusa espaço no nome, mas não confere se o modelo existe
+   nem se a chave vale: um id errado ou uma chave revogada só aparecem na primeira
+   inferência.
 3. **O modelo de texto precisa suportar saída estruturada.** No Ollama o `format` vira
    gramática e um modelo sem essa capacidade devolve JSON só por boa vontade — confira
    com `ollama show <modelo>`. Num provedor de nuvem o schema viaja como

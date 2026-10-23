@@ -23,10 +23,10 @@ final class CreateEmbeddingModel
     use AsAction;
     use ValidatesModelCatalog;
 
-    public function handle(AiProvider $provider, string $name): EmbeddingModel
+    public function handle(AiProvider $provider, string $name, ?string $apiKey = null): EmbeddingModel
     {
-        return DB::transaction(function () use ($provider, $name): EmbeddingModel {
-            $model = EmbeddingModel::query()->create(['provider' => $provider, 'name' => $name]);
+        return DB::transaction(function () use ($provider, $name, $apiKey): EmbeddingModel {
+            $model = EmbeddingModel::query()->create(['provider' => $provider, 'name' => $name, 'api_key' => $apiKey]);
 
             if (! EmbeddingModel::hasDefault()) {
                 MakeEmbeddingModelDefault::make()->handle($model);
@@ -54,6 +54,7 @@ final class CreateEmbeddingModel
         $model = $this->handle(
             AiProvider::from($request->string('provider')->toString()),
             $request->string('name')->toString(),
+            $this->typedApiKey($request),
         );
 
         Inertia::flash('success', $model->default

@@ -27,7 +27,7 @@ php artisan lexia:install            # conta da LexIA, admin do sistema e modelo
 composer dev                         # serve + queue + pail + vite
 php artisan test                     # PHPUnit contra o banco lexia_testing
 php artisan lexia:embed-procedural-classes  # vetores do catálogo (após mexer nas descrições)
-php artisan lexia:import-legal-themes       # temas do STJ: baixa, importa e vetoriza (--file, --skip-embeddings, --fresh)
+php artisan lexia:import-legal-themes       # temas do STJ: baixa (portal, senão o espelho no Drive), importa e vetoriza (--file, --skip-embeddings, --fresh)
 ./vendor/bin/pint                    # formatação
 composer analyse                     # phpstan nível 6, sem supressões
 npm run types:check                  # tsc --noEmit
@@ -91,7 +91,10 @@ precisa antes de alguém entrar é `php artisan lexia:install`:
    e-mail já verificado. Os dados vêm de `--name`, `--email` e `--password`; com terminal,
    o que faltar é perguntado; sem terminal, a opção que falta reprova o comando.
 3. `RegisterDefaultModels` cadastra `gemini-3.7-flash` e `gemini-embedding-001` (ver "Os
-   modelos", em "Os agentes").
+   modelos", em "Os agentes"). A chave de API deles vem de `--gemini-key` (com terminal, é
+   perguntada; em branco pula) e só preenche um modelo que não tem chave. Ela é a exceção à
+   regra das opções: não é preciso chave para entrar, então a falta dela **avisa** em vez de
+   reprovar, e a equipe a informa no "Editar" do modelo.
 
 Cada passo é idempotente, então o comando pode rodar em todo deploy: o admin é pulado
 quando já existe um `PlatformAdmin` e nenhuma opção pede outro (um e-mail já cadastrado
@@ -301,7 +304,23 @@ LexIA (`app/Domain/AiModels`, telas `/modelos-de-ia` e `/modelos-de-embedding`, 
 `PlatformAdmin`): `AiModel` para o texto e `EmbeddingModel` para os vetores. Cada tabela tem
 uma coluna `default`, e um índice único parcial (`WHERE "default"`) garante que haja no
 máximo uma — `default` é palavra reservada no Postgres, então SQL cru a põe entre aspas. O
-`.env` ficou só com o que é segredo ou endereço: `GEMINI_API_KEY`, `OLLAMA_URL`.
+`.env` ficou só com o endereço, `OLLAMA_URL`: **a chave de API também mora na linha**.
+
+- **Uma chave por modelo, criptografada.** `api_key` usa o cast `encrypted` (a APP_KEY: ao
+  trocá-la, a antiga vai para `APP_PREVIOUS_KEYS`, senão as chaves ficam ilegíveis) e está
+  em `$hidden`. Ela **nunca volta ao navegador**: a tela recebe `api_key_hint` (`••••9kZA`),
+  e o campo em branco na edição mantém a guardada. A chave é do provedor, então trocar o
+  provedor sem digitar outra a descarta. Só o Gemini a exige (`AiProvider::requiresApiKey()`);
+  o Ollama local não pede nenhuma.
+- **Uma instância do SDK por chave.** O SDK resolve o provider pelo nome em
+  `config('ai.providers')` e guarda a instância pela vida do processo, então a chave não pode
+  ser escrita por cima do bloco `gemini`: texto e embedding podem ser Gemini com chaves
+  diferentes no mesmo request, e um worker seguraria a primeira chave que viu.
+  `ProviderInstance::for()` copia o bloco do provedor, acrescenta a chave da linha e o registra
+  sob um nome derivado dela (`gemini-3f1a…`); é esse nome que `provider()` devolve e que o
+  `DocumentEmbedder` passa ao `generate()`. Chave nova é nome novo, nunca instância velha. O
+  `providerOptions()` continua recebendo o **driver** (`gemini`, `ollama`), não esse nome.
+  Gemini sem chave lança `MissingDefaultModelException` antes de sair da máquina.
 
 - **Nenhum agente nomeia provider nem modelo.** O SDK pergunta `provider()` e `model()` ao
   agente antes de olhar atributo, e o trait `UsesDefaultAiModel` responde as duas pelo
@@ -564,8 +583,11 @@ advogado aceitar, nunca um campo que se preenche sozinho.
 Testes de agente ficam em `tests/Agents`, no grupo `agents`, **fora** do
 `php artisan test` padrão porque gastam inferência de verdade. Eles herdam os padrões que o
 `TestCase` fixa: o texto no `gemini-3.7-flash`, então custam **cota do Gemini**, e os
-embeddings no `nomic-embed-text`, então pedem o Ollama de pé com o modelo baixado. Para
-rodá-los num modelo local, `usingDefaultModels()` no `setUp`.
+embeddings no `nomic-embed-text`, então pedem o Ollama de pé com o modelo baixado. O banco de
+testes não tem catálogo de onde ler a chave, e o `.env` não a tem mais: ela vem do **shell**,
+`GEMINI_API_KEY=… composer test:agents` (sem ela, o modelo em memória leva `test-key`, que
+serve aos agentes falsos e o Gemini recusa). Para rodá-los num modelo local,
+`usingDefaultModels()` no `setUp`.
 `LegalThesisResearchTest` é o extremo e custa **cota do Gemini** mais rede: ele pesquisa
 nos portais de verdade, leva minutos e pode ficar vermelho porque o STJ está fora do ar,
 e não porque o prompt regrediu. Tudo o que nele não depende do modelo — a guarda de
@@ -575,7 +597,7 @@ suíte padrão e é o arquivo em que confiar quando o outro estiver vermelho por
 encontra nada, porque a exclusão do grupo continua valendo:
 
 ```bash
-composer test:agents
+GEMINI_API_KEY=… composer test:agents
 ```
 
 ## A revisão forense
@@ -1096,6 +1118,18 @@ Controvérsias, PUIL, IAC e SIRDR —, trazido do portal de dados abertos por
 sem `account_id` e sem soft delete, mas carregado por **comando** e não por migration,
 porque o STJ afeta e julga temas toda semana e um snapshot versionado envelheceria no
 commit.
+
+**O portal cai, e o comando tem um espelho.** Medido em 2026-10-23: o
+`dadosabertos.web.stj.jus.br` completa o TLS e não devolve um byte, então o download
+morre nos 60 s do `StjLegalThemesFeed`. Esgotado esse prazo, o comando tenta
+`StjLegalThemesFeed::MIRROR_URL`, uma cópia do mesmo `temas.csv` no Google Drive (o
+download direto em `drive.usercontent.google.com`, e não a página `/view`). O espelho é
+um snapshot e envelhece como envelheceria no commit, daí ser a **segunda** fonte e nunca
+a primeira; atualizá-lo é subir o arquivo novo por cima no Drive, sem mexer no id. Quando o
+arquivo deixa de ser público, o Drive responde **200 com uma página HTML**, e o feed a
+recusa pelo `Content-Type` em vez de deixar o leitor tropeçar no cabeçalho. Com o portal
+fora, cada execução espera os 60 s antes de cair para o espelho; `--file` continua sendo o
+atalho.
 
 Quatro fatos do arquivo decidem o desenho, todos medidos nele:
 

@@ -16,16 +16,20 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * Corrects a text model — a typo in the id, a newer version of the same one.
  *
  * Editing the default changes what every agent runs on from the next prompt,
- * and that is the point: there is nothing stored that the old name made.
+ * and that is the point: there is nothing stored that the old name made. The
+ * same goes for its key — the next prompt goes out with the new one.
  */
 final class UpdateAiModel
 {
     use AsAction;
     use ValidatesModelCatalog;
 
-    public function handle(AiModel $model, AiProvider $provider, string $name): AiModel
+    /**
+     * A null key keeps the stored one, unless the provider changed.
+     */
+    public function handle(AiModel $model, AiProvider $provider, string $name, ?string $apiKey = null): AiModel
     {
-        $model->update(['provider' => $provider, 'name' => $name]);
+        $model->update(['provider' => $provider, 'name' => $name, 'api_key' => $model->apiKeyAfter($provider, $apiKey)]);
 
         return $model;
     }
@@ -52,6 +56,7 @@ final class UpdateAiModel
             $aiModel,
             AiProvider::from($request->string('provider')->toString()),
             $request->string('name')->toString(),
+            $this->typedApiKey($request),
         );
 
         Inertia::flash('success', "Modelo {$aiModel->name} atualizado.");

@@ -10,10 +10,10 @@ use App\Domain\Shared\Contracts\HasLabel;
 /**
  * Who serves a registered model.
  *
- * The value is the instance name under `config('ai.providers')`, which is what
- * the SDK resolves a provider by — so a case here without a block there is a
- * model nothing can reach. Credentials and URLs stay in that config, read from
- * the environment: only the choice of model moved to the database.
+ * The value names the block under `config('ai.providers')` that ProviderInstance
+ * starts from — so a case here without a block there is a model nothing can
+ * reach. The block keeps the driver and the URL, read from the environment; the
+ * key is the model row's (`api_key`), and ProviderInstance merges it in.
  */
 enum AiProvider: string implements HasLabel
 {
@@ -38,6 +38,17 @@ enum AiProvider: string implements HasLabel
      * would not degrade the research, it would erase it.
      */
     public function supportsWebSearch(): bool
+    {
+        return $this === self::Gemini;
+    }
+
+    /**
+     * Whether a model of this provider is useless without an API key.
+     *
+     * The local daemon answers anyone who reaches its port; a key there is
+     * only for an Ollama behind a proxy that asks for a bearer token.
+     */
+    public function requiresApiKey(): bool
     {
         return $this === self::Gemini;
     }

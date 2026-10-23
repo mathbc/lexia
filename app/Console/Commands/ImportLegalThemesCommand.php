@@ -15,8 +15,8 @@ use Illuminate\Support\Collection;
 use Throwable;
 
 /**
- * Traz os temas do STJ do portal de dados abertos e os deixa prontos para a
- * busca vetorial.
+ * Traz os temas do STJ do portal de dados abertos — ou, com ele fora do ar, do
+ * espelho no Google Drive — e os deixa prontos para a busca vetorial.
  *
  * Duas etapas com fronteiras diferentes. A importação é uma transação: ou o
  * arquivo inteiro entra, ou nada muda. A vetorização vem depois e fora dela,
@@ -68,17 +68,25 @@ final class ImportLegalThemesCommand extends Command
         return $this->option('skip-embeddings') ? self::SUCCESS : $this->embed($embed);
     }
 
+    /**
+     * O portal primeiro e o espelho depois: a falha de uma fonte é aviso, e só
+     * a de todas é erro.
+     */
     private function download(StjLegalThemesFeed $feed): ?string
     {
-        $this->info('Baixando '.StjLegalThemesFeed::URL);
+        foreach (StjLegalThemesFeed::SOURCES as $url) {
+            $this->info('Baixando '.$url);
 
-        try {
-            return $feed->download();
-        } catch (Throwable $e) {
-            $this->error('Falha ao baixar o arquivo de temas: '.$e->getMessage());
-
-            return null;
+            try {
+                return $feed->download($url);
+            } catch (Throwable $e) {
+                $this->warn('Falha ao baixar o arquivo de temas: '.$e->getMessage());
+            }
         }
+
+        $this->error('Nenhuma fonte entregou o arquivo de temas; nada foi gravado.');
+
+        return null;
     }
 
     private function import(ImportLegalThemes $import, string $path): ?LegalThemeImportResult

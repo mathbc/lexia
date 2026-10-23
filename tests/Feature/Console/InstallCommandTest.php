@@ -115,9 +115,48 @@ final class InstallCommandTest extends TestCase
             ->expectsQuestion('E-mail do administrador', 'equipe@lexia.com.br')
             ->expectsQuestion('Nome do administrador', 'Equipe LexIA')
             ->expectsQuestion('Senha do administrador', 'outra-senha-longa')
+            ->expectsQuestion('Chave de API do Gemini', 'AIzaPerguntada')
             ->assertSuccessful();
 
         $this->assertSame('Equipe LexIA', User::acrossAllAccounts()->where('email', 'equipe@lexia.com.br')->sole()->name);
+        $this->assertSame('AIzaPerguntada', AiModel::platformDefault()?->api_key);
+    }
+
+    #[Test]
+    public function the_gemini_key_fills_both_models(): void
+    {
+        $this->artisan('lexia:install', [...self::ADMIN, '--gemini-key' => 'AIzaDoDeploy'])
+            ->doesntExpectOutputToContain('sem chave de API')
+            ->assertSuccessful();
+
+        $this->assertSame('AIzaDoDeploy', AiModel::platformDefault()?->api_key);
+        $this->assertSame('AIzaDoDeploy', EmbeddingModel::platformDefault()?->api_key);
+    }
+
+    /**
+     * Not a failure — the key is not needed to sign in, and staff can type it
+     * in the panel —, but not silent either.
+     */
+    #[Test]
+    public function without_a_key_the_models_are_registered_with_a_warning(): void
+    {
+        $this->artisan('lexia:install', self::ADMIN)
+            ->expectsOutputToContain('gemini-3.7-flash está sem chave de API')
+            ->expectsOutputToContain('gemini-embedding-001 está sem chave de API')
+            ->assertSuccessful();
+
+        $this->assertNull(AiModel::platformDefault()?->api_key);
+    }
+
+    #[Test]
+    public function the_gemini_key_never_replaces_one_typed_in_the_panel(): void
+    {
+        AiModel::factory()->asDefault()->create(['name' => 'gemini-3.7-flash', 'api_key' => 'AIzaDoPainel']);
+
+        $this->artisan('lexia:install', [...self::ADMIN, '--gemini-key' => 'AIzaDoDeploy'])->assertSuccessful();
+
+        $this->assertSame('AIzaDoPainel', AiModel::platformDefault()?->api_key);
+        $this->assertSame('AIzaDoDeploy', EmbeddingModel::platformDefault()?->api_key);
     }
 
     #[Test]

@@ -64,7 +64,7 @@ final class ManageAiModelsTest extends TestCase
         $staff = User::factory()->platformAdmin()->create();
 
         $this->actingAs($staff)
-            ->post('/modelos-de-ia', ['provider' => 'gemini', 'name' => 'gemini-3.7-flash'])
+            ->post('/modelos-de-ia', ['provider' => 'gemini', 'name' => 'gemini-3.7-flash', 'api_key' => 'AIzaChave'])
             ->assertRedirect('/modelos-de-ia');
 
         $this->actingAs($staff)
@@ -97,6 +97,72 @@ final class ManageAiModelsTest extends TestCase
         $this->actingAs($staff)
             ->post('/modelos-de-ia', ['provider' => 'ollama', 'name' => 'gemini-3.7-flash'])
             ->assertSessionHasNoErrors();
+    }
+
+    #[Test]
+    public function a_gemini_model_needs_a_key_and_an_ollama_one_does_not(): void
+    {
+        $staff = User::factory()->platformAdmin()->create();
+
+        $this->actingAs($staff)
+            ->post('/modelos-de-ia', ['provider' => 'gemini', 'name' => 'gemini-3.7-flash'])
+            ->assertSessionHasErrors('api_key');
+
+        $this->actingAs($staff)
+            ->post('/modelos-de-ia', ['provider' => 'gemini', 'name' => 'gemini-3.7-flash', 'api_key' => 'AIza chave'])
+            ->assertSessionHasErrors('api_key');
+
+        $this->actingAs($staff)
+            ->post('/modelos-de-ia', ['provider' => 'ollama', 'name' => 'gpt-oss:20b'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertNull(AiModel::query()->sole()->api_key);
+    }
+
+    #[Test]
+    public function the_key_is_encrypted_at_rest_and_never_reaches_the_screen(): void
+    {
+        $staff = User::factory()->platformAdmin()->create();
+
+        $this->actingAs($staff)
+            ->post('/modelos-de-ia', ['provider' => 'gemini', 'name' => 'gemini-3.7-flash', 'api_key' => 'AIzaSegredo9kZA'])
+            ->assertSessionHasNoErrors();
+
+        $stored = DB::table('ai_models')->value('api_key');
+
+        $this->assertIsString($stored);
+        $this->assertStringNotContainsString('AIzaSegredo9kZA', $stored);
+        $this->assertSame('AIzaSegredo9kZA', AiModel::query()->sole()->api_key);
+        $this->assertArrayNotHasKey('api_key', AiModel::query()->sole()->toArray());
+
+        $this->actingAs($staff)
+            ->get('/modelos-de-ia')
+            ->assertDontSee('AIzaSegredo9kZA')
+            ->assertInertia(fn ($page) => $page
+                ->where('models.0.api_key_hint', '••••9kZA')
+                ->missing('models.0.api_key')
+                ->where('keyed_providers', ['gemini']));
+    }
+
+    #[Test]
+    public function a_correction_keeps_the_key_unless_one_is_typed_or_the_provider_changes(): void
+    {
+        $staff = User::factory()->platformAdmin()->create();
+        $model = AiModel::factory()->create(['name' => 'gemini-3.6-flash', 'api_key' => 'chave-antiga']);
+        $url = "/modelos-de-ia/{$model->id}";
+
+        $this->actingAs($staff)->put($url, ['provider' => 'gemini', 'name' => 'gemini-3.7-flash', 'api_key' => ''])->assertSessionHasNoErrors();
+        $this->assertSame('chave-antiga', $model->refresh()->api_key);
+
+        $this->actingAs($staff)->put($url, ['provider' => 'gemini', 'name' => 'gemini-3.7-flash', 'api_key' => 'chave-nova'])->assertSessionHasNoErrors();
+        $this->assertSame('chave-nova', $model->refresh()->api_key);
+
+        // A key belongs to its provider: switching drops it…
+        $this->actingAs($staff)->put($url, ['provider' => 'ollama', 'name' => 'gpt-oss:20b'])->assertSessionHasNoErrors();
+        $this->assertNull($model->refresh()->api_key);
+
+        // …and switching back has to bring one.
+        $this->actingAs($staff)->put($url, ['provider' => 'gemini', 'name' => 'gemini-3.7-flash'])->assertSessionHasErrors('api_key');
     }
 
     #[Test]

@@ -22,6 +22,8 @@ export interface ModelCatalogProps {
     models: CatalogModel[]
     /** `AiProvider::options()`. */
     providers: Option[]
+    /** The providers that refuse to run without an API key — `AiProvider::requiresApiKey()`. */
+    keyed_providers: string[]
     can: { create: boolean }
 }
 
@@ -46,7 +48,7 @@ interface Props extends ModelCatalogProps {
  * view. Promoting is a row action, never a field of the form, because it moves
  * the flag off another row too.
  */
-export function ModelCatalog({ models, providers, can, title, subtitle, baseUrl, nameHint, confirmDefault }: Props) {
+export function ModelCatalog({ models, providers, keyed_providers, can, title, subtitle, baseUrl, nameHint, confirmDefault }: Props) {
     const [open, setOpen] = useState(false)
     const [editing, setEditing] = useState<CatalogModel | null>(null)
 
@@ -76,6 +78,7 @@ export function ModelCatalog({ models, providers, can, title, subtitle, baseUrl,
                         <TableRow>
                             <TableHead>Modelo</TableHead>
                             <TableHead>Provedor</TableHead>
+                            <TableHead>Chave de API</TableHead>
                             <TableHead>Situação</TableHead>
                             <TableHead className="w-12">
                                 <span className="sr-only">Ações</span>
@@ -89,6 +92,9 @@ export function ModelCatalog({ models, providers, can, title, subtitle, baseUrl,
                                     {model.name}
                                 </TableCell>
                                 <TableCell className="py-3 text-muted-foreground">{model.provider_label}</TableCell>
+                                <TableCell className="py-3">
+                                    <ApiKeyCell model={model} required={keyed_providers.includes(model.provider)} />
+                                </TableCell>
                                 <TableCell className="py-3">
                                     {model.default ? <Badge variant="success">Padrão</Badge> : <Badge variant="muted">Disponível</Badge>}
                                 </TableCell>
@@ -126,7 +132,7 @@ export function ModelCatalog({ models, providers, can, title, subtitle, baseUrl,
 
                         {models.length === 0 && (
                             <TableRow className="hover:bg-transparent">
-                                <TableCell colSpan={4} className="py-12 text-center whitespace-normal text-muted-foreground">
+                                <TableCell colSpan={5} className="py-12 text-center whitespace-normal text-muted-foreground">
                                     Nenhum modelo cadastrado. O primeiro cadastrado vira o padrão — ou rode{' '}
                                     <code className="font-mono">php artisan lexia:install</code>.
                                 </TableCell>
@@ -144,6 +150,7 @@ export function ModelCatalog({ models, providers, can, title, subtitle, baseUrl,
                     <ModelForm
                         model={editing}
                         providers={providers}
+                        keyedProviders={keyed_providers}
                         baseUrl={baseUrl}
                         nameHint={nameHint}
                         onClose={() => setOpen(false)}
@@ -154,15 +161,34 @@ export function ModelCatalog({ models, providers, can, title, subtitle, baseUrl,
     )
 }
 
+/**
+ * The stored key's tail, or why there is none. A missing key is an error only
+ * where the provider refuses to run without one — an Ollama row without a key
+ * is the local daemon working as intended.
+ */
+function ApiKeyCell({ model, required }: { model: CatalogModel; required: boolean }) {
+    if (model.api_key_hint) {
+        return <span className="font-mono text-sm text-muted-foreground">{model.api_key_hint}</span>
+    }
+
+    return required ? (
+        <Badge variant="destructive">Não cadastrada</Badge>
+    ) : (
+        <span className="text-muted-foreground">Dispensada</span>
+    )
+}
+
 function ModelForm({
     model,
     providers,
+    keyedProviders,
     baseUrl,
     nameHint,
     onClose,
 }: {
     model: CatalogModel | null
     providers: Option[]
+    keyedProviders: string[]
     baseUrl: string
     nameHint: string
     onClose: () => void
@@ -170,7 +196,15 @@ function ModelForm({
     const form = useForm({
         provider: model?.provider ?? '',
         name: model?.name ?? '',
+        // Sempre vazio: a chave guardada não volta ao navegador, e em branco
+        // na edição significa manter a que está lá.
+        api_key: '',
     })
+
+    // A chave é do provedor: trocar de provedor descarta a guardada, e o
+    // servidor só a exige quando nenhuma sobreviveria ao salvamento.
+    const keepsStoredKey = Boolean(model?.api_key_hint) && model?.provider === form.data.provider
+    const keyRequired = keyedProviders.includes(form.data.provider) && !keepsStoredKey
 
     const submit = (event: FormEvent) => {
         event.preventDefault()
@@ -220,6 +254,27 @@ function ModelForm({
                             disabled={form.processing}
                         />
                     </Field>
+
+                    <Field
+                        label="Chave de API"
+                        required={keyRequired}
+                        error={form.errors.api_key}
+                        hint={apiKeyHint(model, form.data.provider, keyedProviders, keepsStoredKey)}
+                    >
+                        {/* `new-password` e não `off`: é o único valor que o
+                            Chrome respeita para não preencher a senha de login
+                            salva num campo de senha. */}
+                        <Input
+                            type="password"
+                            value={form.data.api_key}
+                            onChange={(event) => form.setData('api_key', event.target.value)}
+                            placeholder={keepsStoredKey ? (model?.api_key_hint ?? '') : ''}
+                            className="font-mono"
+                            autoComplete="new-password"
+                            spellCheck={false}
+                            disabled={form.processing}
+                        />
+                    </Field>
                 </div>
 
                 <DialogFooter className="border-t p-6">
@@ -233,4 +288,21 @@ function ModelForm({
             </form>
         </>
     )
+}
+
+/** What the key field means for the provider chosen and the row being edited. */
+function apiKeyHint(model: CatalogModel | null, provider: string, keyedProviders: string[], keepsStoredKey: boolean): string {
+    if (keepsStoredKey) {
+        return 'Em branco, a chave atual é mantida. Preencha só para trocá-la.'
+    }
+
+    if (model?.api_key_hint && provider !== model.provider) {
+        return 'A chave atual é do outro provedor e será descartada.'
+    }
+
+    if (provider !== '' && !keyedProviders.includes(provider)) {
+        return 'Opcional para este provedor: só um servidor atrás de autenticação pede chave.'
+    }
+
+    return 'Guardada criptografada no banco; depois de salva, nunca é exibida de novo.'
 }

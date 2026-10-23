@@ -18,17 +18,21 @@ use Lorisleiva\Actions\Concerns\AsAction;
  *
  * Renaming the default is a change of model in all but name: the key the
  * vectors are stamped with stops matching, so the catalogues are queued for
- * re-embedding exactly as a promotion would.
+ * re-embedding exactly as a promotion would. A new API key is not: the same
+ * model answers the same vectors whoever pays for them.
  */
 final class UpdateEmbeddingModel
 {
     use AsAction;
     use ValidatesModelCatalog;
 
-    public function handle(EmbeddingModel $model, AiProvider $provider, string $name): EmbeddingModel
+    /**
+     * A null key keeps the stored one, unless the provider changed.
+     */
+    public function handle(EmbeddingModel $model, AiProvider $provider, string $name, ?string $apiKey = null): EmbeddingModel
     {
-        return DB::transaction(function () use ($model, $provider, $name): EmbeddingModel {
-            $model->update(['provider' => $provider, 'name' => $name]);
+        return DB::transaction(function () use ($model, $provider, $name, $apiKey): EmbeddingModel {
+            $model->update(['provider' => $provider, 'name' => $name, 'api_key' => $model->apiKeyAfter($provider, $apiKey)]);
 
             if ($model->default && $model->wasChanged(['provider', 'name'])) {
                 EmbedCatalogs::dispatch()->afterCommit();
@@ -60,6 +64,7 @@ final class UpdateEmbeddingModel
             $embeddingModel,
             AiProvider::from($request->string('provider')->toString()),
             $request->string('name')->toString(),
+            $this->typedApiKey($request),
         );
 
         Inertia::flash('success', "Modelo {$embeddingModel->name} atualizado.");

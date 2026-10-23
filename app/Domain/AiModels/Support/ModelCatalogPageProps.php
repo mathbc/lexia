@@ -15,6 +15,9 @@ use Illuminate\Database\Eloquent\Collection;
  *
  * Each row carries what the actor may do to it, so the row-actions menu
  * arrives already filtered; the policy is still what refuses the request.
+ *
+ * The API key never leaves: a row says only its last characters, and the form
+ * learns from `keyed_providers` which providers refuse to run without one.
  */
 final class ModelCatalogPageProps
 {
@@ -33,6 +36,7 @@ final class ModelCatalogPageProps
                 'provider' => $model->provider->value,
                 'provider_label' => $model->provider->label(),
                 'name' => $model->name,
+                'api_key_hint' => $model->apiKeyHint(),
                 'default' => $model->default,
                 'can' => [
                     'update' => $actor->can('update', $model),
@@ -41,6 +45,10 @@ final class ModelCatalogPageProps
                 ],
             ])->all(),
             'providers' => AiProvider::options(),
+            'keyed_providers' => array_values(array_map(
+                static fn (AiProvider $provider): string => $provider->value,
+                array_filter(AiProvider::cases(), static fn (AiProvider $provider): bool => $provider->requiresApiKey()),
+            )),
             'can' => [
                 'create' => $actor->can('create', $class),
             ],

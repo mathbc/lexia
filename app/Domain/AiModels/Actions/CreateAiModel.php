@@ -26,10 +26,10 @@ final class CreateAiModel
     use AsAction;
     use ValidatesModelCatalog;
 
-    public function handle(AiProvider $provider, string $name): AiModel
+    public function handle(AiProvider $provider, string $name, ?string $apiKey = null): AiModel
     {
-        return DB::transaction(function () use ($provider, $name): AiModel {
-            $model = AiModel::query()->create(['provider' => $provider, 'name' => $name]);
+        return DB::transaction(function () use ($provider, $name, $apiKey): AiModel {
+            $model = AiModel::query()->create(['provider' => $provider, 'name' => $name, 'api_key' => $apiKey]);
 
             if (! AiModel::hasDefault()) {
                 MakeAiModelDefault::make()->handle($model);
@@ -57,6 +57,7 @@ final class CreateAiModel
         $model = $this->handle(
             AiProvider::from($request->string('provider')->toString()),
             $request->string('name')->toString(),
+            $this->typedApiKey($request),
         );
 
         Inertia::flash('success', $model->default

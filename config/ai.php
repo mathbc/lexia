@@ -203,14 +203,18 @@ return [
     | AI Providers
     |--------------------------------------------------------------------------
     |
-    | Only how to reach each provider: the key and the URL, read from the
-    | environment. Which model runs is the database's (see the top of this
-    | file), so there is no `models` key — the SDK would only read it for a
-    | model nobody named, and every request here names one.
+    | Only how to reach each provider: the driver and the URL. Which model runs
+    | is the database's (see the top of this file), so there is no `models`
+    | key — the SDK would only read it for a model nobody named, and every
+    | request here names one. And there is no `key` either: the API key is the
+    | model row's (`api_key`, encrypted), typed in /modelos-de-ia and
+    | /modelos-de-embedding.
     |
-    | Each block's name is an `App\Domain\AiModels\Enums\AiProvider` value: a
-    | registered model is reached through the block of its provider, and a case
-    | in the enum without a block here is a model nothing can call.
+    | Each block's name is an `App\Domain\AiModels\Enums\AiProvider` value, and
+    | it is a template: ProviderInstance copies the block of a model's provider,
+    | adds the row's key and registers the result under a name of its own, which
+    | is what the agents and DocumentEmbedder hand the SDK. A case in the enum
+    | without a block here is a model nothing can call.
     |
     | Every other provider is removed: failover walks this list, so a provider
     | left here without credentials is just a slower way to fail.
@@ -240,7 +244,6 @@ return [
 
         'gemini' => [
             'driver' => 'gemini',
-            'key' => env('GEMINI_API_KEY'),
             'url' => env('GEMINI_URL', 'https://generativelanguage.googleapis.com/v1beta/'),
         ],
 
@@ -255,7 +258,6 @@ return [
 
         'ollama' => [
             'driver' => 'ollama',
-            'key' => env('OLLAMA_API_KEY', ''),
             'url' => env('OLLAMA_URL', 'http://localhost:11434'),
         ],
     ],

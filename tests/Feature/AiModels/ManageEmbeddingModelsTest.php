@@ -56,7 +56,7 @@ final class ManageEmbeddingModelsTest extends TestCase
         $staff = User::factory()->platformAdmin()->create();
 
         $this->actingAs($staff)
-            ->post('/modelos-de-embedding', ['provider' => 'gemini', 'name' => 'gemini-embedding-001'])
+            ->post('/modelos-de-embedding', ['provider' => 'gemini', 'name' => 'gemini-embedding-001', 'api_key' => 'AIzaChave'])
             ->assertRedirect('/modelos-de-embedding');
 
         $this->assertSame('gemini-embedding-001', EmbeddingModel::platformDefault()?->name);
@@ -119,6 +119,23 @@ final class ManageEmbeddingModelsTest extends TestCase
         EmbedCatalogs::assertPushed(1);
     }
 
+    /**
+     * The same model answers the same vectors whoever pays for them.
+     */
+    #[Test]
+    public function replacing_the_default_key_queues_nothing(): void
+    {
+        $staff = User::factory()->platformAdmin()->create();
+        $default = EmbeddingModel::factory()->asDefault()->create(['name' => 'gemini-embedding-001']);
+
+        $this->actingAs($staff)
+            ->put("/modelos-de-embedding/{$default->id}", ['provider' => 'gemini', 'name' => 'gemini-embedding-001', 'api_key' => 'chave-nova'])
+            ->assertRedirect('/modelos-de-embedding');
+
+        $this->assertSame('chave-nova', $default->fresh()?->api_key);
+        EmbedCatalogs::assertNotPushed();
+    }
+
     #[Test]
     public function the_default_is_never_deleted(): void
     {
@@ -143,6 +160,7 @@ final class ManageEmbeddingModelsTest extends TestCase
         $this->usingDefaultModels(embedding: new EmbeddingModel([
             'provider' => AiProvider::Gemini,
             'name' => 'gemini-embedding-001',
+            'api_key' => 'test-key',
         ]));
 
         $first = EmbedCatalogs::run();

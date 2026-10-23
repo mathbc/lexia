@@ -32,13 +32,20 @@ use function Laravel\Prompts\text;
  * only promoted on a catalogue with no default. Without a terminal, which is
  * how a deploy runs it, a missing option fails the command instead of waiting
  * on a prompt nobody will answer.
+ *
+ * The Gemini key is the exception to that rule: it is not needed to sign in,
+ * only to run inference, and staff can type it in /modelos-de-ia afterwards.
+ * So `--gemini-key` only fills a registered model that has none, a terminal
+ * asks for it when one is missing (blank skips), and a run that ends with a
+ * model still keyless warns instead of failing.
  */
 final class InstallCommand extends Command
 {
     protected $signature = 'lexia:install
                             {--name= : nome do administrador da plataforma}
                             {--email= : e-mail do administrador da plataforma}
-                            {--password= : senha do administrador da plataforma}';
+                            {--password= : senha do administrador da plataforma}
+                            {--gemini-key= : chave de API do Gemini para os modelos padrão que ainda não têm uma}';
 
     protected $description = 'Garante a conta da LexIA, cria o administrador da plataforma e registra os modelos padrão';
 
@@ -119,16 +126,37 @@ final class InstallCommand extends Command
 
     private function registerModels(): void
     {
-        ['text' => $text, 'embedding' => $embedding] = RegisterDefaultModels::run();
+        ['text' => $text, 'embedding' => $embedding] = RegisterDefaultModels::run($this->geminiKey());
 
         $this->info($this->modelLine('Modelo de IA', $text, AiModel::platformDefault()));
         $this->info($this->modelLine('Modelo de embedding', $embedding, EmbeddingModel::platformDefault()));
+
+        foreach ([$text, $embedding] as $model) {
+            if (! $model->hasApiKey()) {
+                $this->warn("{$model->name} está sem chave de API: rode de novo com --gemini-key ou informe-a em \"Editar\", no painel.");
+            }
+        }
 
         // Promoted on this run, so MakeEmbeddingModelDefault queued the
         // catalogues — and on a deploy the queue may have nobody listening.
         if ($embedding->wasChanged('default')) {
             $this->line('Os catálogos foram enfileirados para vetorização: mantenha um worker de fila rodando.');
         }
+    }
+
+    /**
+     * The option, or the answer to the prompt when a terminal is there and a
+     * model would be left without a key; null to leave the keys as they are.
+     */
+    private function geminiKey(): ?string
+    {
+        $key = trim((string) $this->option('gemini-key'));
+
+        if ($key === '' && $this->input->isInteractive() && RegisterDefaultModels::lacksKey()) {
+            $key = trim(password('Chave de API do Gemini', hint: 'Em branco para informar depois, no painel.'));
+        }
+
+        return $key === '' ? null : $key;
     }
 
     private function modelLine(string $kind, AiModel|EmbeddingModel $model, AiModel|EmbeddingModel|null $default): string

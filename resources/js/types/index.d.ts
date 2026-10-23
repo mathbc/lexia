@@ -128,6 +128,8 @@ export interface CatalogModel {
     provider_label: string;
     /** The model id the provider's API speaks, as `gemini-3.7-flash`. */
     name: string;
+    /** The stored key's last characters, as `••••9kZA` — the key itself never leaves the server. */
+    api_key_hint: string | null;
     default: boolean;
     can: CatalogModelAbilities;
 }

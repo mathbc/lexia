@@ -23,17 +23,23 @@ class EmbeddingModelFactory extends Factory
         return [
             'provider' => AiProvider::Gemini,
             'name' => 'gemini-embedding-'.fake()->unique()->numerify('00#'),
+            'api_key' => 'AIza'.fake()->regexify('[A-Za-z0-9_-]{35}'),
             'default' => false,
         ];
     }
 
     public function ollama(string $name = 'nomic-embed-text'): static
     {
-        return $this->state(['provider' => AiProvider::Ollama, 'name' => $name]);
+        return $this->state(['provider' => AiProvider::Ollama, 'name' => $name, 'api_key' => null]);
     }
 
     public function asDefault(): static
     {
         return $this->state(['default' => true]);
+    }
+
+    public function withoutApiKey(): static
+    {
+        return $this->state(['api_key' => null]);
     }
 }
