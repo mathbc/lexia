@@ -13,18 +13,12 @@ use App\Domain\LegalCases\Data\InjunctiveReliefSuggestionData;
 use App\Domain\LegalCases\Data\LegalCaseClassification;
 use App\Domain\LegalCases\Data\LegalCaseFraming;
 use App\Domain\LegalCases\Exceptions\InadmissibleFactsException;
-use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\PracticeAreas\Actions\ClassifyPracticeArea;
 use App\Domain\ProceduralClasses\Actions\SelectProceduralClass;
 use App\Domain\ProceduralClasses\Data\ProceduralClassSelection;
 use App\Domain\Requirements\Data\RequirementListData;
 use Closure;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Concurrency;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
-use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 use RuntimeException;
 use Throwable;
@@ -58,10 +52,10 @@ use Throwable;
  * O preço é uma inferência curta a mais na espera de todo preenchimento.
  *
  * Duas saídas, e a diferença entre elas é o desenho. A recusa é uma resposta
- * sobre a entrada: `InadmissibleFactsException`, que a casca transforma num
- * 422 sob `facts`, com a frase que `FactsScreeningData::message()` compôs. A
+ * sobre a entrada: `InadmissibleFactsException`, que o job (`RunAssistedFill`) grava como
+ * recusa sob `facts`, com a frase que `FactsScreeningData::message()` compôs. A
  * triagem que **falha** — o provider fora, a resposta sem estrutura — não passa
- * por `stage()` e vira o 503 de sempre: uma guarda que abre quando cai não é
+ * por `stage()` e vira a falha de sempre: uma guarda que abre quando cai não é
  * guarda, e o agente da área, que viria em seguida, mora no mesmo provider.
  *
  * Antes dela há um piso que não custa nada, o `min:20` das regras, para que
@@ -81,7 +75,7 @@ use Throwable;
  * ela precisa da classe. Uma possessória de força nova, um despejo, uma ação de
  * alimentos ou um mandado de segurança trazem liminar própria, com o seu
  * artigo, e é a classe que diz isso. O preço é explícito: a task mais longa do
- * bloco ganha uma inferência, e com ela a espera desta rota. Correr a tutela
+ * bloco ganha uma inferência, e com ela a espera do preenchimento. Correr a tutela
  * em t=0 só com os fatos a tiraria da conta, mas mandaria o agente julgar a
  * urgência sem saber em que processo ela seria pedida.
  *
@@ -151,7 +145,7 @@ use Throwable;
  * dispensa das três regras acima: pode receber o `Customer`, que é da conta, e
  * o tenant está de pé.
  *
- * O preço é explícito e é o maior desta rota: a espera passa a ser a task mais
+ * O preço é explícito e é o maior do preenchimento: a espera passa a ser a task mais
  * longa **mais** uma inferência, e mais duas no foro de um tribunal que usa
  * dois sistemas (SP, RN, RR, AP), porque aí o segundo agente escolhe entre
  * eles. Sem cliente no pedido a etapa não roda, e a chave volta nula — a tela
@@ -190,7 +184,7 @@ use Throwable;
  *
  * Quatro das cinco. A área é a única obrigatória, por duas razões que se somam:
  * a classe depende dela, e é ela o que a tela foi buscar — sem área não há
- * enquadramento nenhum a devolver, e a resposta é o 503 lá de baixo. O preço do
+ * enquadramento nenhum a devolver, e o preenchimento termina em falha. O preço do
  * paralelismo aparece exatamente aqui: quando a área cai, as duas extrações já
  * correram e são descartadas. É desperdício de cota, não de tempo de parede.
  * A triagem, que vem antes de todas, também não pode faltar — mas ela não é
@@ -202,49 +196,42 @@ use Throwable;
  * nem para dispensar as perguntas que ainda não foram feitas. `stage()` é onde
  * isso mora.
  *
- * ## A casca HTTP
+ * ## Quem chama, e onde
  *
- * `POST /pecas/classificar` devolve `LegalCaseClassification::toArray()` como
- * JSON, mais o id da peça gravada (ver "O rascunho", abaixo), e não uma
- * resposta do Inertia: quem chama é a tela de preenchimento inteligente, que
- * precisa do resultado em mãos para decidir para onde ir — a navegação vem
- * depois, e é do browser.
+ * Ninguém pela rota. `POST /pecas/classificar` aponta para `RunAssistedFill`,
+ * que grava uma `AssistedFill` e enfileira o job na fila `inference`; é o job
+ * que chama este `handle()`, num worker, e grava a peça depois dele por
+ * `CreateAssistedLegalCase`. A tela da peça nova espera travada e consulta a
+ * linha até ela terminar.
  *
- * O preço continua sendo a latência, mas encolheu duas vezes. O bloco trocou a
- * soma das etapas pela mais longa delas; a saída da pesquisa tirou da conta a
- * mais lenta de todas. O que resta são cinco inferências na nuvem, e o teto é a
- * mais lenta das três tasks — a do enquadramento, que agora encadeia três.
+ * A dívida da fila foi paga aqui, e o motivo foi o gateway, não o PHP: atrás
+ * do Cloudflare de produção a requisição era cortada com 504 muito antes de o
+ * `AllowLongInference` ter opinião. A fila já tinha sido tentada uma vez e
+ * saíra, porque sem um worker de pé a tela girava até o teto. A diferença hoje
+ * é de operação, e está escrita no código: a fila é própria, o worker é
+ * próprio, e uma rodada que ninguém pega aparece como falha em minutos — ver
+ * `RunsOnInferenceQueue` e `TracksInferenceRun`.
  *
- * A dívida da fila continua de pé e o lugar dela é aqui: quando a espera virar
- * fila de verdade, é este `asController()` que devolve um identificador em vez
- * do resultado, e o `handle()` não muda uma linha. Note que o paralelismo tornou
- * o relato de progresso mais pobre, não mais rico — três tasks que correm junto
- * não têm uma ordem para relatar.
+ * O `handle()` não mudou uma linha com isso, e é de propósito: ele é o que os
+ * testes de agente exercitam, e "tudo o que um relato pode dar sem uma peça
+ * gravada" segue sendo a descrição exata dele. Ele não toca no banco, não lê
+ * sessão e lança em vez de responder — a recusa da triagem como
+ * `InadmissibleFactsException`, a área que caiu como `RuntimeException` —, e é
+ * o job que traduz cada uma num estado que a tela lê: `refused`, com a frase
+ * debaixo do campo Fatos, e `failed`, com a frase do antigo 503.
  *
- * A fila já foi tentada aqui, e saiu. Ela punha o preenchimento atrás de um
- * worker — sem um de pé, o pedido esperava o teto inteiro e a tela dizia que a
- * análise fora interrompida. Se ela voltar, que seja numa fila própria, com
- * worker próprio.
- *
- * Um agente fora do ar é condição de operação, não defeito de código: daí o
- * 503 com uma frase que a tela consegue mostrar, o `report()` para que a causa
- * real continue chegando ao log, e o `RecordAgentFailure` que a deixa no
- * registro de execução dos agentes.
+ * Um agente fora do ar é condição de operação, não defeito de código: daí a
+ * frase que a tela consegue mostrar, o `report()` para que a causa real
+ * continue chegando ao log, e o `RecordAgentFailure` que a deixa no registro de
+ * execução dos agentes.
  *
  * ## O rascunho
  *
- * Com o enquadramento na mão, a casca grava a peça por `CreateAssistedLegalCase`
- * — a etapa 1, o réu e os pedidos, como rascunho parado na etapa 1 — e a
- * resposta ganha `legal_case_id`, que é para onde a tela navega. O `handle()`
- * continua sem tocar no banco, e é de propósito: ele é o que os testes de
- * agente exercitam, e "tudo o que um relato pode dar sem uma peça gravada"
- * segue sendo a descrição exata dele.
- *
  * A gravação vem depois da inferência e nunca no lugar dela. Sem cliente no
  * pedido, sem classe escolhida — as duas colunas são NOT NULL — ou com a
- * gravação falhando, `legal_case_id` volta nulo e o payload é o de sempre: a
- * tela leva o enquadramento até `/pecas/nova` pela entrega do
- * `sessionStorage`, que deixou de ser o caminho e virou a reserva.
+ * gravação falhando, a `AssistedFill` termina sem peça e com o enquadramento em
+ * `result`: a tela o leva até `/pecas/nova` pela entrega do `sessionStorage`,
+ * que deixou de ser o caminho e virou a reserva.
  */
 final class ClassifyLegalCase
 {
@@ -284,7 +271,7 @@ final class ClassifyLegalCase
 
         $framing = $read['framing'];
 
-        // A área é a única obrigatória, e este é o mesmo 503 de sempre: a causa
+        // A área é a única obrigatória, e esta é a falha de sempre: a causa
         // real já foi ao log pelo `report()` do `stage()`, dentro do processo
         // que a viu, com o stack trace de verdade.
         if (! $framing instanceof LegalCaseFraming) {
@@ -337,7 +324,7 @@ final class ClassifyLegalCase
      *
      * A área **não** passa por `stage()` aqui de propósito: ela é obrigatória, e
      * deixá-la estourar é o que faz a task inteira voltar nula e a resposta
-     * virar 503. A classe passa, porque uma área errada torna a classe errada
+     * virar falha. A classe passa, porque uma área errada torna a classe errada
      * por construção e esta etapa não tem como objetar — as duas justificativas
      * viajam separadas justamente para que o advogado veja de qual das duas
      * decisões desconfiar. Uma área sem classes de ajuizamento também devolve
@@ -424,7 +411,7 @@ final class ClassifyLegalCase
      * The gate, written to the execution log when it falls.
      *
      * Ela fica fora de `stage()` — guarda que abre quando cai não é guarda —,
-     * então a queda dela continua escapando para o 503 da casca. Mas o
+     * então a queda dela continua escapando para a falha do job. Mas o
      * `stage()` é o outro lugar que anota uma queda, e a porta nunca passa por
      * ele: sem isto, a cota do Gemini esgotada, que é o que derruba a primeira
      * inferência do preenchimento, não deixaria linha nenhuma.
@@ -437,120 +424,6 @@ final class ClassifyLegalCase
             RecordAgentFailure::run('assisted_fill', $e, ScreenLegalCaseFacts::class);
 
             throw $e;
-        }
-    }
-
-    /**
-     * Quem pode abrir uma peça pode pedir o enquadramento de uma: é o mesmo
-     * gesto, e a rota é a porta curta para o mesmo formulário.
-     */
-    public function authorize(ActionRequest $request): bool
-    {
-        return $request->user()->can('create', LegalCase::class);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function rules(ActionRequest $request): array
-    {
-        return [
-            // O piso não julga nada: só poupa a triagem do que nem frase é.
-            'facts' => ['required', 'string', 'min:20'],
-            // Opcional, e só para o endereçamento: sem ele a sexta etapa não
-            // roda. Conferido contra a conta do ator pela mesma razão da etapa
-            // 1 — é um id vindo do pedido, e para a equipe LexIA o escopo está
-            // aberto.
-            'customer_id' => [
-                'nullable',
-                'uuid',
-                Rule::exists('customers', 'id')
-                    ->where('account_id', $request->user()->account_id)
-                    ->whereNull('deleted_at'),
-            ],
-        ];
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    public function getValidationAttributes(): array
-    {
-        return [
-            'facts' => 'fatos',
-            'customer_id' => 'cliente',
-        ];
-    }
-
-    public function asController(ActionRequest $request): JsonResponse
-    {
-        $facts = $request->string('facts')->toString();
-        $customer = $request->filled('customer_id')
-            ? Customer::query()->findOrFail($request->string('customer_id')->toString())
-            : null;
-
-        try {
-            $classification = $this->handle($facts, $customer);
-        } catch (InadmissibleFactsException $e) {
-            // Sem o texto: um falso positivo é o relato de um cliente de
-            // verdade, e o log não é lugar para ele. Quem recusa o quê, e
-            // quantas vezes, é o que serve para ver um usuário insistindo.
-            Log::notice('Relato recusado pela triagem.', [
-                'user_id' => $request->user()->id,
-                'account_id' => $request->user()->account_id,
-                'verdict' => $e->screening->verdict->value,
-                'length' => mb_strlen($facts),
-            ]);
-
-            // Lançada de dentro do `catch`, a validação não cai no irmão de
-            // baixo, e o handler a desenha como o 422 de sempre.
-            throw ValidationException::withMessages(['facts' => $e->getMessage()]);
-        } catch (Throwable $e) {
-            // Sem `RecordAgentFailure` aqui: a triagem e o enquadramento já
-            // anotaram a própria queda, e o que chega é ela ou o embrulho dela.
-            report($e);
-
-            return response()->json([
-                'message' => 'Não foi possível enquadrar o caso agora. Tente novamente em instantes.',
-            ], 503);
-        }
-
-        return response()->json([
-            ...$classification->toArray(),
-            'legal_case_id' => $this->draft($request, $customer, $facts, $classification)?->id,
-        ]);
-    }
-
-    /**
-     * The pleading saved as a draft, or null when it cannot be — see "O
-     * rascunho" in the class docblock.
-     *
-     * Sem cliente ou sem classe a recusa é esperada e não vai ao log: a coluna
-     * não admite nenhum dos dois nulos, e a tela segue pela entrega. A gravação
-     * que falha vai, porque é defeito — e nem ela custa o enquadramento.
-     */
-    private function draft(
-        ActionRequest $request,
-        ?Customer $customer,
-        string $facts,
-        LegalCaseClassification $classification,
-    ): ?LegalCase {
-        if ($customer === null || $classification->proceduralClass === null) {
-            return null;
-        }
-
-        try {
-            return CreateAssistedLegalCase::run(
-                $request->user()->account_id,
-                $request->user()->id,
-                $customer,
-                $facts,
-                $classification,
-            );
-        } catch (Throwable $e) {
-            report($e);
-
-            return null;
         }
     }
 }

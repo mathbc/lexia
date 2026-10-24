@@ -45,7 +45,9 @@ return [
             // Acima do job mais longo, que é o que este número precisa ser: um
             // job reservado há mais que isto é dado como perdido e reservado de
             // novo por outro worker — com ele ainda rodando. O mais longo é
-            // EmbedCatalogs (1800 s).
+            // EmbedCatalogs (1800 s), na fila `default`; os da fila `inference`
+            // vêm logo abaixo (RunAssistedFill, 1500 s; as pesquisas, 900 s).
+            // A conexão é uma só para as duas filas, e o número vale para ambas.
             'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 1900),
             'after_commit' => false,
         ],

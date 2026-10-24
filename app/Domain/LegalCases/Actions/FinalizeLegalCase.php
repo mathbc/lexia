@@ -7,6 +7,7 @@ namespace App\Domain\LegalCases\Actions;
 use App\Domain\CourtDecisions\Data\CourtDecisionListData;
 use App\Domain\Doctrines\Data\DoctrineListData;
 use App\Domain\LegalCases\Data\ForensicReviewData;
+use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalThemes\Data\LegalCaseThemeListData;
 use App\Domain\Users\Models\User;
@@ -165,9 +166,22 @@ final class FinalizeLegalCase
      * Concluding is the one save in this flow that changes which screen the
      * lawyer belongs on: every other step redirects to the next step, and there
      * is no step after the seventh. The document is what they came for.
+     *
+     * Except while a research is still on its way, which sends the lawyer back
+     * to the last step with the alert. The researches run in the queue and
+     * write by diff when they land, so concluding under one would draft the
+     * pleading from a review that a worker then rewrites. The steps lock behind
+     * their dialog while they wait; this is for the second browser tab.
      */
     public function asController(LegalCase $legalCase, ActionRequest $request): RedirectResponse
     {
+        if ($legalCase->hasResearchInFlight()) {
+            return to_route('legal-cases.edit', [
+                'legalCase' => $legalCase,
+                'etapa' => LegalCaseStep::CourtDecisions->value,
+            ])->with('error', 'Aguarde a pesquisa em andamento terminar antes de concluir a peça.');
+        }
+
         $this->handle(
             $legalCase,
             ForensicReviewData::fromArray($request->validated()),

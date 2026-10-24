@@ -5,13 +5,20 @@ declare(strict_types=1);
 namespace Tests\Feature\LegalCases;
 
 use App\Domain\Accounts\Models\Account;
+use App\Domain\AgentsExecutionLogs\Models\AgentsExecutionLog;
 use App\Domain\CourtDecisions\Data\CourtDecisionData;
 use App\Domain\LegalCases\Actions\ResearchLegalCaseCourtDecisions;
+use App\Domain\LegalCases\Actions\RunLegalCaseJurisprudence;
 use App\Domain\LegalCases\Data\CourtDecisionResearchData;
+use App\Domain\LegalCases\Enums\InferenceRunStatus;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
+use App\Domain\LegalCases\Enums\ResearchSubject;
 use App\Domain\LegalCases\Models\LegalCase;
+use App\Domain\LegalCases\Models\ResearchRun;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
+use Inertia\Testing\AssertableInertia;
 use Mockery;
 use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\Test;
@@ -32,6 +39,10 @@ use Tests\TestCase;
  * `tests/Agents/CourtDecisionResearchTest`, which spends Gemini quota and opens
  * the LexML; what this file is about is the Action around them, and a test that
  * reached the network would be red on days the portal was.
+ *
+ * The route only queues (RunLegalCaseJurisprudence), and the suite runs the
+ * queue in `sync`: the job runs inside the POST, so posting and then reading
+ * the pleading still reads what the research wrote.
  */
 final class ResearchLegalCaseJurisprudenceTest extends TestCase
 {
@@ -175,11 +186,13 @@ final class ResearchLegalCaseJurisprudenceTest extends TestCase
     }
 
     /**
-     * A inferência fica fora da transação, e a falha não deixa rastro.
+     * A inferência fica fora da transação, e a falha não deixa rastro na peça.
      *
      * Nada gravado significa `court_decision_findings` nulo, e o nulo é o que
      * faz a tela oferecer o botão em vez de mostrar uma etapa que parece
-     * pesquisada.
+     * pesquisada. A falha já foi um 500, que caía no modal de erro do Inertia e
+     * não chegava ao registro de execução; hoje o job a captura, a anota lá e a
+     * grava na rodada, de onde a etapa a lê.
      */
     #[Test]
     public function a_failed_run_writes_nothing_and_leaves_no_marker(): void
@@ -193,12 +206,57 @@ final class ResearchLegalCaseJurisprudenceTest extends TestCase
 
         $this->actingAs($owner)
             ->post(route('legal-cases.jurisprudence.research', $case))
-            ->assertStatus(500);
+            ->assertRedirect(route('legal-cases.edit', [
+                'legalCase' => $case,
+                'etapa' => LegalCaseStep::CourtDecisions->value,
+            ]));
 
         $case->refresh();
 
         $this->assertCount(0, $case->courtDecisions);
         $this->assertNull($case->court_decision_findings);
+
+        $run = ResearchRun::acrossAllAccounts()->sole();
+
+        $this->assertSame(ResearchSubject::CourtDecisions, $run->subject);
+        $this->assertSame(InferenceRunStatus::Failed, $run->status);
+        $this->assertSame(ResearchSubject::CourtDecisions->failure(), $run->failure);
+
+        $log = AgentsExecutionLog::query()->sole();
+
+        $this->assertSame('jurisprudence.court_decisions', $log->operation);
+        $this->assertSame('ResearchLegalCaseCourtDecisions', $log->agent);
+        $this->assertStringContainsString('504 Gateway Timeout', $log->error);
+        $this->assertSame($account->id, $log->account_id);
+        $this->assertSame($case->id, $log->legal_case_id);
+    }
+
+    /**
+     * A rota só enfileira, e uma pesquisa a caminho não é paga duas vezes.
+     */
+    #[Test]
+    public function the_route_only_queues_and_never_twice(): void
+    {
+        Queue::fake();
+
+        [$account, $owner] = $this->accountWithOwner();
+        $case = $this->pleading($account);
+
+        $this->fakeResearch()->shouldNotReceive('handle');
+
+        $this->actingAs($owner)->post(route('legal-cases.jurisprudence.research', $case));
+        $this->actingAs($owner)->post(route('legal-cases.jurisprudence.research', $case));
+
+        $run = ResearchRun::acrossAllAccounts()->sole();
+
+        $this->assertSame(InferenceRunStatus::Queued, $run->status);
+        RunLegalCaseJurisprudence::assertPushedOn('inference', 1);
+
+        $this->actingAs($owner)
+            ->get(route('legal-cases.edit', ['legalCase' => $case]))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('researchRuns.court-decisions.status', 'queued')
+                ->where('researchRuns.court-decisions.failure', null));
     }
 
     /**

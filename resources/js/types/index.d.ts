@@ -866,8 +866,80 @@ export interface LegalResearch extends LegalResearchFindings {
 }
 
 /**
+ * Onde está uma inferência da fila `inference` — espelha `InferenceRunStatus`.
+ *
+ * É sempre o estado **efetivo**: uma rodada que nenhum worker pegou, ou que
+ * morreu com o worker, chega como `failed`, e nunca deixa a tela travada. As
+ * duas primeiras são as que travam; `refused` é só do preenchimento inteligente
+ * (a triagem recusou o relato).
+ */
+export type InferenceRunStatus =
+    | 'queued'
+    | 'running'
+    | 'completed'
+    | 'refused'
+    | 'failed';
+
+/**
+ * O que uma pesquisa da fila procura: as três abas da etapa 5 e a etapa 6 —
+ * espelha `ResearchSubject`.
+ */
+export type ResearchSubject = ForensicReviewTab | 'court-decisions';
+
+/**
+ * A última rodada de cada assunto — espelha `InferenceRunProps::researchRuns()`.
+ *
+ * A concluída também vem, e é o que impede o laço: a etapa só dispara a
+ * pesquisa de um assunto **sem rodada nenhuma** e com o marcador nulo, e o
+ * marcador chega com `legalCase` um instante depois da rodada concluída.
+ *
+ * `failure` só vem quando acrescenta ao alerta da aba: a fila que não pegou a
+ * rodada, ou o worker que morreu com ela.
+ */
+export type ResearchRuns = Partial<
+    Record<
+        ResearchSubject,
+        {
+            status: Exclude<InferenceRunStatus, 'refused'>;
+            failure: string | null;
+        }
+    >
+>;
+
+/**
+ * O preenchimento inteligente que a tela da peça nova espera — espelha
+ * `InferenceRunProps::fill()`.
+ *
+ * `result` só vem quando ele terminou sem peça: é o enquadramento que segue
+ * para `/pecas/nova` pela entrega do `sessionStorage`. `facts` some quando a
+ * peça é gravada, porque ela passa a guardá-lo.
+ */
+export interface AssistedFill {
+    id: string;
+    status: InferenceRunStatus;
+    customer_id: string | null;
+    facts: string | null;
+    legal_case_id: string | null;
+    result: LegalCaseClassification | null;
+    failure: string | null;
+}
+
+/**
+ * O formulário do preenchimento inteligente devolvido como estava, depois de um
+ * preenchimento que não terminou em peça — espelha `InferenceRunProps::retry()`.
+ * `field` diz onde vai a frase: debaixo dos fatos (a recusa da triagem) ou no
+ * alerta do topo.
+ */
+export interface AssistedFillRetry {
+    customer_id: string | null;
+    facts: string;
+    message: string;
+    field: 'facts' | null;
+}
+
+/**
  * O que os agentes leram de um relato — espelha
- * `LegalCaseClassification::toArray()`, a resposta de `POST /pecas/classificar`.
+ * `LegalCaseClassification::toArray()`, guardado em `AssistedFill.result`.
  *
  * A área viaja com o slug e a classe com o uuid, que são exatamente as formas
  * que o assistente preenche: `?area=` na URL e `procedural_class_id` no
@@ -893,7 +965,7 @@ export interface LegalCaseClassification {
     /** Nulo quando a etapa falhou ou o pedido não levou o cliente. */
     court_addressing: CourtAddressingSuggestion | null;
     /**
-     * A peça que a rota gravou como rascunho com tudo o que está acima — ver
+     * A peça que o job gravou como rascunho com tudo o que está acima — ver
      * `CreateAssistedLegalCase`. Nula sem cliente, sem classe ou com a gravação
      * falhando, e aí o enquadramento segue pela entrega do `sessionStorage`.
      */

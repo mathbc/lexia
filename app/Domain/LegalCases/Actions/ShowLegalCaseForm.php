@@ -11,6 +11,7 @@ use App\Domain\Customers\Enums\MaritalStatus;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Models\LegalCase;
+use App\Domain\LegalCases\Support\InferenceRunProps;
 use App\Domain\LegalCases\Support\LegalCaseFormProps;
 use App\Domain\LegalCases\Support\LegalCaseOptions;
 use App\Domain\LegalPrecedents\Enums\LegalPrecedentType;
@@ -51,6 +52,13 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * finds its way back — CreateCustomer flashes it and redirects here, so the
  * select can show it chosen without a second round trip.
  *
+ * Two props belong to the queue. `researchRuns` is the state of the researches
+ * of the fifth and sixth steps — pending ones lock the step, failed ones are
+ * reported on their tab —, and `assistedFill` is the smart fill a new pleading
+ * is waiting on. The screen polls each of them as a partial reload, which is
+ * why everything here that costs a query is a closure: a partial reload skips
+ * the closures it did not ask for, and computes every plain value regardless.
+ *
  * `thesisTypes` and `precedentTypes` are the fifth step's share of the same
  * rule: the forensic review arrives from the classification carrying the enum's
  * backing value, because that is what will be written, and the Portuguese label
@@ -75,17 +83,24 @@ final class ShowLegalCaseForm
     {
         $area = $this->area($request, $legalCase);
 
+        // Em closures o que custa consulta: a tela consulta `researchRuns` e
+        // `assistedFill` a cada poucos segundos por recarga parcial, e só uma
+        // closure fica de fora do que a recarga não pediu.
         return Inertia::render('legal-cases/form', [
-            'legalCase' => $legalCase instanceof LegalCase
+            'legalCase' => fn (): ?array => $legalCase instanceof LegalCase
                 ? LegalCaseFormProps::draft($legalCase)
                 : null,
+            'researchRuns' => fn (): array => $legalCase instanceof LegalCase
+                ? InferenceRunProps::researchRuns($legalCase)
+                : [],
+            'assistedFill' => fn (): ?array => $this->assistedFill($request, $legalCase),
             'initialStep' => $this->initialStep($request, $legalCase)->value,
             'steps' => LegalCaseStep::options(),
-            'customers' => LegalCaseOptions::customers($request->user()->account_id),
-            'practiceAreas' => LegalCaseOptions::practiceAreas(),
-            'proceduralClasses' => $this->classes->forArea($area),
+            'customers' => fn (): array => LegalCaseOptions::customers($request->user()->account_id),
+            'practiceAreas' => fn (): array => LegalCaseOptions::practiceAreas(),
+            'proceduralClasses' => fn (): array => $this->classes->forArea($area),
             'selectedArea' => $area,
-            'judicialSystems' => LegalCaseOptions::judicialSystems(),
+            'judicialSystems' => fn (): array => LegalCaseOptions::judicialSystems(),
             'branches' => JusticeBranch::options(),
             'degrees' => JurisdictionDegree::options(),
             // A revisão forense recebe teses e precedentes com o `type` no valor
@@ -100,11 +115,30 @@ final class ShowLegalCaseForm
             'customerTypes' => CustomerType::options(),
             'maritalStatuses' => MaritalStatus::options(),
             'states' => BrazilianState::options(),
-            'can' => [
+            'can' => fn (): array => [
                 'create_customer' => $request->user()->can('create', Customer::class),
             ],
             'createdCustomer' => $request->session()->get(CreateCustomer::INLINE_FLASH_KEY),
         ]);
+    }
+
+    /**
+     * The smart fill a new pleading is being made from, when the URL names one.
+     *
+     * Only on the screen of a new pleading: RunAssistedFill redirects to
+     * `/pecas/nova?preenchimento={id}`, and that screen locks behind the
+     * analysis dialog and polls this prop until the fill ends — then it leaves
+     * for the pleading the fill saved. See InferenceRunProps::fill().
+     *
+     * @return array<string, mixed>|null
+     */
+    private function assistedFill(ActionRequest $request, ?LegalCase $legalCase): ?array
+    {
+        $id = $request->string('preenchimento')->toString();
+
+        return $legalCase === null && $id !== ''
+            ? InferenceRunProps::fill($id)
+            : null;
     }
 
     /**

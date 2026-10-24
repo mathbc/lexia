@@ -11,19 +11,15 @@ use App\Domain\LegalCases\Data\ForensicReviewData;
 use App\Domain\LegalCases\Data\LegalResearchData;
 use App\Domain\LegalCases\Data\LegalThemeResearchData;
 use App\Domain\LegalCases\Enums\ForensicReviewTab;
-use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalTheses\Data\LegalThesisData;
 use App\Domain\LegalTheses\Enums\LegalThesisOrigin;
 use App\Domain\LegalTheses\Models\LegalThesis;
 use App\Domain\Shared\Tenancy\TenantContext;
 use Closure;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Concurrency;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
-use Lorisleiva\Actions\ActionRequest;
 use Lorisleiva\Actions\Concerns\AsAction;
 use RuntimeException;
 use Throwable;
@@ -60,12 +56,15 @@ use Throwable;
  *
  * ## Exactly once per half, and the lawyer asks for the rest
  *
- * The screen fires this when step 5 opens and sends, in `tabs`, **only the
- * halves that were never researched**: `research_findings` null for the theses,
- * `theme_findings` null for the themes, `doctrine_findings` null for the
- * doctrine. A pleading researched before a tab existed asks for that tab alone;
- * one where every half landed asks for nothing.
- * "Pesquisar novamente" sends the one tab it sits on.
+ * Nobody calls this from a route any more: `POST /pecas/{id}/revisao-forense/pesquisar`
+ * points at RunLegalCaseForensicReview, which queues one `research_runs` row per
+ * half and a job in the `inference` queue, and the job calls this `handle()`
+ * in a worker. The screen fires that route when step 5 opens and sends, in
+ * `tabs`, **only the halves that were never researched** and have no run of
+ * their own: `research_findings` null for the theses, `theme_findings` null for
+ * the themes, `doctrine_findings` null for the doctrine. A pleading researched
+ * before a tab existed asks for that tab alone; one where every half landed
+ * asks for nothing. "Pesquisar novamente" sends the one tab it sits on.
  *
  * The guard is those columns and **not** the lists, which is the trap worth
  * naming: a run that confirms nothing is a legitimate, expensive answer that
@@ -108,12 +107,13 @@ use Throwable;
  * a network call to another continent is a lock nobody meant to take.
  *
  * A half that fails writes nothing and marks nothing, and does not stop the
- * other half from being written. It comes back to the screen as an error keyed
- * by the tab — a redirect with `withErrors()`, and not a 500 — so the tab can
- * say that it failed, offer the button, and stop the step from asking again on
- * its own. The one refusal that is still a 500 is the missing narrative: it is
- * checked before anything is spent, and it fails both halves for the same
- * reason.
+ * other half from being written. It comes back to the caller in the list this
+ * returns, and the job writes it on the half's run — which is where the screen
+ * reads it, after a reload as much as in the moment, so the tab can say that it
+ * failed, offer the button, and stop the step from asking again on its own.
+ * The missing narrative is the one refusal that throws: it is checked before
+ * anything is spent, and RunLegalCaseForensicReview checks it again before
+ * anything is queued.
  */
 final class ResearchLegalCaseForensicReview
 {
@@ -125,7 +125,7 @@ final class ResearchLegalCaseForensicReview
      */
     public function handle(LegalCase $legalCase, ?array $tabs = null): array
     {
-        $this->refuseUnresearchable($legalCase);
+        self::refuseUnresearchable($legalCase);
 
         $tabs ??= ForensicReviewTab::cases();
 
@@ -321,85 +321,14 @@ final class ResearchLegalCaseForensicReview
      * step 1, but a lawyer may frame the case first and write the story later,
      * and every step after it opens regardless. Without them both inner
      * Actions would throw the same refusal, one of them after a round trip to
-     * the cloud. Better here, before anything is spent.
+     * the cloud. Better here, before anything is spent — and public, because
+     * RunLegalCaseForensicReview asks it before queueing: a run that can only
+     * fail should not hold a worker.
      */
-    private function refuseUnresearchable(LegalCase $legalCase): void
+    public static function refuseUnresearchable(LegalCase $legalCase): void
     {
         if (trim((string) $legalCase->facts) === '') {
             throw new RuntimeException('Não há fatos para pesquisar.');
         }
-    }
-
-    public function authorize(ActionRequest $request): bool
-    {
-        // A peça, como em toda etapa do assistente: quem pode escrevê-la pode
-        // pedir a pesquisa do que ela argumenta.
-        return $request->user()->can('update', $request->route('legalCase'));
-    }
-
-    /**
-     * Absent means every half — a caller that predates the tabs gets what it
-     * always got, plus the themes and the doctrine.
-     *
-     * @return array<string, mixed>
-     */
-    public function rules(): array
-    {
-        return [
-            'tabs' => ['sometimes', 'array', 'min:1'],
-            'tabs.*' => ['distinct', Rule::enum(ForensicReviewTab::class)],
-        ];
-    }
-
-    /**
-     * @return array<string, string>
-     */
-    public function getValidationAttributes(): array
-    {
-        return [
-            'tabs' => 'abas',
-            'tabs.*' => 'aba',
-        ];
-    }
-
-    /**
-     * Answers with a redirect and not with the payload, unlike the smart fill.
-     *
-     * The rows are already written by the time this returns, so the honest
-     * answer is "go and read the step": Inertia re-renders the form with
-     * `LegalCaseFormProps::draft()`, and the rows arrive with the ids the
-     * database minted. A half that failed rides along as an error under its
-     * tab's value, which is what fires the screen's `onError` — a 500 would
-     * reach Inertia's own error dialog instead, and the tab would never know.
-     */
-    public function asController(LegalCase $legalCase, ActionRequest $request): RedirectResponse
-    {
-        $failed = $this->handle($legalCase, $this->tabsOf($request));
-
-        $redirect = to_route('legal-cases.edit', [
-            'legalCase' => $legalCase,
-            'etapa' => LegalCaseStep::Review->value,
-        ]);
-
-        if ($failed === []) {
-            return $redirect;
-        }
-
-        return $redirect->withErrors(array_combine(
-            array_map(static fn (ForensicReviewTab $tab): string => $tab->value, $failed),
-            array_map(static fn (ForensicReviewTab $tab): string => $tab->failure(), $failed),
-        ));
-    }
-
-    /**
-     * @return list<ForensicReviewTab>|null
-     */
-    private function tabsOf(ActionRequest $request): ?array
-    {
-        $tabs = $request->validated('tabs');
-
-        return is_array($tabs)
-            ? array_values(array_map(static fn (string $tab): ForensicReviewTab => ForensicReviewTab::from($tab), $tabs))
-            : null;
     }
 }

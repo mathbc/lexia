@@ -12,6 +12,7 @@ use App\Domain\Customers\Models\Customer;
 use App\Domain\Doctrines\Models\Doctrine;
 use App\Domain\Documents\Models\Document;
 use App\Domain\JudicialSystems\Models\JudicialSystem;
+use App\Domain\LegalCases\Enums\InferenceRunStatus;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Policies\LegalCasePolicy;
 use App\Domain\LegalPleadings\Models\LegalPleading;
@@ -155,6 +156,7 @@ use Illuminate\Support\Str;
  * @property-read Collection<int, LegalTheme> $themes
  * @property-read Collection<int, Doctrine> $doctrines
  * @property-read Collection<int, LegalPleading> $pleadings
+ * @property-read Collection<int, ResearchRun> $researchRuns
  */
 #[UsePolicy(LegalCasePolicy::class)]
 #[UseFactory(LegalCaseFactory::class)]
@@ -388,6 +390,34 @@ class LegalCase extends Model
     public function pleadings(): HasMany
     {
         return $this->hasMany(LegalPleading::class)->orderByDesc('version');
+    }
+
+    /**
+     * The researches queued for this pleading, newest first — one row per
+     * run, so the first row of a subject is its latest attempt.
+     *
+     * @return HasMany<ResearchRun, $this>
+     */
+    public function researchRuns(): HasMany
+    {
+        return $this->hasMany(ResearchRun::class)->latest()->orderByDesc('id');
+    }
+
+    /**
+     * Whether a research is still on its way to this pleading.
+     *
+     * The effective state, so a run left behind by a worker that died does not
+     * hold the pleading hostage: past its timeout it no longer counts. This is
+     * what FinalizeLegalCase asks before writing the review, because a run that
+     * lands after the conclusion would rewrite what the pleading was drafted
+     * from.
+     */
+    public function hasResearchInFlight(): bool
+    {
+        return $this->researchRuns()
+            ->whereIn('status', [InferenceRunStatus::Queued->value, InferenceRunStatus::Running->value])
+            ->get()
+            ->contains(static fn (ResearchRun $run): bool => $run->isPending());
     }
 
     /**

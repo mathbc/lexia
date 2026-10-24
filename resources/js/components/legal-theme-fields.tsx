@@ -23,6 +23,12 @@ interface Props {
     researching: boolean;
     /** A rodada falhou — o Ollama fora do ar, o catálogo vazio — e nada foi gravado. */
     failed: boolean;
+    /**
+     * Por que a última rodada falhou, quando o motivo não é a pesquisa: a fila
+     * que não a pegou, o worker que morreu com ela. Vai antes do texto do
+     * alerta, porque manda olhar para outro lugar.
+     */
+    failureReason?: string;
     /** Refaz só a seleção de temas, sem tocar nas teses. */
     onResearch: () => void;
     themes: LegalThemeDraft[];
@@ -49,6 +55,7 @@ export function LegalThemesPanel({
     research,
     researching,
     failed,
+    failureReason,
     onResearch,
     themes,
     onToggle,
@@ -97,9 +104,13 @@ export function LegalThemesPanel({
                         A seleção de temas não pôde ser concluída
                     </AlertTitle>
                     <AlertDescription>
-                        Nada foi gravado nesta aba, e as teses não foram
-                        tocadas. Use "Pesquisar novamente" para tentar outra
-                        vez, ou siga sem temas: a peça pode ser concluída assim.
+                        {failureReason && <p>{failureReason}</p>}
+                        <p>
+                            Nada foi gravado nesta aba, e as teses não foram
+                            tocadas. Use "Pesquisar novamente" para tentar outra
+                            vez, ou siga sem temas: a peça pode ser concluída
+                            assim.
+                        </p>
                     </AlertDescription>
                 </Alert>
             ) : research === null ? (

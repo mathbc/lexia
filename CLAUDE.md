@@ -24,7 +24,7 @@ docker compose up -d                 # Postgres + pgvector na porta 5442
 launchctl setenv OLLAMA_NUM_PARALLEL 4      # sem isto o daemon atende uma por vez
 php artisan migrate:fresh            # o seeder está vazio de propósito
 php artisan lexia:install            # conta da LexIA, admin do sistema e modelos padrão (--name, --email, --password)
-composer dev                         # serve + queue + pail + vite
+composer dev                         # serve + filas default e inference + pail + vite
 php artisan test                     # PHPUnit contra o banco lexia_testing
 php artisan lexia:embed-procedural-classes  # vetores do catálogo (após mexer nas descrições)
 php artisan lexia:import-legal-themes       # temas do STJ: baixa (portal, senão o espelho no Drive), importa e vetoriza (--file, --skip-embeddings, --fresh)
@@ -104,8 +104,10 @@ Cada passo é idempotente, então o comando pode rodar em todo deploy: o admin �
 quando já existe um `PlatformAdmin` e nenhuma opção pede outro (um e-mail já cadastrado
 também é pulado, sem trocar a senha), e um modelo só vira padrão num catálogo sem padrão —
 rodar de novo nunca desfaz a escolha feita na tela. Em produção a ordem é `migrate
---force`, `lexia:install`, `lexia:import-legal-themes`, com um **worker de fila** de pé:
-promover um modelo de embedding enfileira a vetorização dos catálogos.
+--force`, `lexia:install`, `lexia:import-legal-themes`, com **dois workers de fila** de pé:
+o da fila `default`, porque promover um modelo de embedding enfileira a vetorização dos
+catálogos, e o da fila `inference`, sem o qual o preenchimento inteligente e as pesquisas
+das etapas 5 e 6 nunca terminam — ver "A fila das inferências".
 
 ## O design system
 
@@ -412,7 +414,7 @@ ao top-k, evitada por construção. Os dois READMEs em `app/Ai` e `app/Rag`
 detalham o resto.
 
 **Antes de tudo isso há uma porta.** `FactsScreeningAgent`, exposto por
-`ScreenLegalCaseFacts`, é a primeira inferência de `POST /pecas/classificar`, sozinha e em
+`ScreenLegalCaseFacts`, é a primeira inferência do preenchimento inteligente, sozinha e em
 série, antes do bloco concorrente: ela nasceu de uma cantiga infantil que foi enquadrada e
 gravada como rascunho. O agente **não dá veredito**: responde seis perguntas de sim ou não
 (`instructs_the_system`, `intelligible`, `legal_matter`, `describes_events`,
@@ -421,11 +423,11 @@ veredito nesta ordem — instrução ao sistema, ininteligível, sem matéria ju
 fato ou sem pretensão), admissível. **A data nunca recusa sozinha**: só entra na lista do
 que falta quando o relato já é vago por outro motivo. A frase que a tela mostra é composta
 em PHP; a razão do agente é omitida quando o texto dá ordens ao sistema, para não ecoar a
-injeção. O relato recusado vira `InadmissibleFactsException`, que o `asController()`
-transforma num **422 sob `facts`** (a tela o desenha debaixo do campo) e num
-`Log::notice` **sem o texto**, porque o falso positivo é o relato de um cliente de
-verdade. A triagem que **falha** não passa por `stage()` e é o 503: guarda que abre quando
-cai não é guarda. Antes dela, o `min:20` das regras poupa a inferência do que nem frase é.
+injeção. O relato recusado vira `InadmissibleFactsException`, que o job (`RunAssistedFill`)
+grava como **recusa sob `facts`** — a tela da peça nova devolve o advogado ao formulário,
+que a desenha debaixo do campo — e num `Log::notice` **sem o texto**, porque o falso
+positivo é o relato de um cliente de verdade. A triagem que **falha** não passa por
+`stage()` e é a falha do preenchimento: guarda que abre quando cai não é guarda. Antes dela, o `min:20` das regras poupa a inferência do que nem frase é.
 O preço é uma inferência curta (3 a 8 s no Gemini) a mais em todo preenchimento. O guia é
 `app/Rag/knowledge/facts-screening.md`, e a assimetria está escrita nele: na dúvida,
 admitir, porque recusar o relato real de um cliente é o erro mais caro. Os "Consultar IA"
@@ -518,30 +520,32 @@ que custou minutos — sobrevive. No payload, `null` é a extração que falhou;
 campos nulos dentro do objeto são o relato que não identifica ninguém, e a lista
 vazia é o relato que não pede nada.
 
-`POST /pecas/classificar`, `POST /pecas/tutela-de-urgencia/sugerir` e
-`POST /pecas/enderecamento/sugerir` são as rotas das Actions de agente: a primeira aponta
-para `ClassifyLegalCase`, a segunda para `SuggestInjunctiveRelief` e a terceira para
-`SuggestCourtAddressing` — os dois "Consultar IA" da etapa 1 —, e as demais não têm
-`asController()` enquanto nada apontar para elas.
-O preço da rota continua sendo latência, com o navegador esperando, mas encolheu duas
-vezes. As cinco etapas estão num `Concurrency::run` — três tasks, porque área, classe e
-tutela são uma cadeia —, então a espera é a mais longa delas e não o total; e a saída da
-pesquisa tirou da conta a única que abria páginas. Sobram cinco inferências, e a cadeia do
-enquadramento é a mais longa.
-**A dívida da fila continua de pé**, e agora por um motivo menor do que era. Ela já foi
-paga uma vez e devolvida, aqui e na revisão forense: a fila punha a inferência atrás de um
-worker, e sem um de pé o pedido esperava o teto inteiro e a tela dizia que a análise fora
-interrompida. Se voltar, que seja numa fila própria, com worker próprio.
+`POST /pecas/classificar` aponta para `RunAssistedFill`, que **enfileira** o preenchimento
+na fila `inference` e responde na hora (ver "A fila das inferências");
+`POST /pecas/tutela-de-urgencia/sugerir` e `POST /pecas/enderecamento/sugerir` são as
+rotas síncronas de agente, para `SuggestInjunctiveRelief` e `SuggestCourtAddressing` — os
+dois "Consultar IA" da etapa 1 —, e as demais não têm `asController()` enquanto nada
+apontar para elas. As cinco etapas estão num `Concurrency::run` — três tasks, porque área,
+classe e tutela são uma cadeia —, então a espera é a mais longa delas e não o total; e a
+saída da pesquisa tirou da conta a única que abria páginas. Sobram cinco inferências, e a
+cadeia do enquadramento é a mais longa.
+**A dívida da fila foi paga**, e o motivo foi o gateway: em produção o Cloudflare na frente
+do Laravel Cloud cortava o `POST` com 504 muito antes do `AllowLongInference`, e a tela
+nunca saía do lugar. A fila já tinha sido tentada uma vez e devolvida — sem um worker de pé
+o pedido esperava o teto inteiro e a tela dizia que a análise fora interrompida —, e voltou
+nas condições que essa tentativa ensinou: fila própria, worker próprio e a rodada que
+ninguém pega dada como falha em minutos.
 
-**O preenchimento inteligente termina com a peça gravada.** Depois do `handle()`, o
-`asController()` de `ClassifyLegalCase` chama `CreateAssistedLegalCase`, que grava numa
+**O preenchimento inteligente termina com a peça gravada.** O job (`RunAssistedFill::asJob()`)
+chama o `handle()` de `ClassifyLegalCase` e depois `CreateAssistedLegalCase`, que grava numa
 transação a etapa 1 (com os envelopes da tutela e do endereçamento), o réu e os pedidos,
 com `is_draft` no default e a **marca d'água em `basics`** — quem preencheu foi a IA, e o
-advogado ainda confere cada etapa no "Continuar" dela. A resposta ganha `legal_case_id` e a
-tela abre `/pecas/{id}/editar`. O `handle()` continua sem tocar no banco, que é o que os
-testes de agente exercitam. Sem cliente, sem classe (a coluna é NOT NULL) ou com a gravação
-falhando, a chave volta nula e o payload segue pela entrega do `sessionStorage` até
-`/pecas/nova`, que virou reserva: a gravação nunca custa a inferência.
+advogado ainda confere cada etapa no "Continuar" dela. A `AssistedFill` termina com
+`legal_case_id`, e a tela da peça nova abre `/pecas/{id}/editar`. O `handle()` continua sem
+tocar no banco, que é o que os testes de agente exercitam. Sem cliente, sem classe (a
+coluna é NOT NULL) ou com a gravação falhando, a linha termina sem peça e com o
+enquadramento em `result`, que segue pela entrega do `sessionStorage` até `/pecas/nova` —
+a reserva: a gravação nunca custa a inferência.
 
 Duas consequências operacionais. O driver vive em `CONCURRENCY_DRIVER`
 (`config/concurrency.php`): em `process` — o default, e o único que serve a um request web,
@@ -617,7 +621,7 @@ nunca no lugar dele: o log do Laravel guarda o stack trace, que é o que consert
 esta tabela guarda a resposta que a operação pergunta primeiro — é o STJ de novo, a cota do
 Gemini ou um agente que quebrou. As colunas são o agente (`LegalThesisResearchAgent`), a
 operação (`forensic_review.theses`, `forensic_review.themes`, `forensic_review.doctrines`,
-`assisted_fill`), o **status HTTP** quando houve resposta, a **mensagem** do outro lado, o
+`jurisprudence.court_decisions`, `assisted_fill`), o **status HTTP** quando houve resposta, a **mensagem** do outro lado, o
 erro, o modelo padrão (`gemini:gemini-3.7-flash`), a conta e a peça.
 
 Quem lê a exceção é `AgentFailureData`, e o ponto é a **cadeia**: o SDK nunca deixa o erro
@@ -635,8 +639,11 @@ os dois, vale a Action que segurava a etapa.
 trocaria a causa pela dele. O `attempt()` de `ResearchLegalCaseForensicReview` grava a aba
 que cai, com a conta e a peça. O `stage()` de `ClassifyLegalCase` também grava, sem conta —
 as tasks do bloco não leem tenant —, e a triagem, que fica fora do `stage()`, grava pelo
-`screen()`; a casca não grava nada, porque o que chega a ela já foi anotado. Não há tela
-ainda; ela seria do `PlatformAdmin`.
+`screen()`; o job do preenchimento não grava nada, porque o que chega a ele já foi anotado.
+A jurisprudência, que lança em vez de devolver nulo, é gravada pelo job
+(`RunLegalCaseJurisprudence`), e o `jobFailed()` dos jobs de pesquisa grava a aba que o
+worker abandonou — o filho que a pesquisava não estava lá para isso. Não há tela ainda; ela
+seria do `PlatformAdmin`.
 
 ## A revisão forense
 
@@ -771,11 +778,13 @@ em duas listas e cunha o uuid em PHP é `ForensicReviewData::fromAgent()`, que �
 ### Quem dispara a pesquisa, e exatamente uma vez
 
 Não é mais o `ClassifyLegalCase`: é **abrir a etapa 5**, por
-`ResearchLegalCaseForensicReview` (`POST /pecas/{id}/revisao-forense/pesquisar`). A troca
-resolveu duas coisas de uma vez — a espera saiu do preenchimento inteligente, e o
-resultado passou a ter onde ser gravado, porque ali a peça já tem chave primária. A
-inferência fica **fora** da transação: são minutos de rede, e segurar uma linha travada
-por eles seria um lock que ninguém quis.
+`POST /pecas/{id}/revisao-forense/pesquisar`, que aponta para `RunLegalCaseForensicReview`.
+Ela só **enfileira** — uma `research_runs` por aba pedida e um job na fila `inference` — e
+responde na hora; o job chama `ResearchLegalCaseForensicReview`, que é a pesquisa. A troca
+para a etapa 5 resolveu duas coisas de uma vez — a espera saiu do preenchimento
+inteligente, e o resultado passou a ter onde ser gravado, porque ali a peça já tem chave
+primária. A inferência fica **fora** da transação: são minutos de rede, e segurar uma
+linha travada por eles seria um lock que ninguém quis.
 
 A Action pesquisa as **três abas em paralelo**: a pesquisa de teses
 (`ResearchLegalCaseTheses`), a seleção de temas (`ResearchLegalCaseThemes`) e a pesquisa de
@@ -801,12 +810,15 @@ gravação reconcilia por diff.
 Os marcadores são **um por aba** pelo mesmo motivo, um nível abaixo. A tela manda em
 `tabs[]` só as abas cujo marcador é nulo: uma peça pesquisada antes de a aba de doutrina
 existir pede só a doutrina, e as teses e os temas curados não são tocados. "Pesquisar novamente" é por aba e pede
-só a sua. Uma metade que falha não grava nada e não impede a outra de ser gravada; ela
-volta como **erro de validação sob a chave da aba** (`withErrors(['themes' => …])`), e
-não como 500 — é o que dispara o `onError` do Inertia, mostra o alerta naquela aba e
-impede o efeito de abertura de tentar de novo sozinho —, e o `attempt()` a anota em
-`agents_execution_logs` (ver "O log de execução dos agentes"). A única recusa que continua
-500 é a peça sem fatos, checada antes de gastar qualquer coisa.
+só a sua. Uma metade que falha não grava nada e não impede a outra de ser gravada; a falha
+fica **na rodada da aba** (`research_runs.status = failed`), que a tela lê em
+`researchRuns` — mostra o alerta naquela aba e impede o efeito de abertura de tentar de
+novo sozinho, também depois de um reload —, e o `attempt()` a anota em
+`agents_execution_logs` (ver "O log de execução dos agentes"). Já foi um erro de validação
+sob a chave da aba, e morria com o redirect. O efeito de abertura dispara só a aba com o
+marcador nulo **e sem rodada nenhuma**: a que está na fila, a que falhou e a que acabou de
+terminar — com o marcador ainda chegando nas props — ficam de fora. A única recusa que
+continua 500 é a peça sem fatos, checada antes de enfileirar qualquer coisa.
 
 Essa coluna (jsonb) guarda o que não tem tabela: a questão pesquisada, os portais
 abertos, o pendente e as citações que a guarda recusou — mais o `researched_at`, que não
@@ -819,18 +831,18 @@ senão não há peça para a pesquisa gravar em cima. A trilha do assistente já
 outras etapas numa peça nova; o que faltava era o `?etapa`, que abria a etapa 5 de uma
 peça parada na 2 — `ShowLegalCaseForm::initialStep()` agora limita pela marca d'água.
 
-A dívida da fila continua de pé aqui, e agora só aqui: são dois `Timeout(360)` em série, e
-o primeiro é a inferência mais lenta do projeto — a seleção de temas corre ao lado e não
-soma. A tela que consome isso é `ForensicReviewFields`, com o `AnalysisDialog` durante a
-espera.
+São dois `Timeout(360)` em série na aba de teses, e o primeiro é a inferência mais lenta do
+projeto — a seleção de temas corre ao lado e não soma. A tela que consome isso é
+`ForensicReviewFields`, travada pelo `AnalysisDialog` enquanto houver aba pendente.
 
 **O paralelismo foi medido**, numa peça de acidente de trânsito, em 2026-10-24: os três
 filhos começam no mesmo décimo de segundo, e com o STJ instável os temas terminaram aos
-23 s, a doutrina aos 22 s e as teses aos 71 s. A requisição espera a mais lenta, e só
-então grava as três. O preço é conhecido: um gateway que corte a requisição antes da
-pesquisa de teses terminar leva junto o que os temas e a doutrina já tinham achado. A fila
-resolvia isso gravando cada aba no seu tempo, e saiu porque sem um worker de pé as abas
-ficavam pesquisando até o teto — ver a dívida da fila em "Os modelos".
+23 s, a doutrina aos 22 s e as teses aos 71 s. O job espera a mais lenta, e só então grava
+as três — e as três rodadas terminam juntas. Na requisição, isso tinha um preço: o gateway
+cortava antes de a pesquisa de teses terminar e levava junto o que os temas e a doutrina já
+tinham achado. No worker não há gateway, e o teto é o `$jobTimeout` (900 s), acima do
+`concurrency.timeout` (840 s): o filho que trava é abatido pelo driver, e os outros são
+gravados.
 
 E há um teto que não é do SDK: o **`max_execution_time` do PHP**. Um `php.ini` de fábrica
 traz 30, e a requisição morre em 32 s dentro do cURL do Guzzle —
@@ -839,13 +851,107 @@ que dispara porque o normal não consegue interromper um `curl_exec()` bloqueado
 exceção, é o processo abatido, sem gravar nada e sem nada a capturar. Subir o `#[Timeout]`
 do agente não move isso um segundo — são coisas independentes, e vence o interpretador.
 Quem levanta é o middleware `AllowLongInference` (`ai.request_time_limit`, 900 s, o pior
-caso destes dois agentes em série), pelo alias `inference` nas **sete** rotas que
-esperam por uma inferência: classificar, sugerir a tutela, sugerir o endereçamento,
-pesquisar as teses, pesquisar a jurisprudência, concluir e gerar a minuta. Ele só
-levanta — zero é ilimitado, que é o que a CLI e o `artisan serve` entregam, e escrever um
-número ali construiria a parede em vez de derrubá-la. Num servidor de verdade o corte
-volta de fora (`fastcgi_read_timeout`, `request_terminate_timeout`), onde nenhum
-`set_time_limit()` alcança, e aí a saída é mesmo a fila.
+caso de dois agentes em série), pelo alias `inference` nas **quatro** rotas que ainda
+esperam por uma inferência na requisição: sugerir a tutela, sugerir o endereçamento,
+concluir e gerar a minuta. As três que foram para a fila — classificar, pesquisar a
+revisão forense e pesquisar a jurisprudência — saíram dele, e `LongInferenceRoutesTest`
+fixa as duas listas. Ele só levanta — zero é ilimitado, que é o que a CLI e o `artisan
+serve` entregam, e escrever um número ali construiria a parede em vez de derrubá-la. Num
+servidor de verdade o corte volta de fora (`fastcgi_read_timeout`,
+`request_terminate_timeout`, e em produção o Cloudflare antes de todos), onde nenhum
+`set_time_limit()` alcança, e aí a saída é mesmo a fila: concluir e gerar a minuta são as
+próximas candidatas, com duas inferências em série cada.
+
+## A fila das inferências
+
+Três esperas saíram da requisição e foram para a fila `inference`, na conexão `database`:
+o preenchimento inteligente (`RunAssistedFill`), as três abas da etapa 5
+(`RunLegalCaseForensicReview`) e a etapa 6 (`RunLegalCaseJurisprudence`). O motivo é o
+gateway: em produção o Cloudflare na frente do Laravel Cloud respondia 504 bem antes dos
+900 s do `AllowLongInference`. Cada uma é uma Action com as duas cascas: o `handle()` grava
+a linha que a tela vai esperar e despacha o job **depois** da transação (a conexão tem
+`after_commit = false`), o `asController()` redireciona na hora, e o `asJob()` faz o que a
+requisição fazia — chamando os `handle()` de sempre (`ClassifyLegalCase`,
+`ResearchLegalCaseForensicReview`, `ResearchLegalCaseJurisprudence`), que não mudaram uma
+linha e são o que os testes de agente exercitam.
+
+**A fila já foi tentada e devolvida**, e o desenho de hoje é o que aquela tentativa
+ensinou. Ela dividia a `default` com o `EmbedCatalogs` e um `queue:listen` só, e sem worker
+de pé a tela girava dezessete minutos até dizer que a análise fora interrompida. Três
+regras vieram disso:
+
+1. **Fila própria, worker próprio.** `RunsOnInferenceQueue` põe os três na `inference`,
+   com `$jobTries = 1` — toda tentativa gasta inferência paga, e quem refaz é o botão. O
+   `composer dev` sobe um `queue:listen --queue=inference` ao lado do da `default`, e
+   produção precisa de um worker para cada fila (ver a seção seguinte).
+2. **O estado é uma linha, e a tela lê o estado efetivo.** `assisted_fills` (uma por
+   preenchimento, só de quem o pediu — `AssistedFillPolicy` nega como 404) e
+   `research_runs` (uma por rodada e assunto: `theses`, `themes`, `doctrines`,
+   `court-decisions`, com um índice único parcial que impede duas em voo). As duas usam
+   `TracksInferenceRun`: a linha `queued` há mais que `ai.queue.pickup_timeout` (300 s) é
+   "a fila não está ativa", e a `running` há mais que o `$jobTimeout` mais 120 s é
+   "interrompida". Nenhuma das duas trava a tela, e o worker que pega um job vencido o
+   recusa em vez de reacender a rodada.
+3. **Toda transição é condicional** (`UPDATE … WHERE status = …`): o job, o `jobFailed()`
+   e a próxima rodada podem notar o desfecho, e só o primeiro o grava.
+
+Os tetos se encaixam: `RunAssistedFill` tem 1500 s (triagem, bloco e endereçamento), as
+pesquisas 900 s, todos acima do `concurrency.timeout` (840 s), para que o filho travado seja
+abatido pelo driver antes de o worker abater o job, e abaixo do `retry_after` da conexão
+(1900 s), para que um job em curso nunca seja entregue a um segundo worker. O `$jobTimeout`
+de cada job prevalece sobre o `--timeout` do worker.
+
+**A tela espera pelo `usePoll` do Inertia**, e não por broadcasting: os jobs levam de
+dezenas de segundos a minutos, e três segundos de atraso não justificavam um servidor de
+WebSocket. O preenchimento redireciona para `/pecas/nova?preenchimento={id}` — a tela da
+peça nova, com o cliente e o relato ao fundo do `AnalysisDialog` —, que recarrega só a prop
+`assistedFill` (`useAssistedFill`) e, no fim, abre `/pecas/{id}/editar`, segue pela entrega
+do `sessionStorage` quando não há peça, ou volta a `/pecas/nova/inteligente?preenchimento=`
+com o relato e o motivo (`retry`). As etapas 5 e 6 recarregam só `researchRuns`
+(`useResearchRuns`) e, quando um assunto deixa de estar pendente, a peça. Por isso as props
+de `ShowLegalCaseForm` que custam consulta são closures: a recarga parcial só calcula as
+que pediu. O diálogo mostra "Na fila" enquanto nenhum worker pegou o trabalho.
+
+`researchRuns` traz também a rodada concluída, e não por enfeite: o gatilho de abertura é
+"marcador nulo **e** sem rodada", e o marcador chega com `legalCase` um instante depois de
+a rodada concluir. Sem a concluída nas props, o poll que a vê terminar mostraria a aba sem
+rodada e com marcador nulo, e a etapa pagaria a pesquisa de novo.
+
+`FinalizeLegalCase` recusa concluir com pesquisa em voo (`hasResearchInFlight()`): a
+gravação por diff do job reescreveria a revisão que a minuta acabou de usar. A etapa já
+fica travada; a recusa é para a segunda aba do navegador.
+
+Na suíte, `QUEUE_CONNECTION=sync` (no `phpunit.xml`) roda o job dentro do próprio POST, e
+os testes que postam e leem a peça continuam valendo; os do contrato da fila usam
+`Queue::fake()`. `ClassifyLegalCaseEndpointTest::classify()` reconstrói do desfecho da
+`AssistedFill` a resposta que a rota dava quando esperava.
+
+### O worker em produção (Laravel Cloud)
+
+O Laravel Cloud oferece dois caminhos, e só um serve: **não crie um "Managed queue"**. Ele
+põe `QUEUE_CONNECTION=cloud` no ambiente — o que mandaria estes jobs, e o `EmbedCatalogs`,
+para o SQS dele — e o worker Flex corta o job em 90 s. O caminho é um worker próprio sobre
+a conexão `database`:
+
+1. No canvas do ambiente, **Add worker cluster** (recomendado: não disputa CPU com a web) —
+   ou use o próprio App cluster. Dimensione a memória para os filhos: um job da etapa 5 é um
+   `queue:work` mais três `php artisan` simultâneos.
+2. No cluster, em **Background processes**, **New background process**, aba de queue
+   worker: conexão `database`, fila `inference`, `tries` 1, `timeout` 1500, `sleep` 1, e
+   **2 processos ou mais** (até 10 por réplica) — com um só, a pesquisa de um advogado
+   segura o preenchimento de outro.
+3. Um segundo background process para a fila `default` (o `EmbedCatalogs`), com `tries` 1
+   e `timeout` 1800.
+4. Se o App cluster dorme (scale to zero), deixe o worker cluster **sempre acordado**: o que
+   dorme junto com o App interrompe o job no meio.
+5. Variáveis: `QUEUE_CONNECTION=database`, `DB_QUEUE_RETRY_AFTER` ≥ 1900 (ou ausente),
+   `AI_QUEUE_PICKUP_TIMEOUT` se 300 s não servir, e as de concorrência de sempre.
+6. Deploy com `php artisan migrate --force` antes de o código novo atender. O Cloud
+   reinicia os workers a cada deploy (não é preciso `queue:restart`); um job abatido nesse
+   instante aparece como "interrompido" e o botão da aba o refaz.
+
+Para conferir: `php artisan queue:monitor database:inference,database:default` na aba de
+comandos, e as tabelas `assisted_fills`, `research_runs` e `failed_jobs`.
 
 ## A análise de jurisprudência
 
@@ -861,11 +967,14 @@ linha não tem `legal_thesis_id`, nem `adherence`, nem `grounding`.
 A mecânica é a da etapa 5, deliberadamente repetida para que quem aprendeu uma não
 precise aprender a outra:
 
-- **Abrir a etapa dispara a pesquisa**, por `ResearchLegalCaseJurisprudence`
-  (`POST /pecas/{id}/jurisprudencia/pesquisar`, com o `inference`). Ela chama
+- **Abrir a etapa dispara a pesquisa**, por `POST /pecas/{id}/jurisprudencia/pesquisar`,
+  que aponta para `RunLegalCaseJurisprudence`: ela enfileira uma rodada `court-decisions`
+  e o job chama `ResearchLegalCaseJurisprudence`, que chama
   `ResearchLegalCaseCourtDecisions` — os dois agentes mais o `LexmlRecordReader` —, grava
   as linhas por `SaveLegalCaseCourtDecisions` e o envelope em
-  `legal_cases.court_decision_findings`. A inferência fica **fora** da transação.
+  `legal_cases.court_decision_findings`. A inferência fica **fora** da transação. A falha,
+  que na requisição era um 500 no modal de erro do Inertia, o job anota em
+  `agents_execution_logs` e grava na rodada, de onde a etapa a lê.
 - **O gatilho é a coluna ser nula, e nunca a lista estar vazia.** Mesma armadilha, mesma
   saída: uma rodada que abriu o portal e nada confirmou é resposta cara e legítima que
   grava zero linhas, e um gatilho pela lista repesquisaria a cada visita — substituindo

@@ -30,12 +30,12 @@ use App\Domain\Customers\Actions\ShowCustomerForm;
 use App\Domain\Customers\Actions\UpdateCustomer;
 use App\Domain\Dashboard\Actions\ShowDashboard;
 use App\Domain\LegalCases\Actions\AdvanceLegalCaseStep;
-use App\Domain\LegalCases\Actions\ClassifyLegalCase;
 use App\Domain\LegalCases\Actions\CreateLegalCase;
 use App\Domain\LegalCases\Actions\FinalizeLegalCase;
 use App\Domain\LegalCases\Actions\ListLegalCases;
-use App\Domain\LegalCases\Actions\ResearchLegalCaseForensicReview;
-use App\Domain\LegalCases\Actions\ResearchLegalCaseJurisprudence;
+use App\Domain\LegalCases\Actions\RunAssistedFill;
+use App\Domain\LegalCases\Actions\RunLegalCaseForensicReview;
+use App\Domain\LegalCases\Actions\RunLegalCaseJurisprudence;
 use App\Domain\LegalCases\Actions\SaveLegalCaseForensicReview;
 use App\Domain\LegalCases\Actions\SaveLegalCaseRequirements;
 use App\Domain\LegalCases\Actions\ShowAssistedLegalCaseForm;
@@ -144,11 +144,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     // assistente acima, já preenchido.
     Route::get('/pecas/nova/inteligente', ShowAssistedLegalCaseForm::class)->name('legal-cases.create-assisted');
 
-    // Uma rota de peça que não devolve tela: o enquadramento sai em JSON
-    // porque quem o pede — o preenchimento inteligente — leva o resultado até
-    // o assistente em vez de exibi-lo.
-    Route::post('/pecas/classificar', ClassifyLegalCase::class)
-        ->middleware('inference')
+    // O preenchimento inteligente: grava o pedido, enfileira os agentes na
+    // fila `inference` e responde na hora com a tela da peça nova, que espera
+    // travada até o job terminar. Sem `inference`: nada aqui espera por um
+    // provedor — ver RunAssistedFill.
+    Route::post('/pecas/classificar', RunAssistedFill::class)
         ->name('legal-cases.classify');
 
     // A outra rota em JSON, e pelo mesmo motivo: o "Consultar IA" da tutela
@@ -190,25 +190,18 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
 
         // A pesquisa que preenche a etapa 5, disparada ao abri-la e nunca de
         // novo sozinha: `research_findings` é o marcador de que já rodou. Ela
-        // grava o que acha, então responde com um redirect para a própria etapa
-        // em vez de devolver o payload — ver ResearchLegalCaseForensicReview.
-        //
-        // `inference` é o teto de execução do PHP levantado: sem ele o
-        // `max_execution_time` de fábrica abate a requisição em 32 s, no meio
-        // do cURL, muito antes de o `#[Timeout(360)]` do agente ter opinião —
-        // e aqui são dois agentes em série. Ver AllowLongInference.
-        Route::post('/revisao-forense/pesquisar', ResearchLegalCaseForensicReview::class)
-            ->middleware('inference')
+        // só enfileira — uma `research_runs` por aba e um job na fila
+        // `inference` — e responde na hora com um redirect para a própria
+        // etapa, que espera travada pelas abas. Sem `inference`, pelo mesmo
+        // motivo do preenchimento. Ver RunLegalCaseForensicReview.
+        Route::post('/revisao-forense/pesquisar', RunLegalCaseForensicReview::class)
             ->name('legal-cases.forensic-review.research');
 
         // A etapa 6, e a segunda pesquisa do assistente. Mesmo arranjo da de
         // cima e pelos mesmos motivos: dispara ao abrir a etapa, uma vez só —
-        // `court_decision_findings` é o marcador —, grava o que confirma e
-        // responde com um redirect para a própria etapa. `inference` outra vez,
-        // porque são dois agentes em série mais a leitura de um registro do
-        // LexML por julgado. Ver ResearchLegalCaseJurisprudence.
-        Route::post('/jurisprudencia/pesquisar', ResearchLegalCaseJurisprudence::class)
-            ->middleware('inference')
+        // `court_decision_findings` é o marcador —, enfileira e responde com um
+        // redirect para a própria etapa. Ver RunLegalCaseJurisprudence.
+        Route::post('/jurisprudencia/pesquisar', RunLegalCaseJurisprudence::class)
             ->name('legal-cases.jurisprudence.research');
 
         // Os documentos ainda não persistem, mas o Continuar deles diz uma

@@ -9,8 +9,9 @@ import type {
  * O que o preenchimento inteligente entrega ao assistente **quando não há peça
  * gravada**.
  *
- * Deixou de ser o caminho: a rota do enquadramento grava o rascunho e a tela
- * navega para ele (ver `CreateAssistedLegalCase`). A entrega sobra para o
+ * Deixou de ser o caminho: o job do enquadramento grava o rascunho e a tela
+ * navega para ele (ver `CreateAssistedLegalCase` e `useAssistedFill`). A
+ * entrega sobra para o
  * enquadramento que a coluna não aceita — a seleção de classe que falhou — e
  * para a gravação que caiu, para que nenhum dos dois custe a inferência.
  *

@@ -1,3 +1,4 @@
+import type { RequestPayload } from "@inertiajs/core";
 import { Head, Link, router, useForm } from "@inertiajs/react";
 import { Mic, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -22,6 +23,8 @@ import { JudicialSystemAccess } from "@/components/judicial-system-access";
 import { PracticeAreaPicker } from "@/components/practice-area-picker";
 import { ProceduralClassPicker } from "@/components/procedural-class-picker";
 import { RequirementFormFields } from "@/components/requirement-form-fields";
+import { useAssistedFill } from "@/hooks/use-assisted-fill";
+import { useResearchRuns } from "@/hooks/use-research-runs";
 import { Button } from "@/components/ui/button";
 import {
     Card,
@@ -41,6 +44,7 @@ import {
     toDoctrinePayload,
     type DoctrineDraft,
 } from "@/lib/doctrines";
+import { ANALYSIS_STEPS } from "@/lib/analysis-steps";
 import { toDocumentDrafts, type DocumentDraft } from "@/lib/documents";
 import { formatDocument } from "@/lib/format";
 import {
@@ -60,6 +64,7 @@ import {
     type RequirementDraft,
 } from "@/lib/requirements";
 import type {
+    AssistedFill,
     CustomerOption,
     DefendantSuggestion,
     ForensicReviewTab,
@@ -72,6 +77,8 @@ import type {
     ResearchedDoctrine,
     ResearchedPrecedent,
     ResearchedThesis,
+    ResearchRuns,
+    ResearchSubject,
 } from "@/types";
 
 /**
@@ -82,6 +89,8 @@ import type {
  * valor (`currentStep === "review"`), para que pôr ou tirar uma etapa seja uma
  * linha aqui e outra no enum, e nenhuma conta de índice pelo arquivo.
  */
+const FORENSIC_TABS: ForensicReviewTab[] = ["theses", "themes", "doctrines"];
+
 const STEP_ORDER: LegalCaseStepValue[] = [
     "basics",
     "defendant",
@@ -232,6 +241,16 @@ const suggestedDefendant = (
 interface Props {
     /** A peça em edição, ou null em `/pecas/nova`. */
     legalCase: LegalCaseDraft | null;
+    /**
+     * As pesquisas das etapas 5 e 6 na fila, a última de cada assunto — ver
+     * `useResearchRuns`. Vazio numa peça nova.
+     */
+    researchRuns: ResearchRuns;
+    /**
+     * O preenchimento inteligente que esta peça nova espera, quando a URL traz
+     * `?preenchimento=` — ver `useAssistedFill`.
+     */
+    assistedFill: AssistedFill | null;
     /** Onde abrir: o `?etapa`, senão a marca d'água, senão a etapa 1. */
     initialStep: LegalCaseStepValue;
     /** `LegalCaseStep::options()` — os rótulos em português vêm do enum. */
@@ -285,9 +304,11 @@ interface Props {
  * que fecha tudo.
  *
  * Quem vem do preenchimento inteligente chega, quase sempre, a uma peça **já
- * gravada**: a rota do enquadramento salva o rascunho com a etapa 1, o réu e
+ * gravada**: o job do enquadramento salva o rascunho com a etapa 1, o réu e
  * os pedidos, e com a marca d'água ainda na etapa 1 — ver
- * `CreateAssistedLegalCase`. Daí em diante é uma peça como outra qualquer: a
+ * `CreateAssistedLegalCase`. Até ele terminar, a espera acontece aqui mesmo, na
+ * peça nova (`?preenchimento=`), travada atrás do diálogo — ver
+ * `useAssistedFill`. Daí em diante é uma peça como outra qualquer: a
  * trilha abre a etapa 1, e cada "Continuar" regrava a etapa que o advogado
  * acabou de ler e destrava a seguinte. O advogado vê as sugestões antes de
  * seguir com elas, que é o ponto de devolvê-las ao assistente em vez de abrir
@@ -312,6 +333,8 @@ interface Props {
  */
 export default function LegalCaseForm({
     legalCase,
+    researchRuns,
+    assistedFill,
     initialStep,
     steps,
     customers,
@@ -375,8 +398,17 @@ export default function LegalCaseForm({
     // escritos, com o selo, e a peça salva manda na entrega.
     const suggestedAddressing = handoff?.court_addressing ?? null;
 
+    // O preenchimento inteligente em espera põe o cliente e o relato no fundo
+    // da tela, atrás do diálogo: é a peça que ele está montando. Quando ele
+    // termina, a tela sai — ver `useAssistedFill`.
+    useAssistedFill(assistedFill);
+
     const basics = useForm({
-        customer_id: legalCase?.customer_id ?? handoff?.customer_id ?? "",
+        customer_id:
+            legalCase?.customer_id ??
+            handoff?.customer_id ??
+            assistedFill?.customer_id ??
+            "",
         practice_area: selectedArea,
         procedural_class_id:
             legalCase?.procedural_class_id ??
@@ -392,7 +424,7 @@ export default function LegalCaseForm({
             "",
         court_addressing_suggestion:
             legalCase?.court_addressing_suggestion ?? suggestedAddressing,
-        facts: legalCase?.facts ?? handoff?.facts ?? "",
+        facts: legalCase?.facts ?? handoff?.facts ?? assistedFill?.facts ?? "",
         injunctive_relief:
             legalCase?.injunctive_relief ??
             suggestedRelief?.recommended ??
@@ -707,98 +739,114 @@ export default function LegalCaseForm({
     /**
      * As duas pesquisas do assistente, que preenchem as etapas 5 e 6.
      *
-     * `router.post` solto e não um `useForm`: não há payload nenhum — a peça
-     * está na URL e tudo o que os agentes leem já está no banco. O `researching`
-     * é local porque é ele que abre o diálogo, e o `preserveState` impede que a
-     * volta remonte a página e o apague sozinho.
+     * Rodam na fila `inference`: o `POST` de cada uma só enfileira e volta na
+     * hora — ver `RunLegalCaseForensicReview` e `RunLegalCaseJurisprudence` —,
+     * e o estado de cada assunto mora numa `research_runs` que chega em
+     * `researchRuns`. Por isso o que trava a tela é **derivado das props**: um
+     * reload no meio da pesquisa reabre a etapa travada em vez de pesquisar de
+     * novo, e a falha de uma rodada continua dita na aba depois de um F5.
      *
-     * Um estado por etapa, e não um compartilhado: as duas rodadas falham por
-     * motivos diferentes — o STJ fora do ar, o LexML fora do ar — e uma falha na
-     * etapa 5 não pode impedir a etapa 6 de tentar, nem o contrário.
+     * Fica local só o que o servidor ainda não sabe: o instante entre o clique
+     * e o redirect (`requesting`), e o `POST` que nem chegou a enfileirar
+     * (`requestFailed`) — a peça sem fatos, a rede que caiu.
      *
-     * Na etapa 5 o estado é **por aba**, pelo mesmo motivo um nível abaixo: as
-     * teses, os temas e a doutrina correm juntos no servidor, mas cada metade
-     * tem marcador próprio e falha por si — a pesquisa de teses pode cair com o
-     * STJ enquanto as outras voltam.
+     * Um estado por assunto, e não um compartilhado: as rodadas falham por
+     * motivos diferentes — o STJ fora do ar, o LexML fora do ar, a cota — e uma
+     * falha na etapa 5 não pode impedir a etapa 6 de tentar, nem o contrário.
+     * Na etapa 5 é **por aba**, pelo mesmo motivo um nível abaixo: as teses, os
+     * temas e a doutrina correm juntos no worker, mas cada metade tem marcador e
+     * rodada próprios e falha por si.
      */
-    const [researching, setResearching] = useState<ForensicReviewTab[]>([]);
-    const [researchFailed, setResearchFailed] = useState<ForensicReviewTab[]>(
-        [],
+    const runs = useResearchRuns(researchRuns);
+    const [requesting, setRequesting] = useState<ResearchSubject[]>([]);
+    const [requestFailed, setRequestFailed] = useState<ResearchSubject[]>([]);
+
+    const inFlight = [...requesting, ...runs.pending];
+    const failedSubjects = [...requestFailed, ...runs.failed].filter(
+        (subject) => !inFlight.includes(subject),
     );
 
-    const [researchingDecisions, setResearchingDecisions] = useState(false);
-    const [decisionResearchFailed, setDecisionResearchFailed] = useState(false);
+    const researching = FORENSIC_TABS.filter((tab) => inFlight.includes(tab));
+    const researchFailed = FORENSIC_TABS.filter((tab) =>
+        failedSubjects.includes(tab),
+    );
+    const researchingDecisions = inFlight.includes("court-decisions");
+    const decisionResearchFailed = failedSubjects.includes("court-decisions");
+
+    /** Os assuntos dados estão todos na fila, e nenhum worker os pegou ainda. */
+    const queued = (subjects: ResearchSubject[]) =>
+        subjects.length > 0 &&
+        subjects.every((subject) => runs.queued.includes(subject));
+
+    /**
+     * Enfileira a pesquisa dos assuntos dados.
+     *
+     * Sem `onSuccess`: o servidor redireciona para a própria etapa, e a
+     * resposta já traz as rodadas em `researchRuns` — é isso que mantém o
+     * diálogo aberto depois que `requesting` se apaga, e que liga o polling. O
+     * erro de validação, o `onHttpException` e o `onNetworkError` são o `POST`
+     * que não enfileirou nada, e marcam os assuntos pedidos para que o efeito
+     * de abertura não tente de novo sem parar.
+     */
+    const request = (
+        subjects: ResearchSubject[],
+        url: string,
+        data: RequestPayload,
+    ) => {
+        const fail = () =>
+            setRequestFailed((current) => [
+                ...current.filter((subject) => !subjects.includes(subject)),
+                ...subjects,
+            ]);
+
+        setRequesting(subjects);
+        setRequestFailed((current) =>
+            current.filter((subject) => !subjects.includes(subject)),
+        );
+
+        router.post(url, data, {
+            preserveScroll: true,
+            onError: fail,
+            onHttpException: fail,
+            onNetworkError: fail,
+            onFinish: () => setRequesting([]),
+        });
+    };
 
     /**
      * Pede as abas dadas — todas ao abrir uma peça nova, uma só no botão de
      * cada aba ou as que nunca foram pesquisadas.
-     *
-     * A falha de uma metade volta como erro de validação sob a chave da aba
-     * (`errors.theses`, `errors.themes`, `errors.doctrines`), e é isso que o
-     * `onError` lê: as metades que voltaram já estão gravadas e chegam nas
-     * props. O `onHttpException` cobre o que não é de uma aba só — a peça sem
-     * fatos, um 500 qualquer — e marca todas as pedidas, senão o efeito de
-     * abertura tentaria de novo sem parar.
      */
     const research = (tabs: ForensicReviewTab[]) => {
         if (!id || researching.length > 0 || tabs.length === 0) {
             return;
         }
 
-        const fail = (failed: ForensicReviewTab[]) =>
-            setResearchFailed((current) => [
-                ...current.filter((tab) => !failed.includes(tab)),
-                ...failed,
-            ]);
-
-        setResearching(tabs);
-        setResearchFailed((current) =>
-            current.filter((tab) => !tabs.includes(tab)),
-        );
-
-        router.post(
-            `/pecas/${id}/revisao-forense/pesquisar`,
-            { tabs },
-            {
-                preserveScroll: true,
-                // Sem `onSuccess` que mexa na etapa: o servidor redireciona
-                // para `?etapa=review`, que é onde já estamos. Quem redesenha
-                // são os efeitos das teses e dos temas, com as props novas.
-                onError: (errors) => fail(tabs.filter((tab) => tab in errors)),
-                onHttpException: () => fail(tabs),
-                onNetworkError: () => fail(tabs),
-                onFinish: () => setResearching([]),
-            },
-        );
+        request(tabs, `/pecas/${id}/revisao-forense/pesquisar`, { tabs });
     };
 
-    /** A mesma coisa uma etapa adiante — ver `ResearchLegalCaseJurisprudence`. */
+    /** A mesma coisa uma etapa adiante — ver `RunLegalCaseJurisprudence`. */
     const researchCourtDecisions = () => {
         if (!id || researchingDecisions) {
             return;
         }
 
-        setResearchingDecisions(true);
-        setDecisionResearchFailed(false);
-
-        router.post(
-            `/pecas/${id}/jurisprudencia/pesquisar`,
-            {},
-            {
-                preserveScroll: true,
-                onError: () => setDecisionResearchFailed(true),
-                onFinish: () => setResearchingDecisions(false),
-            },
-        );
+        request(["court-decisions"], `/pecas/${id}/jurisprudencia/pesquisar`, {});
     };
+
+    // O que muda quando uma rodada nasce ou muda de estado: os efeitos de
+    // abertura abaixo releem o que já tem rodada por ela.
+    const runSignature = Object.entries(researchRuns)
+        .map(([subject, run]) => `${subject}:${run?.status}`)
+        .join(",");
 
     /**
      * Uma vez por aba, ao abrir a etapa, e nunca mais sozinha.
      *
      * O gatilho é o marcador de cada aba ser nulo — `legalCase.research` para as
      * teses, `legalCase.theme_research` para os temas,
-     * `legalCase.doctrine_research` para a doutrina —, que é "nunca se
-     * pesquisou", e **não** a lista estar vazia. O efeito pede só as abas que
+     * `legalCase.doctrine_research` para a doutrina — **e a aba não ter rodada
+     * nenhuma**. Nunca a lista estar vazia. O efeito pede só as abas que
      * faltam: uma peça pesquisada antes de a aba de doutrina existir pede só a
      * doutrina, e as teses e os temas que o advogado já curou não são tocados.
      *
@@ -809,13 +857,11 @@ export default function LegalCaseForm({
      * do Gemini toda vez e, pior, substituindo em silêncio o que o advogado já
      * tivesse curado, porque `SaveLegalCaseForensicReview` reconcilia por diff.
      *
-     * Com o marcador no banco, voltar à etapa não pesquisa: o que já foi
-     * encontrado está gravado e é isso que a tela mostra. Uma segunda rodada é
-     * o botão "Pesquisar novamente", que é um gesto do advogado.
-     *
-     * `researchFailed` é o que impede o laço depois de um erro: a falha não
-     * grava marcador nenhum, então sem ele a etapa tentaria de novo a cada
-     * render. Uma aba que falhou fica de fora até o botão dela ser apertado.
+     * A rodada é o que impede o laço depois de uma falha, e o reload no meio de
+     * uma pesquisa: a aba que está na fila, a que falhou e a que acabou de
+     * terminar — com o marcador ainda chegando — têm rodada, e ficam de fora.
+     * Uma segunda rodada é o botão "Pesquisar novamente", que é um gesto do
+     * advogado.
      */
     useEffect(() => {
         if (currentStep !== "review" || !id || researching.length > 0) {
@@ -836,7 +882,11 @@ export default function LegalCaseForm({
             missing.push("doctrines");
         }
 
-        research(missing.filter((tab) => !researchFailed.includes(tab)));
+        research(
+            missing.filter(
+                (tab) => !runs.hasRun(tab) && !requestFailed.includes(tab),
+            ),
+        );
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
         step,
@@ -844,31 +894,42 @@ export default function LegalCaseForm({
         legalCase?.research,
         legalCase?.theme_research,
         legalCase?.doctrine_research,
-        researchFailed.join(","),
+        runSignature,
+        researching.join(","),
+        requestFailed.join(","),
     ]);
 
     /**
-     * O mesmo disparo na etapa 6, com o marcador que é dela.
+     * O mesmo disparo na etapa 6, com o marcador e a rodada que são dela.
      *
      * `court_decision_research` e não `court_decisions.length`, pelo motivo que
      * o efeito acima explica por extenso — e aqui ele é ainda mais visível: um
      * relato sobre o qual os tribunais nada decidiram grava zero julgados, e
      * conferir a lista faria esta peça pagar a pesquisa em toda visita.
      *
-     * As duas nunca correm juntas: são etapas diferentes e só uma está na tela.
+     * As duas nunca correm juntas: são etapas diferentes, só uma está na tela,
+     * e a tela fica travada enquanto a dela corre.
      */
     useEffect(() => {
         if (
             currentStep === "court-decisions" &&
             id &&
             legalCase?.court_decision_research == null &&
+            !runs.hasRun("court-decisions") &&
             !researchingDecisions &&
             !decisionResearchFailed
         ) {
             researchCourtDecisions();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [step, id, legalCase?.court_decision_research, decisionResearchFailed]);
+    }, [
+        step,
+        id,
+        legalCase?.court_decision_research,
+        runSignature,
+        researchingDecisions,
+        decisionResearchFailed,
+    ]);
 
     const title = legalCase ? "Editar peça" : "Nova peça";
 
@@ -1265,6 +1326,7 @@ export default function LegalCaseForm({
                             }
                             researching={researching}
                             failed={researchFailed}
+                            failureReasons={runs.failures}
                             onResearch={(tab) => research([tab])}
                             theses={theses}
                             onToggle={(thesisId, keep) =>
@@ -1307,6 +1369,7 @@ export default function LegalCaseForm({
                             }
                             researching={researchingDecisions}
                             failed={decisionResearchFailed}
+                            failureReason={runs.failures["court-decisions"]}
                             onResearch={researchCourtDecisions}
                             decisions={courtDecisions}
                             onToggle={(decisionId, keep) =>
@@ -1367,25 +1430,39 @@ export default function LegalCaseForm({
                 </div>
             </div>
 
-            {/* A pesquisa é a única espera do assistente que sai da máquina:
-                o agente abre os portais oficiais antes de responder. Diálogo
-                modal pela mesma razão do preenchimento inteligente — sair da
-                tela joga fora a inferência inteira sem avisar.
+            {/* A espera do preenchimento inteligente, na tela da peça que ele
+                está montando: o cliente e o relato ao fundo, e a tela travada
+                até o worker terminar — então ela sai para a peça gravada, ou
+                de volta ao formulário com o motivo. Ver `useAssistedFill`. */}
+            <AnalysisDialog
+                open={assistedFill !== null}
+                queued={assistedFill?.status === "queued"}
+                title="Analisando o caso"
+                hint="A análise pode levar alguns minutos e continua no servidor mesmo se você sair desta tela. Ao terminar, a peça é salva como rascunho e o assistente abre com o enquadramento, os dados do réu e os pedidos preenchidos."
+                messages={ANALYSIS_STEPS}
+            />
+
+            {/* As pesquisas são as esperas do assistente que saem da máquina:
+                os agentes abrem os portais oficiais antes de responder. Rodam
+                num worker da fila `inference`, e o diálogo trava a etapa até
+                a rodada terminar — o que ela grava chega junto com o fim
+                dele.
 
                 O título e a dica dizem a demora de saída, e isso é deliberado:
                 é de longe a espera mais longa do projeto — dois agentes em
                 série, um deles abrindo página por página —, e uma tela que
-                prometesse pouco faria o advogado desistir no meio, jogando
-                fora minutos de inferência. Quem espera sabendo que vai
-                demorar espera; quem espera achando que travou, recarrega.
+                prometesse pouco faria o advogado desistir no meio. Quem espera
+                sabendo que vai demorar espera; quem espera achando que travou,
+                recarrega — o que agora não custa nada, mas também não adianta.
 
                 As frases circulam mais devagar aqui do que no preenchimento
                 inteligente: numa espera de minutos, um texto que troca a cada
                 quatro segundos passa de sinal de vida a agitação. */}
             <AnalysisDialog
                 open={researching.includes("theses")}
+                queued={queued(researching)}
                 title="Pesquisando as teses — leva alguns minutos"
-                hint="É a etapa mais demorada da peça, e a espera é normal: o agente consulta o Planalto, o STJ e o STF e lê cada página antes de responder, o que costuma levar alguns minutos. Os temas do STJ e a doutrina do LexML são pesquisados ao mesmo tempo. Mantenha esta aba aberta e não recarregue a página — ao terminar, tudo fica gravado na peça e a pesquisa não se repete."
+                hint="É a etapa mais demorada da peça, e a espera é normal: o agente consulta o Planalto, o STJ e o STF e lê cada página antes de responder, o que costuma levar alguns minutos. Os temas do STJ e a doutrina do LexML são pesquisados ao mesmo tempo. A pesquisa continua no servidor mesmo se você sair desta tela — ao terminar, tudo fica gravado na peça e ela não se repete."
                 messages={RESEARCH_STEPS}
                 interval={6500}
             />
@@ -1398,8 +1475,9 @@ export default function LegalCaseForm({
                     researching.includes("doctrines") &&
                     !researching.includes("theses")
                 }
+                queued={queued(researching)}
                 title="Pesquisando a doutrina — leva alguns minutos"
-                hint="O agente condensa o caso em termos de busca, procura no acervo do LexML os livros e artigos sobre a questão e abre o registro de cada obra para copiar autor, título e publicação. Mantenha esta aba aberta e não recarregue a página — ao terminar, as obras ficam gravadas na peça."
+                hint="O agente condensa o caso em termos de busca, procura no acervo do LexML os livros e artigos sobre a questão e abre o registro de cada obra para copiar autor, título e publicação. A pesquisa continua no servidor mesmo se você sair desta tela — ao terminar, as obras ficam gravadas na peça."
                 messages={DOCTRINE_STEPS}
                 interval={6500}
             />
@@ -1413,20 +1491,21 @@ export default function LegalCaseForm({
                     !researching.includes("theses") &&
                     !researching.includes("doctrines")
                 }
+                queued={queued(researching)}
                 title="Selecionando os temas do STJ"
-                hint="O agente compara o relato com o catálogo de temas repetitivos do STJ e fica com os que se aplicam ao caso. Mantenha esta aba aberta — ao terminar, os temas ficam gravados na peça."
+                hint="O agente compara o relato com o catálogo de temas repetitivos do STJ e fica com os que se aplicam ao caso. A seleção continua no servidor mesmo se você sair desta tela — ao terminar, os temas ficam gravados na peça."
                 messages={THEME_STEPS}
             />
 
             {/* A segunda espera que sai da máquina, e a mesma escolha de
-                diálogo modal: sair da tela joga fora a inferência inteira sem
-                avisar. O texto diz o que esta faz de diferente — ela lê o
-                registro de cada julgado depois de achá-lo, e é essa leitura que
-                torna a ementa da tela a do tribunal. */}
+                diálogo modal. O texto diz o que esta faz de diferente — ela lê
+                o registro de cada julgado depois de achá-lo, e é essa leitura
+                que torna a ementa da tela a do tribunal. */}
             <AnalysisDialog
                 open={researchingDecisions}
+                queued={queued(["court-decisions"])}
                 title="Pesquisando a jurisprudência — leva alguns minutos"
-                hint="O agente procura no LexML os acórdãos que decidiram uma questão como a desta peça e abre o registro de cada um para transcrever a ementa que o tribunal publicou. Mantenha esta aba aberta e não recarregue a página — ao terminar, os julgados ficam gravados na peça e a pesquisa não se repete."
+                hint="O agente procura no LexML os acórdãos que decidiram uma questão como a desta peça e abre o registro de cada um para transcrever a ementa que o tribunal publicou. A pesquisa continua no servidor mesmo se você sair desta tela — ao terminar, os julgados ficam gravados na peça e ela não se repete."
                 messages={COURT_DECISION_STEPS}
                 interval={6500}
             />

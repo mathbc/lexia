@@ -11,12 +11,16 @@ use App\Domain\Doctrines\Models\Doctrine;
 use App\Domain\LegalCases\Actions\ResearchLegalCaseDoctrines;
 use App\Domain\LegalCases\Actions\ResearchLegalCaseThemes;
 use App\Domain\LegalCases\Actions\ResearchLegalCaseTheses;
+use App\Domain\LegalCases\Actions\RunLegalCaseForensicReview;
 use App\Domain\LegalCases\Data\DoctrineResearchData;
 use App\Domain\LegalCases\Data\ForensicReviewData;
 use App\Domain\LegalCases\Data\LegalResearchData;
 use App\Domain\LegalCases\Data\LegalThemeResearchData;
+use App\Domain\LegalCases\Enums\ForensicReviewTab;
+use App\Domain\LegalCases\Enums\InferenceRunStatus;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
 use App\Domain\LegalCases\Models\LegalCase;
+use App\Domain\LegalCases\Models\ResearchRun;
 use App\Domain\LegalPrecedents\Data\LegalPrecedentData;
 use App\Domain\LegalPrecedents\Enums\LegalPrecedentType;
 use App\Domain\LegalThemes\Data\LegalCaseThemeData;
@@ -33,6 +37,8 @@ use GuzzleHttp\Psr7\Response as Psr7Response;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Queue;
+use Inertia\Testing\AssertableInertia;
 use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Mockery;
 use Mockery\MockInterface;
@@ -58,6 +64,13 @@ use Tests\TestCase;
  * and a test that reached the network would be red on days a portal was. The
  * suite runs the `Concurrency::run` in `sync`, which is what lets the mocks be
  * seen at all.
+ *
+ * The route only queues now (RunLegalCaseForensicReview), and the suite runs
+ * the queue in `sync` too: the job runs inside the POST, so the tests that post
+ * and then read the pleading still read what the research wrote. What a failed
+ * half used to say in the error bag it now says on its `research_runs` row,
+ * and `assertRuns()` reads it there. The tests of the queue itself — what is
+ * queued, what is never queued twice, the run nobody picked up — fake it.
  */
 final class ResearchLegalCaseForensicReviewTest extends TestCase
 {
@@ -285,13 +298,23 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
         $this->fakeThemes()->shouldReceive('handle')->once()->andReturn($this->selected($theme));
         $this->fakeDoctrines()->shouldReceive('handle')->once()->andReturn($this->doctrines());
 
-        // Um erro de validação por aba, e não um 500: é o que chega ao
-        // `onError` da tela e a impede de pesquisar de novo sozinha.
+        // A falha mora na rodada da aba, e não mais no bag de erros: é ela que
+        // a tela lê — também depois de um reload — e que a impede de
+        // pesquisar de novo sozinha.
         $this->actingAs($owner)
             ->post(route('legal-cases.forensic-review.research', $case))
             ->assertRedirect()
-            ->assertSessionHasErrors('theses')
-            ->assertSessionDoesntHaveErrors(['themes', 'doctrines']);
+            ->assertSessionHasNoErrors();
+
+        $this->assertRuns($case, [
+            'theses' => InferenceRunStatus::Failed,
+            'themes' => InferenceRunStatus::Completed,
+            'doctrines' => InferenceRunStatus::Completed,
+        ]);
+        $this->assertSame(
+            ForensicReviewTab::Theses->failure(),
+            ResearchRun::acrossAllAccounts()->where('subject', 'theses')->sole()->failure,
+        );
 
         $case->refresh();
 
@@ -338,7 +361,9 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
 
         $this->actingAs($owner)
             ->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['theses']])
-            ->assertSessionHasErrors('theses');
+            ->assertSessionHasNoErrors();
+
+        $this->assertRuns($case, ['theses' => InferenceRunStatus::Failed]);
 
         $log = AgentsExecutionLog::query()->sole();
 
@@ -364,9 +389,13 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
 
         $this->actingAs($owner)
             ->post(route('legal-cases.forensic-review.research', $case))
-            ->assertRedirect()
-            ->assertSessionHasErrors('doctrines')
-            ->assertSessionDoesntHaveErrors(['theses', 'themes']);
+            ->assertRedirect();
+
+        $this->assertRuns($case, [
+            'theses' => InferenceRunStatus::Completed,
+            'themes' => InferenceRunStatus::Completed,
+            'doctrines' => InferenceRunStatus::Failed,
+        ]);
 
         $case->refresh();
 
@@ -390,8 +419,13 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
 
         $this->actingAs($owner)
             ->post(route('legal-cases.forensic-review.research', $case))
-            ->assertRedirect()
-            ->assertSessionHasErrors(['theses', 'themes', 'doctrines']);
+            ->assertRedirect();
+
+        $this->assertRuns($case, [
+            'theses' => InferenceRunStatus::Failed,
+            'themes' => InferenceRunStatus::Failed,
+            'doctrines' => InferenceRunStatus::Failed,
+        ]);
 
         $this->assertEqualsCanonicalizing(
             ['forensic_review.theses', 'forensic_review.themes', 'forensic_review.doctrines'],
@@ -559,6 +593,159 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
     /**
      * Sem fatos o agente pesquisaria no escuro, e a recusa é antes da rede.
      */
+    /**
+     * A rota só enfileira: uma rodada por aba pedida, um job na fila própria,
+     * e a etapa de volta na hora. Pedir de novo uma aba que já está na fila —
+     * o reload, o duplo clique, a etapa aberta em duas abas — não paga a
+     * pesquisa duas vezes.
+     */
+    #[Test]
+    public function the_route_only_queues_the_halves_asked_for_and_never_twice(): void
+    {
+        Queue::fake();
+
+        [$account, $owner] = $this->accountWithOwner();
+        $case = $this->pleading($account);
+
+        $this->fakeResearch()->shouldNotReceive('handle');
+
+        $this->actingAs($owner)
+            ->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['theses', 'themes']])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('legal-cases.edit', [
+                'legalCase' => $case,
+                'etapa' => LegalCaseStep::Review->value,
+            ]));
+
+        $this->assertRuns($case, [
+            'theses' => InferenceRunStatus::Queued,
+            'themes' => InferenceRunStatus::Queued,
+        ]);
+
+        $this->actingAs($owner)
+            ->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['theses', 'doctrines']]);
+
+        // Só a doutrina é nova: as teses já estavam a caminho.
+        $this->assertSame(3, ResearchRun::acrossAllAccounts()->count());
+        RunLegalCaseForensicReview::assertPushedOn('inference', 2);
+
+        $this->actingAs($owner)
+            ->get(route('legal-cases.edit', ['legalCase' => $case, 'etapa' => LegalCaseStep::Review->value]))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('researchRuns.theses.status', 'queued')
+                ->where('researchRuns.themes.status', 'queued')
+                ->where('researchRuns.doctrines.status', 'queued'));
+    }
+
+    /**
+     * A rodada que nenhum worker pegou chega à tela como falha, com a frase que
+     * manda olhar para a fila — e é substituída quando o advogado pede de
+     * novo, em vez de bloquear a aba para sempre.
+     */
+    #[Test]
+    public function a_run_nobody_picked_up_is_told_as_failed_and_replaced(): void
+    {
+        Queue::fake();
+        config(['ai.queue.pickup_timeout' => 60]);
+
+        [$account, $owner] = $this->accountWithOwner();
+        $case = $this->pleading($account);
+
+        $this->actingAs($owner)
+            ->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['theses']]);
+
+        $this->travel(61)->seconds();
+
+        $this->actingAs($owner)
+            ->get(route('legal-cases.edit', ['legalCase' => $case, 'etapa' => LegalCaseStep::Review->value]))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('researchRuns.theses.status', 'failed')
+                ->where('researchRuns.theses.failure', ResearchRun::NOT_STARTED));
+
+        $this->actingAs($owner)
+            ->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['theses']]);
+
+        $runs = ResearchRun::acrossAllAccounts()->oldest()->get();
+
+        $this->assertCount(2, $runs);
+        $this->assertSame(InferenceRunStatus::Failed, $runs[0]->status);
+        $this->assertSame(ResearchRun::NOT_STARTED, $runs[0]->failure);
+        $this->assertSame(InferenceRunStatus::Queued, $runs[1]->status);
+        RunLegalCaseForensicReview::assertPushedOn('inference', 2);
+
+        // O job da primeira rodada, se um worker o pegar agora, não a reacende.
+        $this->fakeResearch()->shouldNotReceive('handle');
+
+        RunLegalCaseForensicReview::make()->asJob($case->id, $account->id, [$runs[0]->id]);
+
+        $this->assertSame(InferenceRunStatus::Failed, $runs[0]->refresh()->status);
+    }
+
+    /**
+     * O worker que morre com a pesquisa na mão — o teto do job, um deploy —
+     * deixa a aba interrompida e uma linha no registro de execução.
+     */
+    #[Test]
+    public function a_worker_that_dies_leaves_the_tabs_interrupted_and_logged(): void
+    {
+        Queue::fake();
+
+        [$account, $owner] = $this->accountWithOwner();
+        $case = $this->pleading($account);
+
+        $this->actingAs($owner)
+            ->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['theses']]);
+
+        $run = ResearchRun::acrossAllAccounts()->sole();
+        $this->assertTrue($run->start());
+
+        RunLegalCaseForensicReview::make()->jobFailed(
+            new RuntimeException('Job has timed out.'),
+            $case->id,
+            $account->id,
+            [$run->id],
+        );
+
+        $this->assertSame(InferenceRunStatus::Failed, $run->refresh()->status);
+        $this->assertSame(ResearchRun::INTERRUPTED, $run->failure);
+
+        $log = AgentsExecutionLog::query()->sole();
+
+        $this->assertSame('forensic_review.theses', $log->operation);
+        $this->assertSame('ResearchLegalCaseTheses', $log->agent);
+        $this->assertSame($case->id, $log->legal_case_id);
+    }
+
+    /**
+     * Concluir com uma pesquisa a caminho gravaria a revisão que o worker
+     * reescreveria em seguida. A etapa trava atrás do diálogo; esta recusa é
+     * para a segunda aba do navegador.
+     */
+    #[Test]
+    public function concluding_waits_for_a_research_in_flight(): void
+    {
+        Queue::fake();
+
+        [$account, $owner] = $this->accountWithOwner();
+        $case = $this->pleading($account);
+
+        $this->actingAs($owner)
+            ->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['themes']]);
+
+        $this->actingAs($owner)
+            ->post(
+                route('legal-cases.finalize', $case),
+                ['theses' => [], 'precedents' => [], 'themes' => [], 'doctrines' => [], 'court_decisions' => []],
+            )
+            ->assertRedirect(route('legal-cases.edit', [
+                'legalCase' => $case,
+                'etapa' => LegalCaseStep::CourtDecisions->value,
+            ]))
+            ->assertSessionHas('error');
+
+        $this->assertTrue($case->refresh()->is_draft);
+    }
+
     #[Test]
     public function a_pleading_without_facts_is_refused_before_any_inference(): void
     {
@@ -603,6 +790,24 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
 
         $this->post(route('legal-cases.forensic-review.research', $case))
             ->assertRedirect('/login');
+    }
+
+    /**
+     * The state of the latest run of each subject of the pleading.
+     *
+     * @param  array<string, InferenceRunStatus>  $expected
+     */
+    private function assertRuns(LegalCase $case, array $expected): void
+    {
+        $runs = ResearchRun::acrossAllAccounts()
+            ->where('legal_case_id', $case->id)
+            ->latest()
+            ->get()
+            ->unique(static fn (ResearchRun $run): string => $run->subject->value)
+            ->mapWithKeys(static fn (ResearchRun $run): array => [$run->subject->value => $run->status])
+            ->all();
+
+        $this->assertEquals($expected, $runs);
     }
 
     private function pleading(

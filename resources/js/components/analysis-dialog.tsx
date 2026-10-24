@@ -18,7 +18,15 @@ interface AnalysisDialogProps {
     messages: readonly string[]
     /** Quanto tempo cada mensagem fica na tela, em milissegundos. */
     interval?: number
+    /**
+     * O trabalho está na fila e nenhum worker o pegou ainda. As mensagens
+     * descrevem o trabalho, e enquanto ele não começou elas mentiriam; no lugar
+     * delas vai a frase que diz por que se espera.
+     */
+    queued?: boolean
 }
+
+const QUEUED_MESSAGE = 'Na fila: aguardando um processador livre para começar.'
 
 const DEFAULT_INTERVAL = 4000
 
@@ -33,9 +41,14 @@ const DEFAULT_INTERVAL = 4000
  * o foco preso dentro e a ordem de tabulação junto com ele.
  *
  * Só que este não fecha. Não há X, o Esc não responde e o clique fora não
- * dispensa — porque não existe nada para dispensar: a requisição segue no
- * servidor de qualquer maneira, e uma tela que some daria a entender que foi
- * cancelada. Fechar mesmo é o fim do trabalho, e quem o fecha é quem o abriu.
+ * dispensa — porque não existe nada para dispensar: o trabalho segue no
+ * servidor de qualquer maneira (hoje, quase sempre, num worker da fila
+ * `inference`), e uma tela que some daria a entender que foi cancelado. Fechar
+ * mesmo é o fim do trabalho, e quem o fecha é quem o abriu.
+ *
+ * `queued` é o único estado em que ele diz algo sobre o andamento, porque é o
+ * único que o servidor sabe: nenhum worker pegou o trabalho ainda. As frases do
+ * trabalho dão lugar a essa, até ele começar.
  *
  * ## As mensagens
  *
@@ -58,6 +71,7 @@ export function AnalysisDialog({
     hint,
     messages,
     interval = DEFAULT_INTERVAL,
+    queued = false,
 }: AnalysisDialogProps) {
     const [step, setStep] = useState(0)
 
@@ -75,7 +89,7 @@ export function AnalysisDialog({
         return () => clearInterval(timer)
     }, [open, interval])
 
-    const message = messages[step % messages.length]
+    const message = queued ? QUEUED_MESSAGE : messages[step % messages.length]
 
     return (
         <Dialog open={open}>
@@ -103,7 +117,7 @@ export function AnalysisDialog({
                             mensagem curta seguida de uma longa faz o diálogo
                             inteiro pular a cada quatro segundos. */}
                         <p
-                            key={step}
+                            key={queued ? 'queued' : step}
                             aria-hidden="true"
                             className="flex min-h-11 items-center text-sm leading-relaxed text-balance text-muted-foreground motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-500"
                         >

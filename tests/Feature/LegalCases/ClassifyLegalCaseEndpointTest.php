@@ -13,6 +13,7 @@ use App\Domain\JudicialSystems\Models\JudicialSystemCourt;
 use App\Domain\LegalCases\Actions\ExtractLegalCaseDefendant;
 use App\Domain\LegalCases\Actions\ExtractLegalCaseRequirements;
 use App\Domain\LegalCases\Actions\ResearchLegalCaseTheses;
+use App\Domain\LegalCases\Actions\RunAssistedFill;
 use App\Domain\LegalCases\Actions\ScreenLegalCaseFacts;
 use App\Domain\LegalCases\Actions\SuggestCourtAddressing;
 use App\Domain\LegalCases\Actions\SuggestInjunctiveRelief;
@@ -24,8 +25,10 @@ use App\Domain\LegalCases\Data\InjunctiveReliefSuggestionData;
 use App\Domain\LegalCases\Enums\CourtDivision;
 use App\Domain\LegalCases\Enums\FactsScreeningVerdict;
 use App\Domain\LegalCases\Enums\ForumSource;
+use App\Domain\LegalCases\Enums\InferenceRunStatus;
 use App\Domain\LegalCases\Enums\InjunctiveReliefKind;
 use App\Domain\LegalCases\Enums\LegalCaseStep;
+use App\Domain\LegalCases\Models\AssistedFill;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\PracticeAreas\Actions\ClassifyPracticeArea;
 use App\Domain\PracticeAreas\Data\PracticeAreaClassification;
@@ -36,21 +39,36 @@ use App\Domain\ProceduralClasses\Models\ProceduralClass;
 use App\Domain\Requirements\Data\RequirementData;
 use App\Domain\Requirements\Data\RequirementListData;
 use App\Domain\Requirements\Models\Requirement;
+use App\Domain\Users\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Testing\TestResponse;
+use Inertia\Testing\AssertableInertia;
 use Mockery;
 use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\Response;
 use Tests\TestCase;
 
 /**
- * A casca HTTP do enquadramento: `POST /pecas/classificar`.
+ * O preenchimento inteligente: `POST /pecas/classificar` e o job que ele
+ * enfileira.
  *
  * As cinco etapas são substituídas por dublês, e é o ponto. O que se verifica
- * aqui é a rota — autorização, validação, a forma da resposta e o que acontece
- * quando a inferência falha —, não a qualidade da classificação; essa vive em
- * `tests/Agents`, exige o Ollama de pé e custa segundos por caso.
+ * aqui é o caminho — autorização, validação, a forma do resultado e o que
+ * acontece quando a inferência falha —, não a qualidade da classificação; essa
+ * vive em `tests/Agents`, exige o Ollama de pé e custa segundos por caso.
+ *
+ * A rota só enfileira (`RunAssistedFill`), e a suíte roda a fila em `sync`: o
+ * job corre dentro do próprio POST, e quando o redirect volta a `AssistedFill`
+ * já guarda o desfecho. `classify()` o lê de volta na forma que a rota tinha
+ * quando esperava pelos agentes — 200 com o payload, 422 sob `facts` para a
+ * recusa da triagem, 503 para a falha —, e é por isso que as asserções sobre o
+ * que os agentes leram continuam escritas como sempre foram. Os testes do
+ * contrato da fila em si — o que nasce enfileirado, a tela que espera, a linha
+ * que ninguém pegou — estão no fim do arquivo, com `Queue::fake()`.
  *
  * Todo teste que chega à inferência dubla as cinco — a tutela de urgência é a
  * quinta, terceiro elo do enquadramento: uma que ficasse de fora sairia daqui
@@ -137,7 +155,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->andReturn($this->suggestion(recommended: true));
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro e se recusa a reconstruí-lo.'])
+            ->classify(['facts' => 'O vizinho derrubou o muro e se recusa a reconstruí-lo.'])
             ->assertOk()
             // O slug da área e o uuid da classe são as duas formas que o
             // assistente preenche: `?area=` na URL e `procedural_class_id` no
@@ -233,7 +251,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->andReturn($this->suggestion(recommended: false));
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
+            ->classify(['facts' => 'O vizinho derrubou o muro.'])
             ->assertOk()
             ->assertJsonPath('practice_area.slug', 'civil')
             ->assertJsonPath('defendant', null)
@@ -291,7 +309,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->andReturn($this->suggestion(recommended: false));
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
+            ->classify(['facts' => 'O vizinho derrubou o muro.'])
             ->assertOk()
             ->assertJsonPath('procedural_class', null)
             ->assertJsonPath('procedural_class_justification', null)
@@ -316,7 +334,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         $this->fakeAction(ResearchLegalCaseTheses::class)->shouldNotReceive('handle');
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => ''])
+            ->classify(['facts' => ''])
             ->assertStatus(422)
             ->assertJsonValidationErrors('facts');
     }
@@ -360,7 +378,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         }
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => $facts, 'customer_id' => $customer->id])
+            ->classify(['facts' => $facts, 'customer_id' => $customer->id])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['facts' => $screening->message()])
             ->assertJsonPath('message', $screening->message());
@@ -397,7 +415,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         $this->fakeAction(ExtractLegalCaseRequirements::class)->shouldNotReceive('handle');
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
+            ->classify(['facts' => 'O vizinho derrubou o muro.'])
             ->assertStatus(503)
             ->assertJsonPath(
                 'message',
@@ -426,7 +444,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         $this->fakeAction(ClassifyPracticeArea::class)->shouldNotReceive('handle');
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'teste teste'])
+            ->classify(['facts' => 'teste teste'])
             ->assertStatus(422)
             ->assertJsonValidationErrors('facts');
     }
@@ -472,7 +490,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         $this->fakeAction(SuggestInjunctiveRelief::class)->shouldNotReceive('handle');
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
+            ->classify(['facts' => 'O vizinho derrubou o muro.'])
             ->assertStatus(503)
             ->assertJsonPath(
                 'message',
@@ -525,7 +543,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->andReturn($this->suggestion(recommended: false));
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
+            ->classify(['facts' => 'O vizinho derrubou o muro.'])
             ->assertOk()
             ->assertJsonPath('defendant', null);
 
@@ -627,7 +645,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->andReturn(new RequirementListData([]));
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
+            ->classify(['facts' => 'O vizinho derrubou o muro.'])
             ->assertOk();
     }
 
@@ -695,7 +713,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ]));
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
+            ->classify(['facts' => 'O vizinho derrubou o muro.'])
             ->assertOk()
             ->assertJsonPath('practice_area.slug', 'civil')
             ->assertJsonPath('procedural_class', null)
@@ -746,7 +764,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->andReturn(new RequirementListData([]));
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
+            ->classify(['facts' => 'O vizinho derrubou o muro.'])
             ->assertOk()
             ->assertJsonPath('procedural_class.code', 7)
             ->assertJsonPath('defendant.defendant_name', 'Joaquim Vizinho')
@@ -808,7 +826,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->andReturn($this->suggestion(recommended: false));
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
+            ->classify(['facts' => 'O vizinho derrubou o muro.'])
             ->assertOk()
             ->assertJsonPath('practice_area.slug', 'civil')
             ->assertJsonMissingPath('research');
@@ -843,7 +861,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ));
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id])
+            ->classify(['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id])
             ->assertOk()
             ->assertJsonPath('practice_area.slug', 'civil')
             ->assertJsonPath('court_addressing.court_addressing', 'Excelentíssimo(a) Senhor(a) Juiz(a) de Direito da Vara Cível da Comarca de Joinville/SC')
@@ -867,7 +885,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->andThrow(new RuntimeException('Connection refused'));
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id])
+            ->classify(['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id])
             ->assertOk()
             ->assertJsonPath('practice_area.slug', 'civil')
             ->assertJsonPath('court_addressing', null);
@@ -886,7 +904,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         $this->fakeAction(SuggestCourtAddressing::class)->shouldNotReceive('handle');
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
+            ->classify(['facts' => 'O vizinho derrubou o muro.'])
             ->assertOk()
             ->assertJsonPath('court_addressing', null)
             ->assertJsonPath('legal_case_id', null);
@@ -957,7 +975,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ));
 
         $response = $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => "  O vizinho derrubou o muro.\n", 'customer_id' => $customer->id])
+            ->classify(['facts' => "  O vizinho derrubou o muro.\n", 'customer_id' => $customer->id])
             ->assertOk()
             // O payload continua inteiro: é ele que a tela usa quando a peça
             // não pôde ser gravada.
@@ -966,6 +984,12 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         $legalCase = LegalCase::acrossAllAccounts()->sole();
 
         $response->assertJsonPath('legal_case_id', $legalCase->id);
+
+        // A peça passa a guardar o relato, e a linha do preenchimento o solta.
+        $fill = AssistedFill::acrossAllAccounts()->sole();
+        $this->assertSame(InferenceRunStatus::Completed, $fill->status);
+        $this->assertSame($legalCase->id, $fill->legal_case_id);
+        $this->assertNull($fill->facts);
 
         $this->assertSame($account->id, $legalCase->account_id);
         $this->assertSame($owner->id, $legalCase->user_id);
@@ -1030,7 +1054,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->andThrow(new RuntimeException('Connection refused'));
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id])
+            ->classify(['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id])
             ->assertOk();
 
         $legalCase = LegalCase::acrossAllAccounts()->sole();
@@ -1086,7 +1110,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->andThrow(new RuntimeException('Connection refused'));
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id])
+            ->classify(['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id])
             ->assertOk()
             ->assertJsonPath('practice_area.slug', 'civil')
             ->assertJsonPath('procedural_class', null)
@@ -1162,7 +1186,7 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
             ->andThrow(new RuntimeException('Connection refused'));
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id])
+            ->classify(['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id])
             ->assertOk()
             ->assertJsonPath('procedural_class.code', 7)
             ->assertJsonCount(1, 'requirements')
@@ -1186,9 +1210,183 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         $this->fakeAction(ClassifyPracticeArea::class)->shouldNotReceive('handle');
 
         $this->actingAs($owner)
-            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $foreign->id])
+            ->classify(['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $foreign->id])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['customer_id']);
+    }
+
+    /**
+     * A rota não espera por agente nenhum: grava o pedido, enfileira o job na
+     * fila própria e manda a tela para a peça nova, que espera travada.
+     */
+    #[Test]
+    public function the_route_only_queues_and_opens_the_new_pleading(): void
+    {
+        Queue::fake();
+
+        [$account, $owner] = $this->accountWithOwner();
+        $customer = Customer::factory()->forAccount($account)->create();
+
+        $this->fakeAction(ScreenLegalCaseFacts::class)->shouldNotReceive('handle');
+        $this->fakeAction(ClassifyPracticeArea::class)->shouldNotReceive('handle');
+
+        $response = $this->actingAs($owner)
+            ->post('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id]);
+
+        $fill = AssistedFill::acrossAllAccounts()->sole();
+
+        $response->assertRedirect(route('legal-cases.create', ['preenchimento' => $fill->id]));
+
+        $this->assertSame(InferenceRunStatus::Queued, $fill->status);
+        $this->assertSame($account->id, $fill->account_id);
+        $this->assertSame($owner->id, $fill->user_id);
+        $this->assertSame($customer->id, $fill->customer_id);
+        $this->assertSame('O vizinho derrubou o muro.', $fill->facts);
+
+        RunAssistedFill::assertPushedOn('inference', 1);
+
+        // A tela da peça nova lê o preenchimento e trava enquanto ele espera.
+        $this->actingAs($owner)
+            ->get(route('legal-cases.create', ['preenchimento' => $fill->id]))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('legal-cases/form')
+                ->where('assistedFill.id', $fill->id)
+                ->where('assistedFill.status', 'queued')
+                ->where('assistedFill.customer_id', $customer->id)
+                ->where('assistedFill.facts', 'O vizinho derrubou o muro.')
+                ->where('assistedFill.result', null));
+    }
+
+    /**
+     * A recusa chega à tela da peça nova minutos depois do envio, e ela manda o
+     * advogado de volta ao formulário — que se reconstrói da linha, com o
+     * relato e o motivo debaixo dos fatos.
+     */
+    #[Test]
+    public function a_refusal_puts_the_form_back_with_the_narrative(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $customer = Customer::factory()->forAccount($account)->create();
+        $screening = $this->screening(legalMatter: false, reason: 'Uma cantiga infantil.');
+
+        $this->fakeAction(ScreenLegalCaseFacts::class)
+            ->shouldReceive('handle')
+            ->andReturn($screening);
+
+        $this->actingAs($owner)
+            ->post('/pecas/classificar', ['facts' => 'Atirei o pau no gato, mas o gato não morreu.', 'customer_id' => $customer->id]);
+
+        $fill = AssistedFill::acrossAllAccounts()->sole();
+
+        $this->assertSame(InferenceRunStatus::Refused, $fill->status);
+        $this->assertSame($screening->message(), $fill->failure);
+        $this->assertSame('Atirei o pau no gato, mas o gato não morreu.', $fill->facts);
+
+        $this->actingAs($owner)
+            ->get(route('legal-cases.create-assisted', ['preenchimento' => $fill->id]))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('retry.customer_id', $customer->id)
+                ->where('retry.facts', 'Atirei o pau no gato, mas o gato não morreu.')
+                ->where('retry.message', $screening->message())
+                ->where('retry.field', 'facts'));
+    }
+
+    /**
+     * A lição da primeira tentativa de fila: sem worker de pé, a tela girava
+     * dezessete minutos. A linha que ninguém pega em `pickup_timeout` chega à
+     * tela como falha, com a frase que manda olhar para a fila — e o worker
+     * que acorda tarde não a reacende.
+     */
+    #[Test]
+    public function a_fill_nobody_picked_up_is_told_as_failed_and_never_revived(): void
+    {
+        Queue::fake();
+        config(['ai.queue.pickup_timeout' => 60]);
+
+        [$account, $owner] = $this->accountWithOwner();
+        $customer = Customer::factory()->forAccount($account)->create();
+
+        $this->actingAs($owner)
+            ->post('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id]);
+
+        $fill = AssistedFill::acrossAllAccounts()->sole();
+
+        $this->travel(61)->seconds();
+
+        $this->actingAs($owner)
+            ->get(route('legal-cases.create', ['preenchimento' => $fill->id]))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('assistedFill.status', 'failed')
+                ->where('assistedFill.failure', AssistedFill::NOT_STARTED));
+
+        $this->fakeAction(ScreenLegalCaseFacts::class)->shouldNotReceive('handle');
+
+        RunAssistedFill::make()->asJob($fill->id);
+
+        $fill->refresh();
+
+        $this->assertSame(InferenceRunStatus::Failed, $fill->status);
+        $this->assertSame(AssistedFill::NOT_STARTED, $fill->failure);
+        $this->assertNull($fill->started_at);
+    }
+
+    /**
+     * O worker que morre com o preenchimento na mão — o teto do job, um deploy
+     * — chega à tela como interrompido, e não como pendente para sempre.
+     */
+    #[Test]
+    public function a_worker_that_dies_leaves_the_fill_interrupted(): void
+    {
+        Queue::fake();
+
+        [$account, $owner] = $this->accountWithOwner();
+        $customer = Customer::factory()->forAccount($account)->create();
+
+        $this->actingAs($owner)
+            ->post('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id]);
+
+        $fill = AssistedFill::acrossAllAccounts()->sole();
+        $this->assertTrue($fill->start());
+
+        RunAssistedFill::make()->jobFailed(new RuntimeException('Timed out.'), $fill->id);
+
+        $fill->refresh();
+
+        $this->assertSame(InferenceRunStatus::Failed, $fill->status);
+        $this->assertSame(AssistedFill::INTERRUPTED, $fill->failure);
+    }
+
+    /**
+     * O preenchimento é de quem o pediu: o relato de outro usuário, mesmo da
+     * mesma conta, não abre — nem para confirmar que existe.
+     */
+    #[Test]
+    public function another_users_fill_is_not_found(): void
+    {
+        Queue::fake();
+
+        [$account, $owner] = $this->accountWithOwner();
+        $colleague = User::factory()->forAccount($account)->create();
+        $customer = Customer::factory()->forAccount($account)->create();
+
+        $this->actingAs($owner)
+            ->post('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.', 'customer_id' => $customer->id]);
+
+        $fill = AssistedFill::acrossAllAccounts()->sole();
+
+        $this->actingAs($colleague)
+            ->get(route('legal-cases.create', ['preenchimento' => $fill->id]))
+            ->assertNotFound();
+
+        $this->actingAs($colleague)
+            ->get(route('legal-cases.create-assisted', ['preenchimento' => $fill->id]))
+            ->assertNotFound();
+
+        $this->actingAs($owner)
+            ->get(route('legal-cases.create', ['preenchimento' => 'nao-e-um-uuid']))
+            ->assertNotFound();
     }
 
     /**
@@ -1306,6 +1504,51 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
         );
 
         return $screening;
+    }
+
+    /**
+     * Posts the smart fill and reads back what the queue answered, in the shape
+     * the route answered with while it waited on the agents.
+     *
+     * The route only queues — RunAssistedFill — and the suite runs the queue in
+     * `sync`, so the job runs inside the same request and the fill holds its
+     * outcome by the time the redirect comes back. What the old route said is
+     * rebuilt from it: 200 with the payload, 422 under `facts` for the
+     * screening's refusal, 503 for a failure. Anything that is not the redirect
+     * — a validation error, the login — never reached the queue, and is
+     * returned as it came.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return TestResponse<Response>
+     */
+    private function classify(array $payload): TestResponse
+    {
+        $response = $this->postJson('/pecas/classificar', $payload);
+
+        if (! $response->isRedirect()) {
+            return $response;
+        }
+
+        $fill = AssistedFill::acrossAllAccounts()->latest()->firstOrFail();
+
+        $response->assertRedirect(route('legal-cases.create', ['preenchimento' => $fill->id]));
+
+        return TestResponse::fromBaseResponse($this->outcome($fill));
+    }
+
+    /**
+     * What the synchronous route answered, rebuilt from the fill's outcome.
+     */
+    private function outcome(AssistedFill $fill): Response
+    {
+        return match ($fill->status) {
+            InferenceRunStatus::Completed => response()->json($fill->result),
+            InferenceRunStatus::Refused => response()->json([
+                'message' => $fill->failure,
+                'errors' => ['facts' => [$fill->failure]],
+            ], 422),
+            default => response()->json(['message' => $fill->failure], 503),
+        };
     }
 
     /**

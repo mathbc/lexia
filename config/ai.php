@@ -146,12 +146,38 @@ return [
     | distingui-las.
     |
     | Isto não alcança `fastcgi_read_timeout` nem `request_terminate_timeout`:
-    | num servidor de verdade quem corta é o proxy, e a saída é a fila que
-    | ResearchLegalCaseForensicReview registra como dívida.
+    | num servidor de verdade quem corta é o proxy, e a saída é a fila — que o
+    | preenchimento inteligente e as pesquisas das etapas 5 e 6 já usam (ver
+    | "Inference Queue", abaixo). As rotas que continuam aqui são as quatro que
+    | ainda esperam na requisição.
     |
     */
 
     'request_time_limit' => (int) env('AI_REQUEST_TIME_LIMIT', 900),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Inference Queue
+    |--------------------------------------------------------------------------
+    |
+    | O preenchimento inteligente e as pesquisas das etapas 5 e 6 rodam na fila
+    | `inference` (RunAssistedFill, RunLegalCaseForensicReview,
+    | RunLegalCaseJurisprudence), atendida por um worker próprio, e a tela
+    | espera travada consultando a linha que o job vai responder.
+    |
+    | `pickup_timeout` é quanto tempo essa linha pode ficar `queued` — sem
+    | nenhum worker tê-la pegado — antes de a tela a dar como falha, com a frase
+    | de que a fila não está ativa. É a lição da primeira tentativa de fila:
+    | sem worker de pé, a tela girava até o teto do job, dezessete minutos, e
+    | só então dizia que a análise fora interrompida. Cinco minutos cobrem um
+    | worker ocupado com a pesquisa de outro advogado; um job que um worker
+    | pega depois disso é recusado em vez de reacender a tela.
+    |
+    */
+
+    'queue' => [
+        'pickup_timeout' => (int) env('AI_QUEUE_PICKUP_TIMEOUT', 300),
+    ],
 
     /*
     |--------------------------------------------------------------------------

@@ -16,7 +16,9 @@ return [
     | o default do framework, e o único que serve a um request web, já que o
     | `fork` recusa rodar fora do console — cada task é um `php artisan
     | invoke-serialized-closure`, com o framework subindo de novo e o retorno
-    | atravessando `serialize()`.
+    | atravessando `serialize()`. Hoje o bloco roda num worker da fila
+    | `inference`, e não mais num request, e o driver continua o mesmo — as
+    | regras das closures também.
     |
     | Duas razões para trocar para `sync`, que corre tudo em série no mesmo
     | processo. A primeira é o teste: um dublê registrado no container do
@@ -54,12 +56,15 @@ return [
     |   quem desista primeiro seja o cliente HTTP do agente. A exceção dele é
     |   capturada dentro do filho, que a relata com o stack trace de verdade;
     |   abater o processo é a rede, não o caminho.
-    | - **abaixo** de `ai.request_time_limit` (900 s), para que o pai ainda
+    | - **abaixo** do teto de quem espera pelo bloco, para que o pai ainda
     |   esteja vivo quando um filho for abatido e grave o que os outros
-    |   trouxeram. Um teto igual ao do request mataria o pai primeiro, e nada
-    |   seria gravado.
+    |   trouxeram. Um teto igual ao do pai o mataria primeiro, e nada seria
+    |   gravado. Quem espera hoje é um job da fila `inference`, e o teto dele é
+    |   o `$jobTimeout`: 900 s em RunLegalCaseForensicReview e 1500 s em
+    |   RunAssistedFill. O `ai.request_time_limit` (900 s) vale para as rotas
+    |   que continuam na requisição.
     |
-    | Quem mexer num dos três números confere os outros dois.
+    | Quem mexer num destes números confere os outros.
     |
     */
 

@@ -41,10 +41,14 @@ use Symfony\Component\HttpFoundation\Response;
  *
  * Note the boundary this does not cross: under PHP-FPM behind a web server,
  * `fastcgi_read_timeout` (nginx) and `request_terminate_timeout` (the pool)
- * cut the same request from outside, and no amount of `set_time_limit()`
- * reaches them. The real answer for production is the queue that
- * `ResearchLegalCaseForensicReview` and `ClassifyLegalCase` both document as
- * their standing debt; this is what makes the synchronous path work meanwhile.
+ * cut the same request from outside — and in production the Cloudflare in
+ * front of Laravel Cloud answers 504 sooner still —, and no amount of
+ * `set_time_limit()` reaches them. The real answer is the `inference` queue,
+ * which the smart fill and the researches of steps 5 and 6 already take
+ * (RunAssistedFill, RunLegalCaseForensicReview, RunLegalCaseJurisprudence):
+ * their routes left this middleware when they stopped waiting. The four that
+ * keep it — the two suggestions of step 1, the conclusion and the pleading —
+ * are the synchronous path this still makes work.
  */
 final class AllowLongInference
 {

@@ -45,6 +45,12 @@ interface Props {
     researching: boolean;
     /** A rodada falhou — portal fora do ar, cota esgotada — e nada foi gravado. */
     failed: boolean;
+    /**
+     * Por que a última rodada falhou, quando o motivo não é a pesquisa: a fila
+     * que não a pegou, o worker que morreu com ela. Vai antes do texto do
+     * alerta, porque manda olhar para outro lugar.
+     */
+    failureReason?: string;
     /** Refaz a pesquisa, descartando a anterior. Um gesto do advogado, nunca automático. */
     onResearch: () => void;
     /** Os julgados com a decisão do advogado ao lado — ver `@/lib/court-decisions`. */
@@ -85,6 +91,7 @@ export function CourtDecisionFields({
     research,
     researching,
     failed,
+    failureReason,
     onResearch,
     decisions,
     onToggle,
@@ -151,11 +158,15 @@ export function CourtDecisionFields({
                             A pesquisa não pôde ser concluída
                         </AlertTitle>
                         <AlertDescription>
-                            Nada foi gravado. A pesquisa depende do portal do
-                            LexML: ele fora do ar basta para derrubá-la. Use
-                            "Pesquisar novamente" para tentar outra vez, ou
-                            conclua sem jurisprudência — a minuta é redigida
-                            normalmente, com as teses da revisão forense.
+                            {failureReason && <p>{failureReason}</p>}
+                            <p>
+                                Nada foi gravado. A pesquisa depende do portal
+                                do LexML: ele fora do ar basta para derrubá-la.
+                                Use "Pesquisar novamente" para tentar outra vez,
+                                ou conclua sem jurisprudência — a minuta é
+                                redigida normalmente, com as teses da revisão
+                                forense.
+                            </p>
                         </AlertDescription>
                     </Alert>
                 ) : research === null ? (

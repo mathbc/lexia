@@ -24,6 +24,11 @@ use Tests\TestCase;
  *
  * So what is pinned is the wiring and the one rule the middleware has: it
  * raises a limit and never lowers one.
+ *
+ * And the other side of the wiring: the three routes that moved to the
+ * `inference` queue answer at once, and carry no ceiling to lift. Behind the
+ * Cloudflare of production they were cut with a 504 long before this
+ * middleware mattered, which is why they left it.
  */
 final class LongInferenceRoutesTest extends TestCase
 {
@@ -33,14 +38,33 @@ final class LongInferenceRoutesTest extends TestCase
     public static function inferenceRoutes(): array
     {
         return [
-            'o enquadramento' => ['legal-cases.classify'],
             'a sugestão de tutela' => ['legal-cases.injunctive-relief.suggest'],
             'a sugestão de endereçamento' => ['legal-cases.court-addressing.suggest'],
-            'a pesquisa de teses' => ['legal-cases.forensic-review.research'],
-            'a pesquisa de jurisprudência' => ['legal-cases.jurisprudence.research'],
             'a conclusão da peça' => ['legal-cases.finalize'],
             'a minuta gerada de novo' => ['legal-cases.pleading.generate'],
         ];
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function queuedRoutes(): array
+    {
+        return [
+            'o preenchimento inteligente' => ['legal-cases.classify'],
+            'a pesquisa da revisão forense' => ['legal-cases.forensic-review.research'],
+            'a pesquisa de jurisprudência' => ['legal-cases.jurisprudence.research'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('queuedRoutes')]
+    public function a_route_that_only_queues_does_not_wait(string $name): void
+    {
+        $route = Route::getRoutes()->getByName($name);
+
+        $this->assertNotNull($route, "A rota {$name} não existe.");
+        $this->assertNotContains('inference', $route->gatherMiddleware());
     }
 
     #[Test]

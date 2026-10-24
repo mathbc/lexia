@@ -10,6 +10,7 @@ use App\Domain\Customers\Enums\CustomerType;
 use App\Domain\Customers\Enums\MaritalStatus;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\LegalCases\Models\LegalCase;
+use App\Domain\LegalCases\Support\InferenceRunProps;
 use App\Domain\LegalCases\Support\LegalCaseOptions;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -32,7 +33,8 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * and publishes exactly what those two need, which is the client list plus
  * what the inline client dialog opens with: the registration it offers is the
  * same CreateCustomer, and `createdCustomer` is how the client just saved
- * finds its way back here chosen.
+ * finds its way back here chosen. `retry` is the other way back: the fill that
+ * was refused or failed in the queue, returning the form to how it was left.
  */
 final class ShowAssistedLegalCaseForm
 {
@@ -54,6 +56,26 @@ final class ShowAssistedLegalCaseForm
                 'create_customer' => $request->user()->can('create', Customer::class),
             ],
             'createdCustomer' => $request->session()->get(CreateCustomer::INLINE_FLASH_KEY),
+            'retry' => $this->retry($request),
         ]);
+    }
+
+    /**
+     * The fill this form is being sent back from, when it did not end in a
+     * pleading.
+     *
+     * The agents run in the queue, so the screening's refusal and a failure
+     * reach the lawyer on the new pleading's screen, minutes after this form
+     * was left. That screen sends them back here with `?preenchimento={id}`,
+     * and this puts the form as it was — the client, the narrative — with the
+     * reason beside the field it is about. See InferenceRunProps::retry().
+     *
+     * @return array<string, mixed>|null
+     */
+    private function retry(ActionRequest $request): ?array
+    {
+        $id = $request->string('preenchimento')->toString();
+
+        return $id === '' ? null : InferenceRunProps::retry($id);
     }
 }

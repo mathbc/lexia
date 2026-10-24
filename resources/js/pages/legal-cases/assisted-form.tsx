@@ -1,4 +1,4 @@
-import { Head, Link, router } from "@inertiajs/react";
+import { Head, Link, useForm } from "@inertiajs/react";
 import { LoaderCircle, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { AppLayout } from "@/layouts/app-layout";
@@ -14,42 +14,8 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import { Field, Select, Textarea } from "@/components/ui/field";
-import { ApiError, postJson } from "@/lib/api";
-import { stashHandoff } from "@/lib/legal-case-handoff";
-import type { LegalCaseClassification, Option } from "@/types";
-
-/**
- * O que as quatro etapas fazem — ler os fatos, decidir a área, escolher entre as
- * classes de ajuizamento vinculadas a ela e procurar no mesmo relato quem é o
- * réu e o que o cliente está pedindo.
- *
- * São frases sobre o trabalho, não sobre o andamento, e a distinção importa:
- * as quatro correm **em paralelo** no servidor, e a ordem em que estão escritas
- * aqui é a de quem lê, não a de quem executa. A chamada é uma só e o servidor
- * não relata por onde anda, então nenhuma delas afirma que uma etapa terminou.
- *
- * A primeira frase é a triagem, e é a única cuja posição é verdade: ela roda
- * sozinha e antes de todas, e um relato que ela recusa volta antes de as
- * outras começarem — com o motivo debaixo do campo Fatos.
- *
- * A pesquisa de teses **não está aqui**, e as frases dela saíram junto: ela
- * acontece ao abrir a etapa 5, sobre uma peça já gravada, com o diálogo próprio
- * de `ForensicReviewFields`. Prometê-la nesta tela era prometer uma espera que
- * não acontece mais aqui.
- */
-const ANALYSIS_STEPS = [
-    "Conferindo se o texto é o relato de um caso jurídico.",
-    "Lendo o relato e separando o que tem peso jurídico.",
-    "Comparando os fatos com as áreas de atuação do catálogo.",
-    "Reunindo as classes processuais de ajuizamento da área.",
-    "Ordenando as classes candidatas pela proximidade com o caso.",
-    "Pesando prazo, pressuposto e instrumento de cada candidata.",
-    "Escrevendo a justificativa de cada uma das duas escolhas.",
-    "Separando quem narra o caso de quem está do outro lado dele.",
-    "Recolhendo o que o relato diz sobre o réu e onde encontrá-lo.",
-    "Procurando no relato o que o cliente quer do juízo.",
-    "Escrevendo cada pedido e conferindo os valores contra os fatos.",
-] as const;
+import { ANALYSIS_STEPS } from "@/lib/analysis-steps";
+import type { AssistedFillRetry, Option } from "@/types";
 
 interface Props {
     customers: Option[];
@@ -57,6 +23,11 @@ interface Props {
     maritalStatuses: Option[];
     states: Option[];
     can: { create_customer: boolean };
+    /**
+     * O preenchimento que voltou sem peça — recusado pela triagem ou falho —,
+     * com o cliente, o relato e o motivo. Ver `InferenceRunProps::retry()`.
+     */
+    retry: AssistedFillRetry | null;
 }
 
 /**
@@ -68,35 +39,31 @@ interface Props {
  * os quatro são deduzidos dos fatos; o destino das duas é o mesmo formulário, e
  * a diferença é só quem preenche o quê.
  *
- * Por isso não há trilha de etapas nem `useForm`. A tela faz uma chamada só,
- * `POST /pecas/classificar`, que não devolve tela nenhuma — devolve o que os
- * agentes leram do relato e, no mesmo gesto, **grava a peça como rascunho**
- * com isso tudo (ver `CreateAssistedLegalCase`). A navegação é para
- * `/pecas/{id}/editar`: o assistente abre na etapa 1 de uma peça que já
- * existe, com a área e a classe escolhidas, os fatos escritos e o réu e os
- * pedidos gravados atrás do "Continuar" de cada etapa. A espera de minutos
- * passa a sobreviver a uma aba fechada.
+ * Por isso não há trilha de etapas, e o `useForm` tem dois campos. O envio,
+ * `POST /pecas/classificar`, **não espera pelos agentes**: grava o pedido,
+ * enfileira o trabalho na fila `inference` e redireciona na hora para a tela da
+ * peça nova (`/pecas/nova?preenchimento={id}`), que espera travada atrás do
+ * diálogo e consulta o andamento — ver `RunAssistedFill` e `useAssistedFill`.
+ * Quando o worker termina, aquela tela abre `/pecas/{id}/editar`: o assistente
+ * na etapa 1 de uma peça que já existe, com a área e a classe escolhidas, os
+ * fatos escritos e o réu e os pedidos gravados atrás do "Continuar" de cada
+ * etapa.
  *
- * Quando a resposta não traz peça — a seleção de classe falhou, e a coluna não
- * aceita peça sem classe, ou a gravação caiu —, vale o caminho antigo: o
- * resultado vai com o cliente e o relato pelo `sessionStorage` até
+ * Esperava aqui mesmo, e a requisição esperava junto: em produção o gateway a
+ * cortava com 504 antes de a análise terminar, e a tela nunca saía do lugar.
+ *
+ * O que volta para cá é o preenchimento que não virou peça: a recusa da
+ * triagem, que aparece debaixo do campo Fatos — o relato que ela não aceitou é
+ * corrigido ali —, e a falha, no alerta do topo. Nos dois casos o formulário
+ * volta como estava, com o cliente e o relato, por `retry`. Os erros de
+ * validação (o relato curto demais, o cliente que não é da conta) nem chegam a
+ * enfileirar e voltam pelo bag de erros do Inertia, como em qualquer
+ * formulário.
+ *
+ * Quando o enquadramento termina sem peça — a seleção de classe falhou, e a
+ * coluna não aceita peça sem classe, ou a gravação caiu —, vale o caminho
+ * antigo: o resultado vai com o cliente e o relato pelo `sessionStorage` até
  * `/pecas/nova?area=`, e `@/lib/legal-case-handoff` explica por quê.
- *
- * A espera é pelas quatro etapas, em três tasks que correm em paralelo, e
- * nenhuma delas sai da máquina. Ainda assim é espera de inferência local e não
- * o instante de um `submit`, e é por isso que ela é um diálogo modal e não um
- * punhado de campos desabilitados: congelar os controles deste formulário
- * deixaria de fora tudo o que está em volta dele — a barra lateral, o
- * cabeçalho, o menu do usuário —, e sair da tela joga fora a inferência inteira
- * sem que nada tenha avisado. O `AnalysisDialog` tranca a página, conta o que
- * está acontecendo e não se deixa fechar.
- *
- * A revisão forense não está nesta conta e já esteve. Ela era a quinta etapa,
- * a única que saía da máquina e a mais lenta de todas, e dominava esta espera
- * sozinha — sem nada para mostrar depois, porque uma peça não salva não tem
- * onde guardar teses. Hoje ela roda ao abrir a etapa 5, sobre a peça já
- * gravada. Trocar esta requisição por uma fila continua sendo o próximo passo,
- * e agora por um motivo menor — ver `ClassifyLegalCase`.
  */
 export default function LegalCaseAssistedForm({
     customers,
@@ -104,101 +71,27 @@ export default function LegalCaseAssistedForm({
     maritalStatuses,
     states,
     can,
+    retry,
 }: Props) {
-    const [customerId, setCustomerId] = useState("");
-    const [facts, setFacts] = useState("");
-    const [classifying, setClassifying] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    // A recusa que é sobre um campo vai para baixo dele: o relato que a
-    // triagem não aceitou é corrigido ali, e um alerta no topo ficaria longe
-    // do texto que precisa mudar.
-    const [fieldErrors, setFieldErrors] = useState<{
-        facts?: string;
-        customer_id?: string;
-    }>({});
+    const form = useForm({
+        customer_id: retry?.customer_id ?? "",
+        facts: retry?.facts ?? "",
+    });
 
-    const ready = customerId !== "" && facts.trim() !== "";
+    // O motivo do preenchimento que voltou, até o advogado mexer no que ele
+    // descreve: a recusa da triagem era sobre o texto de antes.
+    const [refusal, setRefusal] = useState(
+        retry?.field === "facts" ? retry.message : null,
+    );
+    const failure = retry && retry.field === null ? retry.message : null;
 
-    const classify = async () => {
-        setClassifying(true);
-        setError(null);
-        setFieldErrors({});
+    const ready = form.data.customer_id !== "" && form.data.facts.trim() !== "";
 
-        try {
-            const classification = await postJson<LegalCaseClassification>(
-                "/pecas/classificar",
-                // O cliente só serve ao endereçamento: é o domicílio dele que
-                // o foro do consumidor, do alimentando e do idoso aponta.
-                { facts, customer_id: customerId },
-            );
-
-            // O caminho de sempre: a rota já gravou a peça como rascunho, e o
-            // assistente abre nela, na etapa 1, com o réu e os pedidos atrás
-            // do "Continuar" de cada etapa. Sem desligar o estado de espera,
-            // pelo motivo escrito lá embaixo.
-            if (classification.legal_case_id) {
-                router.visit(`/pecas/${classification.legal_case_id}/editar`);
-
-                return;
-            }
-
-            // A reserva: sem classe não há peça que a coluna aceite, e uma
-            // gravação que falhou não devolveu id. O enquadramento continua
-            // valendo e vai até `/pecas/nova` pela entrega, como ia antes.
-            const area = classification.practice_area.slug;
-
-            stashHandoff({
-                practice_area: area,
-                customer_id: customerId,
-                // A área sem classe de ajuizamento não existe no catálogo de
-                // hoje, mas o payload admite o caso: sem classe, o assistente
-                // abre a lista da área para o advogado escolher.
-                procedural_class_id: classification.procedural_class?.id ?? "",
-                facts,
-                // Nulo aqui é a extração que falhou, e o enquadramento continua
-                // valendo: a etapa do réu abre em branco, como sempre abriu.
-                defendant: classification.defendant,
-                // O mesmo vale para os pedidos, com uma distinção a mais: nulo
-                // é a inferência que caiu, e a lista vazia é o relato que não
-                // pede nada. A etapa abre igual nos dois casos.
-                requirements: classification.requirements,
-                // A tutela é o terceiro elo do enquadramento, e o nulo é o
-                // mesmo das extrações: a etapa falhou, e a etapa 1 oferece o
-                // "Consultar IA" em vez de abrir com uma sugestão.
-                injunctive_relief: classification.injunctive_relief,
-                // O endereçamento vem depois do bloco e pelo mesmo caminho: o
-                // nulo é a etapa que falhou, e a etapa 1 abre os dois campos em
-                // branco com o "Consultar IA" à mão.
-                court_addressing: classification.court_addressing,
-            });
-
-            // Sem desligar o estado de espera: a navegação já está em curso, e
-            // o botão voltando a "Gerar peça" por um instante convidaria a um
-            // segundo pedido tão demorado quanto o primeiro.
-            router.visit(`/pecas/nova?area=${encodeURIComponent(area)}`);
-        } catch (failure) {
-            // O 422 da triagem e o do validador trazem o campo; o 503 do
-            // agente que caiu, não, e continua no alerta do topo.
-            const refused =
-                failure instanceof ApiError
-                    ? {
-                          facts: failure.field("facts"),
-                          customer_id: failure.field("customer_id"),
-                      }
-                    : {};
-
-            if (refused.facts || refused.customer_id) {
-                setFieldErrors(refused);
-            } else {
-                setError(
-                    failure instanceof Error
-                        ? failure.message
-                        : "Não foi possível enquadrar o caso agora.",
-                );
-            }
-
-            setClassifying(false);
-        }
+    const classify = () => {
+        setRefusal(null);
+        // Sem `onSuccess`: o servidor redireciona para a tela da peça nova, que
+        // é onde a espera acontece.
+        form.post("/pecas/classificar");
     };
 
     return (
@@ -206,10 +99,10 @@ export default function LegalCaseAssistedForm({
             <Head title="Nova peça — preenchimento inteligente" />
 
             <div className="mx-auto w-full max-w-3xl space-y-6 pb-4">
-                {error && (
+                {failure && (
                     <Alert variant="destructive">
                         <AlertTitle>A análise não foi concluída</AlertTitle>
-                        <AlertDescription>{error}</AlertDescription>
+                        <AlertDescription>{failure}</AlertDescription>
                     </Alert>
                 )}
 
@@ -227,7 +120,7 @@ export default function LegalCaseAssistedForm({
                         <Field
                             label="Cliente"
                             required
-                            error={fieldErrors.customer_id}
+                            error={form.errors.customer_id}
                             hint={
                                 customers.length === 0
                                     ? "Nenhum cliente cadastrado ainda."
@@ -240,17 +133,20 @@ export default function LegalCaseAssistedForm({
                                         maritalStatuses={maritalStatuses}
                                         states={states}
                                         onCreated={(customer) =>
-                                            setCustomerId(customer.value)
+                                            form.setData(
+                                                "customer_id",
+                                                customer.value,
+                                            )
                                         }
                                     />
                                 )
                             }
                         >
                             <Select
-                                value={customerId}
+                                value={form.data.customer_id}
                                 onValueChange={(value) => {
-                                    setCustomerId(value);
-                                    setFieldErrors(({ facts }) => ({ facts }));
+                                    form.setData("customer_id", value);
+                                    form.clearErrors("customer_id");
                                 }}
                                 options={customers}
                                 placeholder="Selecione o cliente"
@@ -263,17 +159,16 @@ export default function LegalCaseAssistedForm({
                         <Field
                             label="Fatos"
                             required
-                            error={fieldErrors.facts}
+                            error={form.errors.facts ?? refusal ?? undefined}
                             hint="Quanto mais completo o relato — datas, valores, nomes, o que já se tentou —, menos o modelo precisa supor."
                         >
                             <Textarea
-                                value={facts}
+                                value={form.data.facts}
                                 onChange={(e) => {
-                                    setFacts(e.target.value);
+                                    form.setData("facts", e.target.value);
                                     // A recusa era sobre o texto de antes.
-                                    setFieldErrors(({ customer_id }) => ({
-                                        customer_id,
-                                    }));
+                                    form.clearErrors("facts");
+                                    setRefusal(null);
                                 }}
                                 rows={18}
                                 placeholder="Relate o caso como o cliente o contou: quando começou, o que foi feito, o que foi cobrado, o que se tentou resolver antes de procurar a Justiça…"
@@ -295,27 +190,28 @@ export default function LegalCaseAssistedForm({
 
                     <Button
                         type="button"
-                        disabled={!ready || classifying}
+                        disabled={!ready || form.processing}
                         onClick={classify}
                     >
-                        {classifying ? (
+                        {form.processing ? (
                             <LoaderCircle className="animate-spin" />
                         ) : (
                             <Sparkles />
                         )}
-                        {classifying ? "Analisando os fatos…" : "Gerar peça"}
+                        {form.processing ? "Enviando os fatos…" : "Gerar peça"}
                     </Button>
                 </div>
             </div>
 
-            {/* Fica montado durante a navegação para `/pecas/nova`: o diálogo
-                some junto com a tela, e não antes dela. Desligá-lo ao receber
-                a resposta devolveria o formulário por uma fração de segundo —
-                clicável, e com um botão convidando ao mesmo pedido de novo. */}
+            {/* O envio só enfileira e redireciona, então este diálogo dura o
+                instante do POST: a espera de verdade é a da tela da peça nova,
+                que abre com o mesmo diálogo. Ele existe para que o formulário
+                não volte clicável nesse meio-tempo, convidando a um segundo
+                pedido. */}
             <AnalysisDialog
-                open={classifying}
+                open={form.processing}
                 title="Analisando o caso"
-                hint="A análise pode levar alguns minutos. Mantenha esta aba aberta: ao terminar, a peça é salva como rascunho e o assistente abre com o enquadramento, os dados do réu e os pedidos preenchidos."
+                hint="A análise pode levar alguns minutos e continua no servidor mesmo se você sair desta tela. Ao terminar, a peça é salva como rascunho e o assistente abre com o enquadramento, os dados do réu e os pedidos preenchidos."
                 messages={ANALYSIS_STEPS}
             />
         </AppLayout>

@@ -36,6 +36,12 @@ interface Props {
     researching: boolean;
     /** A rodada falhou — cota, LexML fora do ar — e nada foi gravado. */
     failed: boolean;
+    /**
+     * Por que a última rodada falhou, quando o motivo não é a pesquisa: a fila
+     * que não a pegou, o worker que morreu com ela. Vai antes do texto do
+     * alerta, porque manda olhar para outro lugar.
+     */
+    failureReason?: string;
     /** Refaz só a pesquisa de doutrina, sem tocar nas teses nem nos temas. */
     onResearch: () => void;
     doctrines: DoctrineDraft[];
@@ -62,6 +68,7 @@ export function DoctrinesPanel({
     research,
     researching,
     failed,
+    failureReason,
     onResearch,
     doctrines,
     onToggle,
@@ -110,10 +117,13 @@ export function DoctrinesPanel({
                         A pesquisa de doutrina não pôde ser concluída
                     </AlertTitle>
                     <AlertDescription>
-                        Nada foi gravado nesta aba, e as teses e os temas não
-                        foram tocados. Use "Pesquisar novamente" para tentar
-                        outra vez, ou siga sem doutrina: a peça pode ser
-                        concluída assim.
+                        {failureReason && <p>{failureReason}</p>}
+                        <p>
+                            Nada foi gravado nesta aba, e as teses e os temas
+                            não foram tocados. Use "Pesquisar novamente" para
+                            tentar outra vez, ou siga sem doutrina: a peça pode
+                            ser concluída assim.
+                        </p>
                     </AlertDescription>
                 </Alert>
             ) : research === null ? (

@@ -66,6 +66,11 @@ interface Props {
     researching: ForensicReviewTab[];
     /** As abas cuja última rodada falhou sem gravar nada. */
     failed: ForensicReviewTab[];
+    /**
+     * Por que a última rodada de cada aba falhou, quando o motivo não é a
+     * pesquisa: a fila que não a pegou, o worker que morreu com ela.
+     */
+    failureReasons?: Partial<Record<ForensicReviewTab, string>>;
     /** Refaz a pesquisa de uma aba, descartando a anterior dela e só dela. */
     onResearch: (tab: ForensicReviewTab) => void;
     /** As teses com a decisão do advogado ao lado — ver `@/lib/forensic-review`. */
@@ -93,12 +98,12 @@ interface Props {
  * se apoia — e **Doutrinas** — as obras de juristas que tratam da questão.
  *
  * As três abas abrem **preenchidas por uma pesquisa**, e as pesquisas correm
- * juntas: abrir a etapa dispara `ResearchLegalCaseForensicReview`, que roda a
- * pesquisa de teses nos portais, a seleção de temas no catálogo e a pesquisa de
- * doutrina no acervo do LexML como tasks do mesmo `Concurrency::run`. Cada aba
- * tem marcador próprio, então elas também falham e se repetem cada uma por si —
- * a aba que falhou mostra o alerta e um ícone no gatilho, e o "Pesquisar
- * novamente" de uma não toca as outras.
+ * juntas: abrir a etapa enfileira `RunLegalCaseForensicReview` na fila
+ * `inference`, e um worker roda a pesquisa de teses nos portais, a seleção de
+ * temas no catálogo e a pesquisa de doutrina no acervo do LexML como tasks do
+ * mesmo `Concurrency::run`. Cada aba tem marcador e rodada próprios, então elas
+ * também falham e se repetem cada uma por si — a aba que falhou mostra o alerta
+ * e um ícone no gatilho, e o "Pesquisar novamente" de uma não toca as outras.
  *
  * As abas são o primitivo do Radix, e não links: o que a etapa decide (o `keep`
  * de cada linha) já vive em estado local até o "Concluir", e trocar de aba não
@@ -111,6 +116,7 @@ export function ForensicReviewFields({
     doctrineResearch,
     researching,
     failed,
+    failureReasons = {},
     onResearch,
     theses,
     onToggle,
@@ -179,6 +185,7 @@ export function ForensicReviewFields({
                             researching={researching.includes("theses")}
                             busy={researching.length > 0}
                             failed={failed.includes("theses")}
+                            failureReason={failureReasons.theses}
                             onResearch={() => onResearch("theses")}
                             theses={theses}
                             onToggle={onToggle}
@@ -194,6 +201,7 @@ export function ForensicReviewFields({
                             research={themeResearch}
                             researching={researching.includes("themes")}
                             failed={failed.includes("themes")}
+                            failureReason={failureReasons.themes}
                             onResearch={() => onResearch("themes")}
                             themes={themes}
                             onToggle={onToggleTheme}
@@ -205,6 +213,7 @@ export function ForensicReviewFields({
                             research={doctrineResearch}
                             researching={researching.includes("doctrines")}
                             failed={failed.includes("doctrines")}
+                            failureReason={failureReasons.doctrines}
                             onResearch={() => onResearch("doctrines")}
                             doctrines={doctrines}
                             onToggle={onToggleDoctrine}
@@ -308,6 +317,7 @@ function ThesesPanel({
     researching,
     busy,
     failed,
+    failureReason,
     onResearch,
     theses,
     onToggle,
@@ -322,6 +332,7 @@ function ThesesPanel({
     /** Alguma pesquisa em voo, de qualquer aba: uma visita nova a cancelaria. */
     busy: boolean;
     failed: boolean;
+    failureReason?: string;
     onResearch: () => void;
     theses: ThesisDraft[];
     onToggle: (id: string, keep: boolean) => void;
@@ -410,12 +421,16 @@ function ThesesPanel({
                                 A pesquisa não pôde ser concluída
                             </AlertTitle>
                             <AlertDescription>
-                                Nada foi gravado nesta aba, e os temas não foram
-                                tocados. A pesquisa depende dos portais oficiais
-                                — um deles fora do ar basta para derrubá-la. Use
-                                "Pesquisar novamente" para tentar outra vez,
-                                cadastre as teses à mão, ou siga sem teses: a
-                                peça pode ser concluída assim.
+                                {failureReason && <p>{failureReason}</p>}
+                                <p>
+                                    Nada foi gravado nesta aba, e os temas não
+                                    foram tocados. A pesquisa depende dos
+                                    portais oficiais — um deles fora do ar basta
+                                    para derrubá-la. Use "Pesquisar novamente"
+                                    para tentar outra vez, cadastre as teses à
+                                    mão, ou siga sem teses: a peça pode ser
+                                    concluída assim.
+                                </p>
                             </AlertDescription>
                         </Alert>
                     )}
