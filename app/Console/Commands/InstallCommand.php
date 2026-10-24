@@ -38,6 +38,11 @@ use function Laravel\Prompts\text;
  * So `--gemini-key` only fills a registered model that has none, a terminal
  * asks for it when one is missing (blank skips), and a run that ends with a
  * model still keyless warns instead of failing.
+ *
+ * Rotating the key is a separate, explicit ask: `--replace-gemini-key` writes
+ * the key over the one both models hold. Then the key is required like the
+ * admin's options — asked on a terminal, a failure without one — because a
+ * rotation that silently did nothing would leave the revoked key in place.
  */
 final class InstallCommand extends Command
 {
@@ -45,7 +50,8 @@ final class InstallCommand extends Command
                             {--name= : nome do administrador da plataforma}
                             {--email= : e-mail do administrador da plataforma}
                             {--password= : senha do administrador da plataforma}
-                            {--gemini-key= : chave de API do Gemini para os modelos padrão que ainda não têm uma}';
+                            {--gemini-key= : chave de API do Gemini para os modelos padrão que ainda não têm uma}
+                            {--replace-gemini-key : troca também a chave que os modelos padrão já têm}';
 
     protected $description = 'Garante a conta da LexIA, cria o administrador da plataforma e registra os modelos padrão';
 
@@ -57,9 +63,7 @@ final class InstallCommand extends Command
             return self::FAILURE;
         }
 
-        $this->registerModels();
-
-        return self::SUCCESS;
+        return $this->registerModels() ? self::SUCCESS : self::FAILURE;
     }
 
     private function ensurePlatformAccount(): void
@@ -124,12 +128,26 @@ final class InstallCommand extends Command
         return true;
     }
 
-    private function registerModels(): void
+    /**
+     * @return bool false when a key replacement was asked for without a key
+     */
+    private function registerModels(): bool
     {
-        ['text' => $text, 'embedding' => $embedding] = RegisterDefaultModels::run($this->geminiKey());
+        $replace = (bool) $this->option('replace-gemini-key');
+        $key = $replace ? $this->replacementKey() : $this->geminiKey();
+
+        if ($replace && $key === null) {
+            return false;
+        }
+
+        ['text' => $text, 'embedding' => $embedding] = RegisterDefaultModels::run($key, $replace);
 
         $this->info($this->modelLine('Modelo de IA', $text, AiModel::platformDefault()));
         $this->info($this->modelLine('Modelo de embedding', $embedding, EmbeddingModel::platformDefault()));
+
+        if ($replace) {
+            $this->info("Chave de API do Gemini: trocada em {$text->name} e {$embedding->name} ({$text->apiKeyHint()}).");
+        }
 
         foreach ([$text, $embedding] as $model) {
             if (! $model->hasApiKey()) {
@@ -142,6 +160,8 @@ final class InstallCommand extends Command
         if ($embedding->wasChanged('default')) {
             $this->line('Os catálogos foram enfileirados para vetorização: mantenha um worker de fila rodando.');
         }
+
+        return true;
     }
 
     /**
@@ -157,6 +177,16 @@ final class InstallCommand extends Command
         }
 
         return $key === '' ? null : $key;
+    }
+
+    /**
+     * The key to rotate to: unlike the one that fills, it is required.
+     */
+    private function replacementKey(): ?string
+    {
+        $key = $this->resolve('gemini-key', fn (): string => password('Nova chave de API do Gemini', required: true));
+
+        return $key === null ? null : trim($key);
     }
 
     private function modelLine(string $kind, AiModel|EmbeddingModel $model, AiModel|EmbeddingModel|null $default): string

@@ -6,6 +6,7 @@ namespace App\Domain\LegalCases\Actions;
 
 use App\Ai\Agents\LegalQuestionFormulationAgent;
 use App\Ai\Agents\LegalThemeSelectionAgent;
+use App\Ai\Exceptions\AgentResponseException;
 use App\Domain\LegalCases\Data\LegalThemeResearchData;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalCases\Support\LegalCaseDossier;
@@ -46,8 +47,11 @@ use RuntimeException;
  *
  * Named after what the agents find, like its siblings: the step's Action is
  * ResearchLegalCaseForensicReview, which calls this one beside the thesis
- * research, as two tasks of the same `Concurrency::run`. It writes nothing —
- * the caller does, in the transaction where it also writes the marker.
+ * research and the doctrine research, as tasks of the same `Concurrency::run`.
+ * It writes nothing — the caller does, in the transaction where it also writes
+ * the marker. And it reads nothing outside our database: the catalogue
+ * `lexia:import-legal-themes` loaded and its vectors. No agent here has a
+ * tool, so no portal can take this tab down.
  *
  * **An empty catalogue throws rather than answering with nothing.** Zero
  * candidates would be an empty `enum`, which is invalid grammar, and even if
@@ -110,6 +114,7 @@ final class ResearchLegalCaseThemes
     private function formulate(string $framing, string $facts): array
     {
         $questions = $this->structured(
+            LegalQuestionFormulationAgent::class,
             (new LegalQuestionFormulationAgent($framing))->prompt($facts),
             'questions',
         );
@@ -122,7 +127,10 @@ final class ResearchLegalCaseThemes
         // Sem questão não há consulta, e consultar pelo relato cru é o que
         // devolvia zero temas: a metade falha em vez de fingir que buscou.
         if ($questions === []) {
-            throw new RuntimeException('O agente não formulou nenhuma questão de direito para a busca de temas.');
+            throw new AgentResponseException(
+                LegalQuestionFormulationAgent::class,
+                'O agente não formulou nenhuma questão de direito para a busca de temas.',
+            );
         }
 
         return array_slice($questions, 0, LegalQuestionFormulationAgent::MAX_QUESTIONS);
@@ -136,6 +144,7 @@ final class ResearchLegalCaseThemes
     private function select(string $framing, array $questions, Collection $candidates, string $facts): array
     {
         return $this->structured(
+            LegalThemeSelectionAgent::class,
             (new LegalThemeSelectionAgent(
                 framing: $framing,
                 questions: $questions,
@@ -148,14 +157,15 @@ final class ResearchLegalCaseThemes
     /**
      * One list out of a structured answer.
      *
+     * @param  class-string  $agent  who answered, for the execution log
      * @return array<mixed>
      */
-    private function structured(mixed $response, string $key): array
+    private function structured(string $agent, mixed $response, string $key): array
     {
         // Mesmo estreitamento das Actions irmãs: não dispara na prática, e
         // dispara quando a integração quebrou.
         if (! $response instanceof StructuredAgentResponse) {
-            throw new RuntimeException('O agente de temas não devolveu uma resposta estruturada.');
+            throw new AgentResponseException($agent, 'O agente de temas não devolveu uma resposta estruturada.');
         }
 
         $list = $response->toArray()[$key] ?? [];

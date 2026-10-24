@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\LegalCases;
 
 use App\Domain\Accounts\Models\Account;
+use App\Domain\AgentsExecutionLogs\Models\AgentsExecutionLog;
 use App\Domain\Doctrines\Data\DoctrineData;
 use App\Domain\Doctrines\Models\Doctrine;
 use App\Domain\LegalCases\Actions\ResearchLegalCaseDoctrines;
@@ -28,7 +29,11 @@ use App\Domain\LegalTheses\Enums\LegalBasisType;
 use App\Domain\LegalTheses\Enums\LegalThesisOrigin;
 use App\Domain\LegalTheses\Enums\LegalThesisType;
 use App\Domain\LegalTheses\Models\LegalThesis;
+use GuzzleHttp\Psr7\Response as Psr7Response;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
 use Mockery;
 use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\Test;
@@ -297,6 +302,49 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
         $this->assertIsArray($case->theme_findings);
         $this->assertCount(1, $case->doctrines);
         $this->assertIsArray($case->doctrine_findings);
+
+        // E o registro de execução, com a Action da aba no lugar do agente: o
+        // dublê não passa por agente nenhum, então não há um a ler do stack.
+        $log = AgentsExecutionLog::query()->sole();
+
+        $this->assertSame('forensic_review.theses', $log->operation);
+        $this->assertSame('ResearchLegalCaseTheses', $log->agent);
+        $this->assertStringContainsString('504 Gateway Timeout', $log->error);
+        $this->assertSame($account->id, $log->account_id);
+        $this->assertSame($case->id, $log->legal_case_id);
+        $this->assertSame('gemini:gemini-3.7-flash', $log->model);
+    }
+
+    /**
+     * A falha do provedor, como o SDK a lança: a exceção que chega é a dele, e
+     * o status e a frase do Gemini estão um `previous` abaixo. É essa que vai
+     * para o registro — "o provedor está sobrecarregado" não diria nada.
+     */
+    #[Test]
+    public function a_provider_error_is_logged_with_its_status_and_its_message(): void
+    {
+        [$account, $owner] = $this->accountWithOwner();
+        $case = $this->pleading($account);
+
+        $this->fakeResearch()->shouldReceive('handle')->andThrow(ProviderOverloadedException::forProvider(
+            'gemini',
+            503,
+            new RequestException(new Response(new Psr7Response(
+                503,
+                ['Content-Type' => 'application/json'],
+                '{"error":{"code":503,"message":"The model is overloaded. Please try again later.","status":"UNAVAILABLE"}}',
+            ))),
+        ));
+
+        $this->actingAs($owner)
+            ->post(route('legal-cases.forensic-review.research', $case), ['tabs' => ['theses']])
+            ->assertSessionHasErrors('theses');
+
+        $log = AgentsExecutionLog::query()->sole();
+
+        $this->assertSame(503, $log->http_status);
+        $this->assertSame('The model is overloaded. Please try again later.', $log->message);
+        $this->assertStringContainsString(ProviderOverloadedException::class, $log->error);
     }
 
     /**
@@ -326,6 +374,8 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
         $this->assertNull($case->doctrine_findings);
         $this->assertCount(1, $case->theses);
         $this->assertCount(1, $case->themes);
+
+        $this->assertSame(['forensic_review.doctrines'], AgentsExecutionLog::query()->pluck('operation')->all());
     }
 
     #[Test]
@@ -342,6 +392,11 @@ final class ResearchLegalCaseForensicReviewTest extends TestCase
             ->post(route('legal-cases.forensic-review.research', $case))
             ->assertRedirect()
             ->assertSessionHasErrors(['theses', 'themes', 'doctrines']);
+
+        $this->assertEqualsCanonicalizing(
+            ['forensic_review.theses', 'forensic_review.themes', 'forensic_review.doctrines'],
+            AgentsExecutionLog::query()->pluck('operation')->all(),
+        );
 
         $case->refresh();
 

@@ -418,6 +418,24 @@ falha a evitar é um fato que não estava no relato, e essa é decisão que se t
 Ressalva: n=1 por configuração, e a qualidade não foi avaliada sistematicamente. Antes de
 mexer no default, rode os casos de `tests/Agents` algumas vezes por configuração.
 
+### No Gemini: `ThinksBrieflyOnGemini`, só na aba de temas
+
+`ConfiguresOllamaRuntime` não manda nada a um padrão Gemini, que então pensa no nível dele
+(`high` no Gemini 3). Para os dois agentes da aba de temas isso era quase todo o tempo da
+aba — a vetorização e a busca somam 0,7 s. Medido em 2026-10-24, uma peça de acidente de
+trânsito, `gemini-3.7-flash`, a aba inteira (formulação + busca + seleção):
+
+| `thinkingLevel` | rodadas | raciocínio por agente | temas |
+|---|---|---|---|
+| padrão (`high`) | 22 s, 23 s, 28 s, 40 s, 53 s | 700 a 1.500 tokens | 440 e 469 sempre; a cauda variou (834, 1324, 518) |
+| `low` | 8,4 s, 8,6 s, 8,8 s, 10 s | 0 | 440 e 469 sempre; a cauda variou (834, 471, 898, 1122) |
+
+Mesmo achado do Ollama: mais raciocínio comprou variância de tempo, não outra resposta.
+`LegalQuestionFormulationAgent` e `LegalThemeSelectionAgent` usam o trait, que compõe
+`ConfiguresOllamaRuntime` (o Ollama recebe o mesmo de sempre) e manda
+`thinkingConfig.thinkingLevel: low` a um Gemini 3 — a um 1.x ou 2.x, nada, porque a chave
+seria recusada. Os pesquisadores não foram medidos em `low` e ficam fora.
+
 ## Cache de prefixo: por que a ordem do prompt importa
 
 O Ollama reaproveita o KV de um prefixo idêntico. Medido com o guia de áreas (4.780

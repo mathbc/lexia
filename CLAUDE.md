@@ -94,7 +94,11 @@ precisa antes de alguém entrar é `php artisan lexia:install`:
    modelos", em "Os agentes"). A chave de API deles vem de `--gemini-key` (com terminal, é
    perguntada; em branco pula) e só preenche um modelo que não tem chave. Ela é a exceção à
    regra das opções: não é preciso chave para entrar, então a falta dela **avisa** em vez de
-   reprovar, e a equipe a informa no "Editar" do modelo.
+   reprovar, e a equipe a informa no "Editar" do modelo. **Trocar** a chave guardada pede
+   `--replace-gemini-key` junto: aí a chave volta a seguir a regra (perguntada com
+   terminal, reprova sem ele), porque uma troca que não troca deixa a chave revogada no
+   lugar. A troca é explícita porque o comando roda em todo deploy, e uma chave esquecida
+   no script desfaria a que a equipe trocou na tela.
 
 Cada passo é idempotente, então o comando pode rodar em todo deploy: o admin é pulado
 quando já existe um `PlatformAdmin` e nenhuma opção pede outro (um e-mail já cadastrado
@@ -357,7 +361,9 @@ ordem do pivot, com as classificações piorando sem erro nenhum.
 
 As opções de runtime também não pertencem a um agente: as três grafias do Ollama saem de
 `config/ai.php` pelo trait `ConfiguresOllamaRuntime`, e só quando o padrão é do Ollama —
-fora dele o trait devolve `[]`.
+fora dele o trait devolve `[]`. A exceção são os dois agentes da aba de temas, que usam
+`ThinksBrieflyOnGemini` e pedem raciocínio curto também ao Gemini (ver "A seleção de
+temas").
 
 - **`num_ctx`** (`ai.context_window`, 24576) é a janela que o prompt pode encher. Sem ele
   o daemon truncaria em silêncio um prompt grande, e o maior prompt de classe tem 10.946
@@ -522,7 +528,10 @@ vezes. As cinco etapas estão num `Concurrency::run` — três tasks, porque ár
 tutela são uma cadeia —, então a espera é a mais longa delas e não o total; e a saída da
 pesquisa tirou da conta a única que abria páginas. Sobram cinco inferências, e a cadeia do
 enquadramento é a mais longa.
-**A dívida da fila continua de pé**, e agora por um motivo menor do que era.
+**A dívida da fila continua de pé**, e agora por um motivo menor do que era. Ela já foi
+paga uma vez e devolvida, aqui e na revisão forense: a fila punha a inferência atrás de um
+worker, e sem um de pé o pedido esperava o teto inteiro e a tela dizia que a análise fora
+interrompida. Se voltar, que seja numa fila própria, com worker próprio.
 
 **O preenchimento inteligente termina com a peça gravada.** Depois do `handle()`, o
 `asController()` de `ClassifyLegalCase` chama `CreateAssistedLegalCase`, que grava numa
@@ -599,6 +608,35 @@ encontra nada, porque a exclusão do grupo continua valendo:
 ```bash
 GEMINI_API_KEY=… composer test:agents
 ```
+
+## O log de execução dos agentes
+
+`agents_execution_logs` (`AgentsExecutionLog`, em `app/Domain/AgentsExecutionLogs`) guarda
+**uma linha por agente que caiu**, escrita por `RecordAgentFailure` ao lado do `report()`, e
+nunca no lugar dele: o log do Laravel guarda o stack trace, que é o que conserta um bug;
+esta tabela guarda a resposta que a operação pergunta primeiro — é o STJ de novo, a cota do
+Gemini ou um agente que quebrou. As colunas são o agente (`LegalThesisResearchAgent`), a
+operação (`forensic_review.theses`, `forensic_review.themes`, `forensic_review.doctrines`,
+`assisted_fill`), o **status HTTP** quando houve resposta, a **mensagem** do outro lado, o
+erro, o modelo padrão (`gemini:gemini-3.7-flash`), a conta e a peça.
+
+Quem lê a exceção é `AgentFailureData`, e o ponto é a **cadeia**: o SDK nunca deixa o erro
+HTTP sair como é — o 503 vira `ProviderOverloadedException`, o 429 `RateLimitedException`, o
+cURL 28 `ProviderConnectionException` —, e a resposta que diz *por quê* é o `previous` da
+que chega ao `catch`. O status e o `error.message` saem da primeira `RequestException` da
+cadeia; um timeout não tem nenhum dos dois, porque ninguém respondeu. O agente sai do stack
+trace (o `prompt()` do `Promptable` aparece com a classe do agente, porque um método de trait
+reporta a classe que o usa) ou de `AgentResponseException`, que as Actions de pesquisa
+lançam quando **recusam** uma resposta — a ficha vazia, a transcrição sem estrutura —, já
+com o agente fora do stack, levando o `finishReason` cru quando o provedor o manda. Faltando
+os dois, vale a Action que segurava a etapa.
+
+`RecordAgentFailure` **nunca lança**: é chamado de dentro de um `catch`, e um log que falhasse
+trocaria a causa pela dele. O `attempt()` de `ResearchLegalCaseForensicReview` grava a aba
+que cai, com a conta e a peça. O `stage()` de `ClassifyLegalCase` também grava, sem conta —
+as tasks do bloco não leem tenant —, e a triagem, que fica fora do `stage()`, grava pelo
+`screen()`; a casca não grava nada, porque o que chega a ela já foi anotado. Não há tela
+ainda; ela seria do `PlatformAdmin`.
 
 ## A revisão forense
 
@@ -766,8 +804,9 @@ existir pede só a doutrina, e as teses e os temas curados não são tocados. "P
 só a sua. Uma metade que falha não grava nada e não impede a outra de ser gravada; ela
 volta como **erro de validação sob a chave da aba** (`withErrors(['themes' => …])`), e
 não como 500 — é o que dispara o `onError` do Inertia, mostra o alerta naquela aba e
-impede o efeito de abertura de tentar de novo sozinho. A única recusa que continua 500 é
-a peça sem fatos, checada antes de gastar qualquer coisa.
+impede o efeito de abertura de tentar de novo sozinho —, e o `attempt()` a anota em
+`agents_execution_logs` (ver "O log de execução dos agentes"). A única recusa que continua
+500 é a peça sem fatos, checada antes de gastar qualquer coisa.
 
 Essa coluna (jsonb) guarda o que não tem tabela: a questão pesquisada, os portais
 abertos, o pendente e as citações que a guarda recusou — mais o `researched_at`, que não
@@ -784,6 +823,14 @@ A dívida da fila continua de pé aqui, e agora só aqui: são dois `Timeout(360
 o primeiro é a inferência mais lenta do projeto — a seleção de temas corre ao lado e não
 soma. A tela que consome isso é `ForensicReviewFields`, com o `AnalysisDialog` durante a
 espera.
+
+**O paralelismo foi medido**, numa peça de acidente de trânsito, em 2026-10-24: os três
+filhos começam no mesmo décimo de segundo, e com o STJ instável os temas terminaram aos
+23 s, a doutrina aos 22 s e as teses aos 71 s. A requisição espera a mais lenta, e só
+então grava as três. O preço é conhecido: um gateway que corte a requisição antes da
+pesquisa de teses terminar leva junto o que os temas e a doutrina já tinham achado. A fila
+resolvia isso gravando cada aba no seu tempo, e saiu porque sem um worker de pé as abas
+ficavam pesquisando até o teto — ver a dívida da fila em "Os modelos".
 
 E há um teto que não é do SDK: o **`max_execution_time` do PHP**. Um `php.ini` de fábrica
 traz 30, e a requisição morre em 32 s dentro do cURL do Guzzle —
@@ -1212,6 +1259,21 @@ recuperação, com uma razão (`UNRANKED_REASON`) que diz que ninguém analisou 
 
 A ordem é gravada: `legal_case_themes.position` é o índice na lista, e a tela desenha, e o
 "Concluir" devolve, nessa ordem.
+
+**O tempo da aba é o raciocínio do modelo, não o banco.** Medido em 2026-10-24 no
+`gemini-3.7-flash`: a vetorização das questões e a busca levam 0,7 s somadas, e as duas
+inferências levavam o resto — 22 a 53 s em cinco rodadas, com 700 a 1.500 tokens de
+raciocínio cada. Os dois agentes usam `ThinksBrieflyOnGemini`, que manda
+`thinkingLevel: low` a um padrão Gemini 3, e a aba caiu para 8 a 10 s. Os temas centrais do
+caso (440 e 469) voltaram em todas as rodadas dos dois níveis, e a cauda da lista variou
+igual nos dois: é o achado do `think` do Ollama outra vez. É opt-in e só desses dois — os
+pesquisadores não foram medidos em `low`, e quem escreve prosa pensa mais, não menos. Um
+padrão Gemini 1.x ou 2.x não recebe a chave, que ele recusaria.
+
+**A aba não sai do banco.** Nenhum dos dois agentes tem ferramenta — os testes de unidade
+afirmam que nenhum implementa `HasTools` —, então os temas só podem vir de `legal_themes`:
+o que sai da máquina é a formulação, o embedding das questões e a seleção. Um STJ fora do
+ar derruba a aba de teses e nunca esta.
 
 Duas escolhas que valem a frase. A recuperação **não degrada em silêncio**, ao contrário do
 ranking das classes: sem questão formulada ou sem vetor não há ordem de reserva, e consultar

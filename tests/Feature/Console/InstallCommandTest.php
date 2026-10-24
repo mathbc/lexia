@@ -160,6 +160,50 @@ final class InstallCommandTest extends TestCase
     }
 
     #[Test]
+    public function asked_explicitly_the_gemini_key_replaces_the_stored_one(): void
+    {
+        $this->artisan('lexia:install', [...self::ADMIN, '--gemini-key' => 'AIzaAntiga'])->assertSuccessful();
+
+        $this->artisan('lexia:install', ['--gemini-key' => 'AIzaNova9kZA', '--replace-gemini-key' => true, '--no-interaction' => true])
+            ->expectsOutputToContain('Chave de API do Gemini: trocada em gemini-3.7-flash e gemini-embedding-001 (••••9kZA).')
+            ->assertSuccessful();
+
+        $this->assertSame('AIzaNova9kZA', AiModel::platformDefault()?->api_key);
+        $this->assertSame('AIzaNova9kZA', EmbeddingModel::platformDefault()?->api_key);
+        EmbedCatalogs::assertPushed(1);
+    }
+
+    #[Test]
+    public function with_a_terminal_the_replacement_key_is_asked_even_when_both_models_have_one(): void
+    {
+        $this->artisan('lexia:install', [...self::ADMIN, '--gemini-key' => 'AIzaAntiga'])->assertSuccessful();
+
+        $this->artisan('lexia:install', ['--replace-gemini-key' => true])
+            ->expectsQuestion('Nova chave de API do Gemini', 'AIzaPerguntada')
+            ->assertSuccessful();
+
+        $this->assertSame('AIzaPerguntada', AiModel::platformDefault()?->api_key);
+        $this->assertSame('AIzaPerguntada', EmbeddingModel::platformDefault()?->api_key);
+    }
+
+    /**
+     * A rotation that did nothing would leave the revoked key in place, so
+     * here the missing key fails like the admin's options, not with a warning.
+     */
+    #[Test]
+    public function a_replacement_without_a_key_fails_and_keeps_the_stored_one(): void
+    {
+        $this->artisan('lexia:install', [...self::ADMIN, '--gemini-key' => 'AIzaAntiga'])->assertSuccessful();
+
+        $this->artisan('lexia:install', ['--replace-gemini-key' => true, '--no-interaction' => true])
+            ->expectsOutputToContain('Informe --gemini-key')
+            ->assertFailed();
+
+        $this->assertSame('AIzaAntiga', AiModel::platformDefault()?->api_key);
+        $this->assertSame('AIzaAntiga', EmbeddingModel::platformDefault()?->api_key);
+    }
+
+    #[Test]
     public function an_invalid_admin_is_refused_before_anything_is_written(): void
     {
         $this->artisan('lexia:install', [...self::ADMIN, '--email' => 'não é e-mail', '--password' => 'curta'])

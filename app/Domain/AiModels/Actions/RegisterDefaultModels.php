@@ -20,7 +20,10 @@ use Lorisleiva\Actions\Concerns\AsAction;
  * catalogue with no default, so running the install again after staff picked
  * another model in the panel leaves their pick alone. The same holds for the
  * key: one given here only fills a row that has none, and never replaces a key
- * typed in the panel.
+ * typed in the panel — unless the caller asks to replace it, which is how
+ * `lexia:install --replace-gemini-key` rotates it. Asking is explicit because
+ * the command runs on every deploy, and a key kept in the deploy script would
+ * otherwise undo a rotation made in the panel.
  */
 final class RegisterDefaultModels
 {
@@ -33,17 +36,17 @@ final class RegisterDefaultModels
     /**
      * @return array{text: AiModel, embedding: EmbeddingModel}
      */
-    public function handle(?string $geminiKey = null): array
+    public function handle(?string $geminiKey = null, bool $replaceKey = false): array
     {
         $text = AiModel::query()->firstOrCreate(['provider' => AiProvider::Gemini, 'name' => self::TEXT]);
-        self::fillKey($text, $geminiKey);
+        self::fillKey($text, $geminiKey, $replaceKey);
 
         if (! AiModel::hasDefault()) {
             MakeAiModelDefault::make()->handle($text);
         }
 
         $embedding = EmbeddingModel::query()->firstOrCreate(['provider' => AiProvider::Gemini, 'name' => self::EMBEDDING]);
-        self::fillKey($embedding, $geminiKey);
+        self::fillKey($embedding, $geminiKey, $replaceKey);
 
         if (! EmbeddingModel::hasDefault()) {
             MakeEmbeddingModelDefault::make()->handle($embedding);
@@ -74,9 +77,9 @@ final class RegisterDefaultModels
             ->exists();
     }
 
-    private static function fillKey(AiModel|EmbeddingModel $model, ?string $key): void
+    private static function fillKey(AiModel|EmbeddingModel $model, ?string $key, bool $replace): void
     {
-        if ($key !== null && $key !== '' && ! $model->hasApiKey()) {
+        if ($key !== null && $key !== '' && ($replace || ! $model->hasApiKey())) {
             $model->forceFill(['api_key' => $key])->save();
         }
     }

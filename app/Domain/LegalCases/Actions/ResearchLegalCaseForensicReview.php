@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\LegalCases\Actions;
 
+use App\Domain\AgentsExecutionLogs\Actions\RecordAgentFailure;
 use App\Domain\Doctrines\Data\DoctrineListData;
 use App\Domain\LegalCases\Data\DoctrineResearchData;
 use App\Domain\LegalCases\Data\ForensicReviewData;
@@ -80,8 +81,9 @@ use Throwable;
  *
  * The rules ClassifyLegalCase documents, unchanged. The `try/catch` lives
  * **inside** each task (`attempt()`): it is what logs the real stack trace,
- * from the child that saw it, and under `sync` an escaped exception would
- * leave `Concurrency::run` and take the other half with it. What no closure
+ * from the child that saw it — and writes the failure to the agents' execution
+ * log, under `forensic_review.<tab>` —, and under `sync` an escaped exception
+ * would leave `Concurrency::run` and take the other half with it. What no closure
  * can catch — the child killed by its clock, a fatal error — belongs to
  * IsolatedProcessDriver, which settles that task as the same null. Either way
  * a half that fell does not take the others with it, and each half has
@@ -156,14 +158,20 @@ final class ResearchLegalCaseForensicReview
 
         $tasks = [
             ForensicReviewTab::Theses->value => static fn (): ?LegalResearchData => self::attempt(
+                ForensicReviewTab::Theses,
+                $id,
                 $accountId,
                 static fn (): LegalResearchData => ResearchLegalCaseTheses::run(self::reload($id)),
             ),
             ForensicReviewTab::Themes->value => static fn (): ?LegalThemeResearchData => self::attempt(
+                ForensicReviewTab::Themes,
+                $id,
                 $accountId,
                 static fn (): LegalThemeResearchData => ResearchLegalCaseThemes::run(self::reload($id)),
             ),
             ForensicReviewTab::Doctrines->value => static fn (): ?DoctrineResearchData => self::attempt(
+                ForensicReviewTab::Doctrines,
+                $id,
                 $accountId,
                 static fn (): DoctrineResearchData => ResearchLegalCaseDoctrines::run(self::reload($id)),
             ),
@@ -181,7 +189,9 @@ final class ResearchLegalCaseForensicReview
      *
      * The `report()` is what separates this from swallowing the error: the
      * cause reaches the log from inside the process that saw it, with the real
-     * stack trace. The null tells the caller this tab has nothing to write.
+     * stack trace. `RecordAgentFailure` sits beside it and writes the row the
+     * operation reads first — which agent, what status, what the provider
+     * said. The null tells the caller this tab has nothing to write.
      *
      * Static because it is called from inside a serialized closure, which has
      * no instance to return to.
@@ -191,15 +201,31 @@ final class ResearchLegalCaseForensicReview
      * @param  Closure(): TFound  $research
      * @return TFound|null
      */
-    private static function attempt(string $accountId, Closure $research): mixed
+    private static function attempt(ForensicReviewTab $tab, string $id, string $accountId, Closure $research): mixed
     {
         try {
             return app(TenantContext::class)->actingAs($accountId, $research);
         } catch (Throwable $e) {
             report($e);
+            RecordAgentFailure::run($tab->operation(), $e, self::stage($tab), $accountId, $id);
 
             return null;
         }
+    }
+
+    /**
+     * The Action to blame in the execution log when no agent can be read from
+     * the failure — the one that held the tab.
+     *
+     * @return class-string
+     */
+    private static function stage(ForensicReviewTab $tab): string
+    {
+        return match ($tab) {
+            ForensicReviewTab::Theses => ResearchLegalCaseTheses::class,
+            ForensicReviewTab::Themes => ResearchLegalCaseThemes::class,
+            ForensicReviewTab::Doctrines => ResearchLegalCaseDoctrines::class,
+        };
     }
 
     /**

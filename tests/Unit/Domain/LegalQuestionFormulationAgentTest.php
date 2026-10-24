@@ -6,6 +6,7 @@ namespace Tests\Unit\Domain;
 
 use App\Ai\Agents\LegalQuestionFormulationAgent;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Laravel\Ai\Contracts\HasTools;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -16,6 +17,17 @@ use PHPUnit\Framework\TestCase;
  */
 final class LegalQuestionFormulationAgentTest extends TestCase
 {
+    /**
+     * A aba de temas lê só o banco: o catálogo importado do STJ e os vetores
+     * dele. Sem ferramenta, o agente não tem como abrir página nenhuma — e um
+     * portal fora do ar não tem como derrubar esta aba junto com a de teses.
+     */
+    #[Test]
+    public function it_has_no_tools_and_never_reaches_the_web(): void
+    {
+        $this->assertNotContains(HasTools::class, class_implements(LegalQuestionFormulationAgent::class));
+    }
+
     #[Test]
     public function the_schema_bounds_the_questions_on_one_array(): void
     {

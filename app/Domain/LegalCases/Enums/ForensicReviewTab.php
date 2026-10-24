@@ -36,6 +36,14 @@ enum ForensicReviewTab: string implements HasLabel
     }
 
     /**
+     * The stage's name in the execution log — see `RecordAgentFailure`.
+     */
+    public function operation(): string
+    {
+        return "forensic_review.{$this->value}";
+    }
+
+    /**
      * What the screen is told when this half did not come back.
      */
     public function failure(): string

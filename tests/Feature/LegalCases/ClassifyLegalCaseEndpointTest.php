@@ -6,6 +6,7 @@ namespace Tests\Feature\LegalCases;
 
 use App\Domain\Accounts\Enums\BrazilianState;
 use App\Domain\Accounts\Models\Account;
+use App\Domain\AgentsExecutionLogs\Models\AgentsExecutionLog;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\JudicialSystems\Data\JudicialSystemSelection;
 use App\Domain\JudicialSystems\Models\JudicialSystemCourt;
@@ -402,6 +403,14 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
                 'message',
                 'Não foi possível enquadrar o caso agora. Tente novamente em instantes.',
             );
+
+        // A porta não passa por `stage()`, e ainda assim a queda dela fica no
+        // registro: é a primeira inferência, e a primeira a sentir a cota.
+        $log = AgentsExecutionLog::acrossAllAccounts()->sole();
+
+        $this->assertSame('assisted_fill', $log->operation);
+        $this->assertSame('ScreenLegalCaseFacts', $log->agent);
+        $this->assertStringContainsString('Connection refused', $log->error);
     }
 
     /**
@@ -469,6 +478,62 @@ final class ClassifyLegalCaseEndpointTest extends TestCase
                 'message',
                 'Não foi possível enquadrar o caso agora. Tente novamente em instantes.',
             );
+
+        // Uma linha só: quem anota é o `stage()` do enquadramento, com a causa
+        // de verdade, e não a casca, que só vê o embrulho dela.
+        $log = AgentsExecutionLog::acrossAllAccounts()->sole();
+
+        $this->assertSame('assisted_fill', $log->operation);
+        $this->assertStringContainsString('Connection refused', $log->error);
+    }
+
+    /**
+     * A etapa que cai sozinha não derruba a resposta, e também não some: vai
+     * para o registro de execução dos agentes.
+     */
+    #[Test]
+    public function a_stage_that_falls_is_written_to_the_execution_log(): void
+    {
+        [, $owner] = $this->accountWithOwner();
+
+        $this->admit();
+
+        $this->fakeAction(ClassifyPracticeArea::class)
+            ->shouldReceive('handle')
+            ->andReturn(new PracticeAreaClassification(
+                practiceArea: PracticeArea::query()->where('slug', 'civil')->sole(),
+                justification: 'O réu é um particular.',
+            ));
+
+        $this->fakeAction(SelectProceduralClass::class)
+            ->shouldReceive('handle')
+            ->andReturn(new ProceduralClassSelection(
+                proceduralClass: ProceduralClass::query()->where('code', 7)->sole(),
+                justification: 'O pedido é indenizatório.',
+            ));
+
+        $this->fakeAction(ExtractLegalCaseDefendant::class)
+            ->shouldReceive('handle')
+            ->andThrow(new RuntimeException('Connection refused'));
+
+        $this->fakeAction(ExtractLegalCaseRequirements::class)
+            ->shouldReceive('handle')
+            ->andReturn(new RequirementListData([]));
+
+        $this->fakeAction(SuggestInjunctiveRelief::class)
+            ->shouldReceive('handle')
+            ->andReturn($this->suggestion(recommended: false));
+
+        $this->actingAs($owner)
+            ->postJson('/pecas/classificar', ['facts' => 'O vizinho derrubou o muro.'])
+            ->assertOk()
+            ->assertJsonPath('defendant', null);
+
+        $log = AgentsExecutionLog::acrossAllAccounts()->sole();
+
+        $this->assertSame('assisted_fill', $log->operation);
+        $this->assertSame('ClassifyLegalCase', $log->agent);
+        $this->assertStringContainsString('Connection refused', $log->error);
     }
 
     #[Test]

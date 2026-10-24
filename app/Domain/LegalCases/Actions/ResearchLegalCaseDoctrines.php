@@ -6,6 +6,7 @@ namespace App\Domain\LegalCases\Actions;
 
 use App\Ai\Agents\DoctrineResearchAgent;
 use App\Ai\Agents\DoctrineTranscriptionAgent;
+use App\Ai\Exceptions\AgentResponseException;
 use App\Domain\Doctrines\Support\DoctrineRecordReader;
 use App\Domain\LegalCases\Data\DoctrineResearchData;
 use App\Domain\LegalCases\Models\LegalCase;
@@ -84,7 +85,7 @@ final class ResearchLegalCaseDoctrines
         ))->prompt($narrative);
 
         if (trim($sheet->text) === '') {
-            throw new RuntimeException('O agente de doutrina não devolveu nada.');
+            throw AgentResponseException::blank(DoctrineResearchAgent::class, 'O agente de doutrina não devolveu nada.', $sheet);
         }
 
         return $sheet;
@@ -100,7 +101,11 @@ final class ResearchLegalCaseDoctrines
         $response = (new DoctrineTranscriptionAgent)->prompt($sheet);
 
         if (! $response instanceof StructuredAgentResponse) {
-            throw new RuntimeException('O agente de transcrição não devolveu uma resposta estruturada.');
+            throw new AgentResponseException(
+                DoctrineTranscriptionAgent::class,
+                'O agente de transcrição não devolveu uma resposta estruturada.',
+                $response->text,
+            );
         }
 
         return $response->toArray();

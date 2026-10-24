@@ -42,7 +42,11 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            // Acima do job mais longo, que é o que este número precisa ser: um
+            // job reservado há mais que isto é dado como perdido e reservado de
+            // novo por outro worker — com ele ainda rodando. O mais longo é
+            // EmbedCatalogs (1800 s).
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 1900),
             'after_commit' => false,
         ],
 

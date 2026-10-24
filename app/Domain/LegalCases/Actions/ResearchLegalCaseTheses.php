@@ -6,6 +6,7 @@ namespace App\Domain\LegalCases\Actions;
 
 use App\Ai\Agents\ForensicReviewTranscriptionAgent;
 use App\Ai\Agents\LegalThesisResearchAgent;
+use App\Ai\Exceptions\AgentResponseException;
 use App\Domain\LegalCases\Data\LegalResearchData;
 use App\Domain\LegalCases\Models\LegalCase;
 use App\Domain\LegalCases\Support\LegalCaseDossier;
@@ -65,10 +66,10 @@ use RuntimeException;
  *
  * No `asController()` of its own, and there will not be one: nothing routes
  * *here*. What reaches it is ResearchLegalCaseForensicReview, when step 5
- * opens, as one of two tasks of a `Concurrency::run` — the other is the STJ
- * theme selection, ResearchLegalCaseThemes, which reads the same pleading and
- * answers a different question. The browser waits on the longer of the two,
- * which is this one: the first of its two serial `Timeout(360)` is the slowest
+ * opens, as one of three tasks of a `Concurrency::run` — the others are the STJ
+ * theme selection and the doctrine research, which read the same pleading and
+ * answer different questions. The browser waits on the longest of them, which
+ * is this one: the first of its two serial `Timeout(360)` is the slowest
  * inference in the project, because the provider runs the searches before it
  * answers. That is the request that should be a queue, and when the step's
  * Action returns an identifier instead of a result, this one does not change a
@@ -119,7 +120,7 @@ final class ResearchLegalCaseTheses
         ))->prompt($narrative);
 
         if (trim($sheet->text) === '') {
-            throw new RuntimeException('O agente de pesquisa não devolveu nada.');
+            throw AgentResponseException::blank(LegalThesisResearchAgent::class, 'O agente de pesquisa não devolveu nada.', $sheet);
         }
 
         return $sheet;
@@ -143,7 +144,11 @@ final class ResearchLegalCaseTheses
         // fires when the integration is broken, which is the same category of
         // failure the sibling Actions raise on an unknown slug or code.
         if (! $response instanceof StructuredAgentResponse) {
-            throw new RuntimeException('O agente de transcrição não devolveu uma resposta estruturada.');
+            throw new AgentResponseException(
+                ForensicReviewTranscriptionAgent::class,
+                'O agente de transcrição não devolveu uma resposta estruturada.',
+                $response->text,
+            );
         }
 
         return $response->toArray();

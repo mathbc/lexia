@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Domain\LegalCases\Actions;
 
+use App\Domain\AgentsExecutionLogs\Actions\RecordAgentFailure;
 use App\Domain\Customers\Models\Customer;
 use App\Domain\LegalCases\Data\CourtAddressingSuggestionData;
 use App\Domain\LegalCases\Data\DefendantData;
+use App\Domain\LegalCases\Data\FactsScreeningData;
 use App\Domain\LegalCases\Data\InjunctiveReliefSuggestionData;
 use App\Domain\LegalCases\Data\LegalCaseClassification;
 use App\Domain\LegalCases\Data\LegalCaseFraming;
@@ -219,9 +221,15 @@ use Throwable;
  * o relato de progresso mais pobre, não mais rico — três tasks que correm junto
  * não têm uma ordem para relatar.
  *
+ * A fila já foi tentada aqui, e saiu. Ela punha o preenchimento atrás de um
+ * worker — sem um de pé, o pedido esperava o teto inteiro e a tela dizia que a
+ * análise fora interrompida. Se ela voltar, que seja numa fila própria, com
+ * worker próprio.
+ *
  * Um agente fora do ar é condição de operação, não defeito de código: daí o
- * 503 com uma frase que a tela consegue mostrar, e o `report()` para que a
- * causa real continue chegando ao log.
+ * 503 com uma frase que a tela consegue mostrar, o `report()` para que a causa
+ * real continue chegando ao log, e o `RecordAgentFailure` que a deixa no
+ * registro de execução dos agentes.
  *
  * ## O rascunho
  *
@@ -251,7 +259,7 @@ final class ClassifyLegalCase
         }
 
         // A porta, fora de `stage()` — ver "A triagem vem antes" no docblock.
-        $screening = ScreenLegalCaseFacts::run($facts);
+        $screening = self::screen($facts);
 
         if (! $screening->admissible()) {
             throw new InadmissibleFactsException($screening);
@@ -383,7 +391,9 @@ final class ClassifyLegalCase
      *
      * O `report()` é o que separa isto de engolir o erro: a causa continua
      * chegando ao log — e, para as três tasks, ao log escrito de dentro do
-     * processo filho, onde o stack trace ainda é o verdadeiro. O nulo diz à tela
+     * processo filho, onde o stack trace ainda é o verdadeiro —, e o
+     * `RecordAgentFailure` a deixa no registro de execução dos agentes, com o
+     * status e a mensagem do provedor. O nulo diz à tela
      * que não há sugestão, e não que o relato não descreve ninguém ou que ele não
      * pede nada. Essas duas outras coisas são doze nulos dentro de um
      * `DefendantData` e uma lista vazia dentro de um `RequirementListData`.
@@ -402,8 +412,31 @@ final class ClassifyLegalCase
             return $read();
         } catch (Throwable $e) {
             report($e);
+            // Sem conta: as tasks do bloco não leem tenant, e um filho não tem
+            // nenhum. O agente sai do stack trace da própria falha.
+            RecordAgentFailure::run('assisted_fill', $e, self::class);
 
             return null;
+        }
+    }
+
+    /**
+     * The gate, written to the execution log when it falls.
+     *
+     * Ela fica fora de `stage()` — guarda que abre quando cai não é guarda —,
+     * então a queda dela continua escapando para o 503 da casca. Mas o
+     * `stage()` é o outro lugar que anota uma queda, e a porta nunca passa por
+     * ele: sem isto, a cota do Gemini esgotada, que é o que derruba a primeira
+     * inferência do preenchimento, não deixaria linha nenhuma.
+     */
+    private static function screen(string $facts): FactsScreeningData
+    {
+        try {
+            return ScreenLegalCaseFacts::run($facts);
+        } catch (Throwable $e) {
+            RecordAgentFailure::run('assisted_fill', $e, ScreenLegalCaseFacts::class);
+
+            throw $e;
         }
     }
 
@@ -473,6 +506,8 @@ final class ClassifyLegalCase
             // baixo, e o handler a desenha como o 422 de sempre.
             throw ValidationException::withMessages(['facts' => $e->getMessage()]);
         } catch (Throwable $e) {
+            // Sem `RecordAgentFailure` aqui: a triagem e o enquadramento já
+            // anotaram a própria queda, e o que chega é ela ou o embrulho dela.
             report($e);
 
             return response()->json([

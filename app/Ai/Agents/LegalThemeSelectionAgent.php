@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Ai\Agents;
 
-use App\Ai\Concerns\ConfiguresOllamaRuntime;
+use App\Ai\Concerns\ThinksBrieflyOnGemini;
 use App\Ai\Concerns\UsesDefaultAiModel;
 use App\Domain\LegalThemes\Data\LegalCaseThemeListData;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -62,8 +62,8 @@ use Laravel\Ai\Promptable;
 #[Temperature(0.1)]
 final class LegalThemeSelectionAgent implements Agent, HasProviderOptions, HasStructuredOutput
 {
-    use ConfiguresOllamaRuntime;
     use Promptable;
+    use ThinksBrieflyOnGemini;
     use UsesDefaultAiModel;
 
     /**
